@@ -1,0 +1,1 @@
+  -L/staff/liyuanhang/intel/oneapi/compiler/2024.0/opt/compiler/lib  -L"/usr/local/cuda-11.7/targets/x86_64-linux/lib/stubs"  -L"/usr/local/cuda-11.7/targets/x86_64-linux/lib"   -lifport -lifcoremt -limf -lsvml -lipgo -lirc -lpthread -lirc_s -ldl -lcudadevrt -lcudart_static -lrt 

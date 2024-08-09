@@ -50,7 +50,14 @@ if( DEFINED ENV{ECBUILD_MODULE_PATH} )
   set( IN_ECBUILD TRUE )
 endif()
 
-project(roms VERSION 4.1 LANGUAGES Fortran)
+project(roms VERSION 4.1 LANGUAGES CXX Fortran)
+
+if ("${YAKL_ARCH}" STREQUAL "CUDA")
+  enable_language(CUDA)
+endif()
+add_subdirectory(YAKL)
+include(${PROJECT_SOURCE_DIR}/YAKL/yakl_utils.cmake)
+
 
 if( IN_ECBUILD )
   set( ECBUILD_DEFAULT_BUILD_TYPE Release )
@@ -312,6 +319,9 @@ set( All_f90s "${f90srcs}" )
 # The libXXX.(a|so) libraries will be created below.
 
 add_library( Objects OBJECT ${All_f90s} )
+yakl_process_target(Objects)
+target_link_libraries(Objects ${YAKL_FORTRAN_INTERFACE_TARGET})
+# target_link_libraries(Objects ${YAKL_FORTRAN_INTERFACE_TARGET} YAKL_Nonlinear)
 
 if( IN_ECBUILD )
   ecbuild_add_library( TARGET   ${PROJECT_NAME}
@@ -350,6 +360,7 @@ else()
     message( STATUS "Enabling position independent code" )
     set_property(TARGET Objects PROPERTY POSITION_INDEPENDENT_CODE 1)
     add_library( ROMS_shared SHARED $<TARGET_OBJECTS:Objects> )
+    yakl_process_target( ROMS_shared )
     set_target_properties(ROMS_shared PROPERTIES OUTPUT_NAME ROMS)
     install( TARGETS ROMS_shared LIBRARY )
 
@@ -363,6 +374,7 @@ else()
 
   if( LIBSTATIC )
     add_library( ROMS_static STATIC $<TARGET_OBJECTS:Objects> )
+    yakl_process_target( ROMS_static )
     set_target_properties(ROMS_static PROPERTIES OUTPUT_NAME ROMS)
     install( TARGETS ROMS_static ARCHIVE )
 
@@ -417,20 +429,24 @@ else()
     set( master_f90 "${f90srcs}" )
     add_executable( "${BIN}" ${master_f90} )
     add_dependencies( "${BIN}" Objects ${deplib} )
+    yakl_process_target(${BIN})
+    add_library(CPP_Lib ROMS/Cpp/yakl_interface.cpp)
+    yakl_process_target(CPP_Lib)
+    set_target_properties(${BIN} PROPERTIES LINKER_LANGUAGE Fortran)
 
     if( LIBSHARED AND LIBSTATIC )
       Message( STATUS "Both LIBSHARED and LIBSTATIC are enabled, the linker will probably default to the shared ROMS library." )
-      target_link_libraries( "${BIN}" ROMS ${netcdf_libs} )
+      target_link_libraries( "${BIN}" ROMS ${netcdf_libs} CPP_Lib ${YAKL_TARGET} ${YAKL_FORTRAN_INTERFACE_TARGET})
     elseif( LIBSHARED )
       Message( STATUS "Linking ROMS using shared ROMS library." )
-      target_link_libraries( "${BIN}" ROMS ${netcdf_libs} )
+      target_link_libraries( "${BIN}" ROMS ${netcdf_libs} CPP_Lib ${YAKL_TARGET} ${YAKL_FORTRAN_INTERFACE_TARGET})
     elseif( LIBSTATIC )
       Message( STATUS "Linking ROMS using static ROMS library." )
-      target_link_libraries( "${BIN}" ROMS ${netcdf_libs} )
+      target_link_libraries( "${BIN}" ROMS ${netcdf_libs} CPP_Lib ${YAKL_TARGET} ${YAKL_FORTRAN_INTERFACE_TARGET})
     else()
       Message( FATAL_ERROR "Unknown configuration!" )
     endif()
-
+    target_include_directories("${BIN}" PUBLIC $<TARGET_PROPERTY:${YAKL_FORTRAN_INTERFACE_TARGET},Fortran_MODULE_DIRECTORY>)
     # If ARPACK is needed, add to linking library list.
     # The path to the library is set above.
 

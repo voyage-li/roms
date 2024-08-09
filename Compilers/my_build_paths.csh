@@ -133,7 +133,7 @@ endif
 # split path. Otherwise, set NETCDFC to NETCDF because they are
 # located in the same path.
 
-setenv MPI_SOFT ""
+setenv MPI_SOFT "/staff/liyuanhang/intel/oneapi/mpi/2021.11/bin"
 
 switch ($FORT)
 
@@ -179,8 +179,8 @@ switch ($FORT)
           setenv NETCDF4        1
         else
           setenv ESMF_DIR       ${MPI_SOFT}/esmf_nc4
-          setenv NETCDF         /opt/intelsoft/serial/netcdf4
-          setenv NETCDFC        ${MPI_SOFT}/netcdf4c
+          setenv NETCDF         /staff/liyuanhang/work/2024OCT/roms_8/install/netcdf
+          setenv NETCDFC        /staff/liyuanhang/work/2024OCT/roms_8/install/netcdf
           setenv NC_CONFIG      ${NETCDFC}/bin/nc-config
           setenv NF_CONFIG      ${NETCDF}/bin/nf-config
           setenv NETCDF_INCDIR  ${NETCDF}/include
@@ -219,7 +219,7 @@ switch ($FORT)
         setenv HDF5_LIBDIR      ${HDF5}/lib
         setenv HDF5_INCDIR      ${HDF5}/include
       else
-        setenv HDF5             /opt/intelsoft/serial/hdf5
+        setenv HDF5            /staff/liyuanhang/work/2024OCT/roms_8/install/hdf5
         setenv HDF5_LIBDIR      ${HDF5}/lib
         setenv HDF5_INCDIR      ${HDF5}/include
       endif

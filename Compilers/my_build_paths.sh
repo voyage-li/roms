@@ -48,7 +48,7 @@ echo ""
 # where the MPI library is installed is computer dependent. Recall
 # that you still need to use the appropriate "mpirun" to execute.
 
-export               MPI_ROOT=""
+export               MPI_ROOT="/staff/liyuanhang/intel/oneapi/mpi/2021.11/bin"
 
 if [ -n "${USE_MPIF90:+1}" ]; then
   case "$FORT" in
@@ -172,8 +172,8 @@ case "$FORT" in
           export        NETCDF4=1
         else
           export       ESMF_DIR=${MPI_SOFT}/esmf_nc4
-          export         NETCDF=/opt/intelsoft/serial/netcdf4
-          export        NETCDFC=${MPI_SOFT}/netcdf4c
+          export         NETCDF=/staff/liyuanhang/work/2024OCT/roms_8/install/netcdf
+          export        NETCDFC=/staff/liyuanhang/work/2024OCT/roms_8/install/netcdf
           export      NC_CONFIG=${NETCDFC}/bin/nc-config
           export      NF_CONFIG=${NETCDF}/bin/nf-config
           export  NETCDF_INCDIR=${NETCDF}/include
@@ -212,7 +212,7 @@ case "$FORT" in
         export    HDF5_LIBDIR=${HDF5}/lib
         export    HDF5_INCDIR=${HDF5}/include
       else
-        export           HDF5=/opt/intelsoft/serial/hdf5
+        export           HDF5=/staff/liyuanhang/work/2024OCT/roms_8/install/hdf5
         export    HDF5_LIBDIR=${HDF5}/lib
         export    HDF5_INCDIR=${HDF5}/include
       fi

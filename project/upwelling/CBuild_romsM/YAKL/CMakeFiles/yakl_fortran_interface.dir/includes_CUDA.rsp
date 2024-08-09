@@ -1,0 +1,1 @@
+-I/staff/liyuanhang/work/2024OCT/roms_8/roms/YAKL/src -I/staff/liyuanhang/work/2024OCT/roms_8/roms/YAKL/external -I/staff/liyuanhang/work/2024OCT/roms_8/roms/YAKL/src/extensions -I/staff/liyuanhang/work/2024OCT/roms_8/roms/project/upwelling/CBuild_romsM/YAKL -isystem "/usr/local/cuda-11.7/targets/x86_64-linux/include"
