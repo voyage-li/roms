@@ -1,0 +1,3 @@
+[submodule "project/upwelling/YAKL"]
+	path = project/upwelling/YAKL
+	url = git@github.com:anyin233/SWYAKL.git
