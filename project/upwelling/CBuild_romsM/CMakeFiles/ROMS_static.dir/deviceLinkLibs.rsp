@@ -1,1 +1,0 @@
-  -L/staff/liyuanhang/work/2024OCT/roms_8/install/netcdf/lib  -L/staff/liyuanhang/work/2024OCT/roms_8/install/hdf5/lib  -L/staff/liyuanhang/work/2024OCT/roms_8/roms/project/upwelling/CBuild_romsM  -L/usr/local/lib  -L/staff/liyuanhang/intel/oneapi/compiler/2024.0/opt/compiler/lib   -lifport -lifcoremt -limf -lsvml -lipgo -lirc -lpthread -lirc_s -ldl 

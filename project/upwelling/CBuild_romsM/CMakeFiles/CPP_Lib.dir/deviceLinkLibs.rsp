@@ -1,1 +1,0 @@
-  -L/staff/liyuanhang/work/2024OCT/roms_8/install/netcdf/lib  -L/staff/liyuanhang/work/2024OCT/roms_8/install/hdf5/lib  -L/staff/liyuanhang/work/2024OCT/roms_8/roms/project/upwelling/CBuild_romsM  -L/usr/local/lib  -L"/usr/local/cuda-11.7/targets/x86_64-linux/lib/stubs"  -L"/usr/local/cuda-11.7/targets/x86_64-linux/lib"   -lcudadevrt -lcudart_static -lrt -lpthread -ldl 

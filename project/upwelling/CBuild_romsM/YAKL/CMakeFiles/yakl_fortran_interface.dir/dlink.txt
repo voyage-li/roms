@@ -1,1 +1,0 @@
-/usr/local/cuda-11.7/bin/nvcc -forward-unknown-to-host-compiler -O3 -DNDEBUG -Xcompiler=-fPIC -Wno-deprecated-gpu-targets -shared -dlink --options-file CMakeFiles/yakl_fortran_interface.dir/deviceObjects1.rsp -o CMakeFiles/yakl_fortran_interface.dir/cmake_device_link.o --options-file CMakeFiles/yakl_fortran_interface.dir/deviceLinkLibs.rsp
