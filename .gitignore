@@ -1,4 +1,4 @@
-./project/**/CBuild_romsM
+/project/**/CBuild_romsM/
 romsM
 *.nc
 roms_test
