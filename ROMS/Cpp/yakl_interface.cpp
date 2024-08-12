@@ -509,20 +509,20 @@ extern "C" void step_loop2(
     DVom_h.deep_copy_to(DVom_d);
 
     yakl::fortran::parallel_for(
-        "step2_loop2_1",
+        "step_loop2_1",
         yakl::fortran::Bounds<2>({JstrR, JendR}, {IstrR, IendR}),
         YAKL_LAMBDA(int j, int i) {
             Zt_avg1_d(i, j) = 0.0;
         });
     yakl::fortran::parallel_for(
-        "step2_loop2_2",
+        "step_loop2_2",
         yakl::fortran::Bounds<2>({JstrR, JendR}, {Istr, IendR}),
         YAKL_LAMBDA(int j, int i) {
             DU_avg1_d(i, j) = 0.0;
             DU_avg2_d(i, j) = cff2 * DUon_d(i, j);
         });
     yakl::fortran::parallel_for(
-        "step2_loop2_3",
+        "step_loop2_3",
         yakl::fortran::Bounds<2>({Jstr, JendR}, {IstrR, IendR}),
         YAKL_LAMBDA(int j, int i) {
             DV_avg1_d(i, j) = 0.0;
@@ -533,6 +533,165 @@ extern "C" void step_loop2(
     DU_avg1_d.deep_copy_to(DU_avg1_h);
     DU_avg2_d.deep_copy_to(DU_avg2_h);
     DV_avg1_d.deep_copy_to(DV_avg1_h);
+    DV_avg2_d.deep_copy_to(DV_avg2_h);
+
+    yakl::fence();
+}
+
+extern "C" void step_loop3(
+    real &cff1, real &cff2,
+    real *Zt_avg1_f, int &Zt_avg1x, int &Zt_avg1y,
+    real *zeta_f, int &zetax, int &zetay, int &zetaz,
+    real *DU_avg1_f, int &DU_avg1x, int &DU_avg1y,
+    real *DU_avg2_f, int &DU_avg2x, int &DU_avg2y,
+    real *DUon_f,
+    real *DV_avg1_f, int &DV_avg1x, int &DV_avg1y,
+    real *DV_avg2_f, int &DV_avg2x, int &DV_avg2y,
+    real *DVom_f
+#ifdef WEC
+    ,
+    real *DUSon, real *DVSom
+#endif
+)
+{
+    int IminS = IminS_g;
+    int ImaxS = ImaxS_g;
+    int JminS = JminS_g;
+    int JmaxS = JmaxS_g;
+    int LBi = LBi_g;
+    int LBj = LBj_g;
+    int JstrR = JstrR_g;
+    int JendR = JendR_g;
+    int IstrR = IstrR_g;
+    int IendR = IendR_g;
+    int Istr = Istr_g;
+    int Jstr = Jstr_g;
+    int krhs = krhs_g;
+
+    realHost2d Zt_avg1_h("Zt_avg1_h", Zt_avg1_f, {LBi, LBi + Zt_avg1x - 1}, {LBj, LBj + Zt_avg1y - 1});
+    realHost3d zeta_h("zeta_h", zeta_f, {LBi, LBi + zetax - 1}, {LBj, LBj + zetay - 1}, zetaz);
+    realHost2d DU_avg1_h("DU_avg1_h", DU_avg1_f, {LBi, LBi + DU_avg1x - 1}, {LBj, LBj + DU_avg1y - 1});
+    realHost2d DU_avg2_h("DU_avg2_h", DU_avg2_f, {LBi, LBi + DU_avg2x - 1}, {LBj, LBj + DU_avg2y - 1});
+    realHost2d DUon_h("DUon_h", DUon_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d DV_avg1_h("DV_avg1_h", DV_avg1_f, {LBi, LBi + DV_avg1x - 1}, {LBj, LBj + DV_avg1y - 1});
+    realHost2d DV_avg2_h("DV_avg2_h", DV_avg2_f, {LBi, LBi + DV_avg2x - 1}, {LBj, LBj + DV_avg2y - 1});
+    realHost2d DVom_h("DVom_h", DVom_f, {IminS, ImaxS}, {JminS, JmaxS});
+#ifdef WEC
+    realHost2d DUSon_h("DUon_h", DUon_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d DVSom_h("DVom_h", DVom_f, {IminS, ImaxS}, {JminS, JmaxS});
+#endif
+
+    real2d Zt_avg1_d("Zt_avg1_d", {LBi, LBi + Zt_avg1x - 1}, {LBj, LBj + Zt_avg1y - 1});
+    real3d zeta_d("zeta_d", {LBi, LBi + zetax - 1}, {LBj, LBj + zetay - 1}, zetaz);
+    real2d DU_avg1_d("DU_avg1_d", {LBi, LBi + DU_avg1x - 1}, {LBj, LBj + DU_avg1y - 1});
+    real2d DU_avg2_d("DU_avg2_d", {LBi, LBi + DU_avg2x - 1}, {LBj, LBj + DU_avg2y - 1});
+    real2d DUon_d("DUon_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d DV_avg1_d("DV_avg1_d", {LBi, LBi + DV_avg1x - 1}, {LBj, LBj + DV_avg1y - 1});
+    real2d DV_avg2_d("DV_avg2_d", {LBi, LBi + DV_avg2x - 1}, {LBj, LBj + DV_avg2y - 1});
+    real2d DVom_d("DVom_d", {IminS, ImaxS}, {JminS, JmaxS});
+#ifdef WEC
+    real2d DUSon_d("DUon_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d DVSom_d("DVom_d", {IminS, ImaxS}, {JminS, JmaxS});
+#endif
+
+    Zt_avg1_h.deep_copy_to(Zt_avg1_d);
+    zeta_h.deep_copy_to(zeta_d);
+    DU_avg1_h.deep_copy_to(DU_avg1_d);
+    DU_avg2_h.deep_copy_to(DU_avg2_d);
+    DUon_h.deep_copy_to(DUon_d);
+    DV_avg1_h.deep_copy_to(DV_avg1_d);
+    DV_avg2_h.deep_copy_to(DV_avg2_d);
+    DVom_h.deep_copy_to(DVom_d);
+#ifdef WEC
+    DUSon_h.deep_copy_to(DUSon_d);
+    DVSom_h.deep_copy_to(DVSom_d);
+#endif
+
+    yakl::fortran::parallel_for(
+        "step_loop3_1",
+        yakl::fortran::Bounds<2>({JstrR, JendR}, {IstrR, IendR}),
+        YAKL_LAMBDA(int j, int i) {
+            Zt_avg1_d(i, j) = Zt_avg1_d(i, j) + cff1 * zeta_d(i, j, krhs);
+        });
+    yakl::fortran::parallel_for(
+        "step_loop3_2",
+        yakl::fortran::Bounds<2>({JstrR, JendR}, {Istr, IendR}),
+        YAKL_LAMBDA(int j, int i) {
+            DU_avg1_d(i, j) = DU_avg1_d(i, j) + cff1 * DUon_d(i, j);
+#ifdef WEC
+            DU_avg1_d(i, j) = DU_avg1_d(i, j) - cff1 * DUSon_d(i, j);
+#endif
+            DU_avg2_d(i, j) = DU_avg2_d(i, j) + cff2 * DUon_d(i, j);
+        });
+    yakl::fortran::parallel_for(
+        "step_loop3_3",
+        yakl::fortran::Bounds<2>({Jstr, JendR}, {IstrR, IendR}),
+        YAKL_LAMBDA(int j, int i) {
+            DV_avg1_d(i, j) = DV_avg1_d(i, j) + cff1 * DVom_d(i, j);
+#ifdef WEC
+            DV_avg1_d(i, j) = DV_avg1_d(i, j) - cff1 * DVSom_d(i, j);
+#endif
+            DV_avg2_d(i, j) = DV_avg2_d(i, j) + cff2 * DVom_d(i, j);
+        });
+
+    Zt_avg1_d.deep_copy_to(Zt_avg1_h);
+    DU_avg1_d.deep_copy_to(DU_avg1_h);
+    DU_avg2_d.deep_copy_to(DU_avg2_h);
+    DV_avg1_d.deep_copy_to(DV_avg1_h);
+    DV_avg2_d.deep_copy_to(DV_avg2_h);
+
+    yakl::fence();
+}
+
+extern "C" void step_loop4(
+    real &cff2,
+    real *DU_avg2, int &DU_avg2x, int &DU_avg2y,
+    real *DUon,
+    real *DV_avg2, int &DV_avg2x, int &DV_avg2y,
+    real *DVom)
+{
+    int JstrR = JstrR_g;
+    int JendR = JendR_g;
+    int Istr = Istr_g;
+    int IendR = IendR_g;
+    int Jstr = Jstr_g;
+    int IstrR = IstrR_g;
+    int LBi = LBi_g;
+    int LBj = LBj_g;
+    int IminS = IminS_g;
+    int ImaxS = ImaxS_g;
+    int JminS = JminS_g;
+    int JmaxS = JmaxS_g;
+
+    realHost2d DU_avg2_h("DU_avg2_h", DU_avg2, {LBi, LBi + DU_avg2x - 1}, {LBj, LBj + DU_avg2y - 1});
+    realHost2d DUon_h("DUon_h", DUon, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d DV_avg2_h("DV_avg2_h", DV_avg2, {LBi, LBi + DV_avg2x - 1}, {LBj, LBj + DV_avg2y - 1});
+    realHost2d DVom_h("DVom_h", DVom, {IminS, ImaxS}, {JminS, JmaxS});
+
+    real2d DU_avg2_d("DU_avg2_d", {LBi, LBi + DU_avg2x - 1}, {LBj, LBj + DU_avg2y - 1});
+    real2d DUon_d("DUon_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d DV_avg2_d("DV_avg2_d", {LBi, LBi + DV_avg2x - 1}, {LBj, LBj + DV_avg2y - 1});
+    real2d DVom_d("DVom_d", {IminS, ImaxS}, {JminS, JmaxS});
+
+    DU_avg2_h.deep_copy_to(DU_avg2_d);
+    DUon_h.deep_copy_to(DUon_d);
+    DV_avg2_h.deep_copy_to(DV_avg2_d);
+    DVom_h.deep_copy_to(DVom_d);
+
+    yakl::fortran::parallel_for(
+        "step_loop4_1",
+        yakl::fortran::Bounds<2>({JstrR, JendR}, {Istr, IendR}),
+        YAKL_LAMBDA(int j, int i) {
+            DU_avg2_d(i, j) = DU_avg2_d(i, j) + cff2 * DUon_d(i, j);
+        });
+    yakl::fortran::parallel_for(
+        "step_loop4_2",
+        yakl::fortran::Bounds<2>({Jstr, JendR}, {IstrR, IendR}),
+        YAKL_LAMBDA(int j, int i) {
+            DV_avg2_d(i, j) = DV_avg2_d(i, j) + cff2 * DVom_d(i, j);
+        });
+
+    DU_avg2_d.deep_copy_to(DU_avg2_h);
     DV_avg2_d.deep_copy_to(DV_avg2_h);
 
     yakl::fence();

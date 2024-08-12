@@ -122,6 +122,55 @@
             integer :: DV_avg2x, DV_avg2y
             real(8), dimension(*) :: DVom_f
         end subroutine step_loop2
+        subroutine step_loop3(                                                      &
+        &        cff1, cff2,                                                        &
+        &        Zt_avg1_f, Zt_avg1x, Zt_avg1y,                                     &
+        &        zeta_f, zetax, zetay, zetaz,                                       &
+        &        DU_avg1_f, DU_avg1x, DU_avg1y,                                     &
+        &        DU_avg2_f, DU_avg2x, DU_avg2y,                                     &
+        &        DUon_f,                                                            &
+        &        DV_avg1_f, DV_avg1x, DV_avg1y,                                     &
+        &        DV_avg2_f, DV_avg2x, DV_avg2y,                                     &
+        &        DVom_f                                                             &
+#ifdef WEC
+        &        ,DUSon, DVSom                                                      &
+#endif
+        &       ) bind(C,name="step_loop3")
+            use iso_c_binding
+            real(8) :: cff1, cff2
+            real(8), dimension(*) :: Zt_avg1_f
+            integer :: Zt_avg1x, Zt_avg1y
+            real(8), dimension(*) :: zeta_f
+            integer :: zetax, zetay, zetaz
+            real(8), dimension(*) :: DU_avg1_f
+            integer :: DU_avg1x, DU_avg1y
+            real(8), dimension(*) :: DU_avg2_f
+            integer :: DU_avg2x, DU_avg2y
+            real(8), dimension(*) :: DUon_f
+            real(8), dimension(*) :: DV_avg1_f
+            integer :: DV_avg1x, DV_avg1y
+            real(8), dimension(*) :: DV_avg2_f
+            integer :: DV_avg2x, DV_avg2y
+            real(8), dimension(*) :: DVom_f
+#ifdef WEC
+            real(8), dimension(*) :: DUSon, DVSom
+#endif
+        end subroutine step_loop3
+        subroutine step_loop4(                                                      &
+        &       cff2,                                                               &
+        &       DU_avg2_f, DU_avg2x, DU_avg2y,                                      &
+        &       DUon_f,                                                             &
+        &       DV_avg2_f, DV_avg2x, DV_avg2y,                                      &
+        &       DVom_f) bind(C,name="step_loop4")
+            use iso_c_binding
+            real(8) :: cff2
+            real(8), dimension(*) :: DU_avg2_f
+            integer :: DU_avg2x, DU_avg2y
+            real(8), dimension(*) :: DUon_f
+            real(8), dimension(*) :: DV_avg2_f
+            integer :: DV_avg2x, DV_avg2y
+            real(8), dimension(*) :: DVom_f
+        end subroutine step_loop4
       end interface
 !
       PRIVATE
@@ -939,27 +988,41 @@
           cff1=weight(1,iif(ng)-1,ng)
           cff2=(8.0_r8/12.0_r8)*weight(2,iif(ng)  ,ng)-                 &
      &         (1.0_r8/12.0_r8)*weight(2,iif(ng)+1,ng)
-          DO j=JstrR,JendR
-            DO i=IstrR,IendR
-              Zt_avg1(i,j)=Zt_avg1(i,j)+cff1*zeta(i,j,krhs)
-            END DO
-            DO i=Istr,IendR
-              DU_avg1(i,j)=DU_avg1(i,j)+cff1*DUon(i,j)
-# ifdef WEC
-              DU_avg1(i,j)=DU_avg1(i,j)-cff1*DUSon(i,j)
-# endif
-              DU_avg2(i,j)=DU_avg2(i,j)+cff2*DUon(i,j)
-            END DO
-          END DO
-          DO j=Jstr,JendR
-            DO i=IstrR,IendR
-              DV_avg1(i,j)=DV_avg1(i,j)+cff1*DVom(i,j)
-# ifdef WEC
-              DV_avg1(i,j)=DV_avg1(i,j)-cff1*DVSom(i,j)
-# endif
-              DV_avg2(i,j)=DV_avg2(i,j)+cff2*DVom(i,j)
-            END DO
-          END DO
+          call step_loop3(                                            &
+            cff1, cff2,                                                 &
+            Zt_avg1, size(Zt_avg1,1), size(Zt_avg1,2),                  &
+            zeta, size(zeta,1), size(zeta,2), size(zeta,3),             &
+            DU_avg1, size(DU_avg1,1), size(DU_avg1,2),                  &
+            DU_avg2, size(DU_avg2,1), size(DU_avg2,2),                  &
+            DUon,                                                       &
+            DV_avg1, size(DV_avg1,1), size(DV_avg1,2),                  &
+            DV_avg2, size(DV_avg2,1), size(DV_avg2,2),                  &
+            DVom                                                        &
+#ifdef WEC
+            ,DUSon, DVSon                                               &
+#endif
+        )
+!           DO j=JstrR,JendR
+!             DO i=IstrR,IendR
+!               Zt_avg1(i,j)=Zt_avg1(i,j)+cff1*zeta(i,j,krhs)
+!             END DO
+!             DO i=Istr,IendR
+!               DU_avg1(i,j)=DU_avg1(i,j)+cff1*DUon(i,j)
+! # ifdef WEC
+!               DU_avg1(i,j)=DU_avg1(i,j)-cff1*DUSon(i,j)
+! # endif
+!               DU_avg2(i,j)=DU_avg2(i,j)+cff2*DUon(i,j)
+!             END DO
+!           END DO
+!           DO j=Jstr,JendR
+!             DO i=IstrR,IendR
+!               DV_avg1(i,j)=DV_avg1(i,j)+cff1*DVom(i,j)
+! # ifdef WEC
+!               DV_avg1(i,j)=DV_avg1(i,j)-cff1*DVSom(i,j)
+! # endif
+!               DV_avg2(i,j)=DV_avg2(i,j)+cff2*DVom(i,j)
+!             END DO
+!           END DO
         END IF
       ELSE
         IF (FIRST_2D_STEP) THEN
@@ -967,16 +1030,23 @@
         ELSE
           cff2=(5.0_r8/12.0_r8)*weight(2,iif(ng),ng)
         END IF
-        DO j=JstrR,JendR
-          DO i=Istr,IendR
-            DU_avg2(i,j)=DU_avg2(i,j)+cff2*DUon(i,j)
-          END DO
-        END DO
-        DO j=Jstr,JendR
-          DO i=IstrR,IendR
-            DV_avg2(i,j)=DV_avg2(i,j)+cff2*DVom(i,j)
-          END DO
-        END DO
+        call step_loop4(                                                &
+            cff2,                                                       &
+            DU_avg2, size(DU_avg2,1), size(DU_avg2,2),                  &
+            DUon,                                                       &
+            DV_avg2, size(DV_avg2,1), size(DV_avg2,2),                  &
+            DVom                                                        &
+        )
+!         DO j=JstrR,JendR
+!           DO i=Istr,IendR
+!             DU_avg2(i,j)=DU_avg2(i,j)+cff2*DUon(i,j)
+!           END DO
+!         END DO
+!         DO j=Jstr,JendR
+!           DO i=IstrR,IendR
+!             DV_avg2(i,j)=DV_avg2(i,j)+cff2*DVom(i,j)
+!           END DO
+!         END DO
       END IF
 !
 !  After all fast time steps are completed, apply boundary conditions
