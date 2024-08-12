@@ -506,7 +506,7 @@ if [[ $dprint -eq 0 && $clean -eq 1 ]]; then
   echo ""
   echo "Configuring CMake for ROMS application:"
   echo ""
-  export PATH=$PATH:/usr/local/cuda-11.7/bin
+#   export PATH=$PATH:/usr/local/cuda-11.7/bin
   cmake -DROMS_APP=${ROMS_APPLICATION} \
                    ${my_hdir} \
                    ${ltype} \
@@ -522,7 +522,7 @@ if [[ $dprint -eq 0 && $clean -eq 1 ]]; then
                    ${comm} \
                    ${roms_exec} \
                    ${dbg} \
-                   -DYAKL_ARCH="CUDA" \
+                   -DYAKL_ARCH="OPENMP" \
                    -DYAKL_OPENMP_FLAGS="-g -O3" \
                    -DYAKL_CUDA_FLAGS="-arch=sm_70 -g -O3" \
                    -DYAKL_F90_FLAGS="-g -O3" \

@@ -31,7 +31,7 @@ endif()
 # FLAGS COMMON TO ALL BUILD TYPES
 ###########################################################################
 
-set( CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fp-model precise" )
+set( CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fp-model precise -diag-disable=10448" )
 
 ###########################################################################
 # RELEASE FLAGS

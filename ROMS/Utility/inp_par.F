@@ -13,6 +13,7 @@
 !                                                                      !
 !=======================================================================
 !
+      use gator_mod, only: gator_init, gator_finalize
       USE mod_kinds
       USE mod_param
       USE mod_parallel
@@ -137,6 +138,7 @@
  20   FORMAT (80('-'),/,                                                &
               ' Model Input Parameters:  ROMS/TOMS version ',a,/,       &
      &        26x,a,/,80('-'))
+      call gator_init()
 !
 !  Process ROMS standard input Iname script.
 !

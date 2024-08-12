@@ -1,0 +1,1615 @@
+Using YAKL Timers
+Using YAKL Timers
+Using memory pool. Initial size: Using memory pool. Initial size: 62.9395GB ;  Grow size: 62.9395GB.62.9395GB ;  Grow size: 62.9395GB.
+
+--------------------------------------------------------------------------------
+ Model Input Parameters:  ROMS/TOMS version 4.2  
+                          Monday - August 12, 2024 - 11:09:42 AM
+--------------------------------------------------------------------------------
+Using YAKL Timers
+Using memory pool. Initial size: 62.9395GB ;  Grow size: 62.9395GB.
+Using YAKL Timers
+Using memory pool. Initial size: 62.9395GB ;  Grow size: 62.9395GB.
+
+ Wind-Driven Upwelling/Downwelling over a Periodic Channel
+
+ Operating system  : Linux
+ CPU/hardware      : x86_64
+ Compiler system   : ifort
+ Compiler command  : /staff/liyuanhang/intel/oneapi/mpi/2021.11/bin/mpiifort
+ Compiler flags    :  -fp-model precise -diag-disable=10448 -ip -O3 -traceback -check uninit
+ OCN Communicator  : 1140850688,  PET size = 4
+
+ Input Script      : ./roms_upwelling.in
+
+ GIT Root URL      : git@github.com:voyage-li/roms.git
+ GIT Revision      : 811315d62561738adc7e77af2caccb49a6f5caaf
+ SVN Root URL      : https://www.myroms.org/svn/src
+ SVN Revision      : 
+
+ Local Root        : /staff/liyuanhang/work/2024OCT/roms_8/roms
+ Header Dir        : /staff/liyuanhang/work/2024OCT/roms_8/roms/project/upwelling
+ Header file       : upwelling.h
+ Analytical Dir    : /staff/liyuanhang/work/2024OCT/roms_8/roms/project/upwelling
+
+ Resolution, Grid 01: 41x80x16,  Parallel Nodes: 4,  Tiling: 2x2
+
+
+ Physical Parameters, Grid: 01
+ =============================
+
+        288  ntimes            Number of timesteps for 3-D equations.
+    300.000  dt                Timestep size (s) for 3-D equations.
+         30  ndtfast           Number of timesteps for 2-D equations between
+                                 each 3D timestep.
+          1  ERstr             Starting ensemble/perturbation run number.
+          1  ERend             Ending ensemble/perturbation run number.
+          0  nrrec             Number of restart records to read from disk.
+          T  LcycleRST         Switch to recycle time-records in restart file.
+         72  nRST              Number of timesteps between the writing of data
+                                 into restart fields.
+          1  ninfo             Number of timesteps between print of information
+                                 to standard output.
+          1  nSTA              Number of timesteps between the writing of data
+                                 the stations file.
+          1  nFLT              Number of timesteps between the writing of data
+                                 into floats file.
+          T  ldefout           Switch to create a new output NetCDF file(s).
+         72  nHIS              Number of timesteps between the writing fields
+                                 into history file.
+          0  nQCK              Number of timesteps between the writing fields
+                                 into quicksave file.
+          1  ntsAVG            Starting timestep for the accumulation of output
+                                 time-averaged data.
+         72  nAVG              Number of timesteps between the writing of
+                                 time-averaged data into averages file.
+          1  ntsDIA            Starting timestep for the accumulation of output
+                                 time-averaged diagnostics data.
+         72  nDIA              Number of timesteps between the writing of
+                                 time-averaged data into diagnostics file.
+ 0.0000E+00  nl_visc2          NLM Horizontal, harmonic mixing coefficient
+                                 (m2/s) for momentum.
+          F  LuvSponge         Turning OFF sponge on horizontal momentum.
+          F  LtracerSponge(01) Turning OFF sponge on tracer 01: temp
+          F  LtracerSponge(02) Turning OFF sponge on tracer 02: salt
+ 1.0000E-06  Akt_bak(01)       Background vertical mixing coefficient (m2/s)
+                                 for tracer 01: temp
+ 1.0000E-06  Akt_bak(02)       Background vertical mixing coefficient (m2/s)
+                                 for tracer 02: salt
+ 1.0000E-05  Akv_bak           Background vertical mixing coefficient (m2/s)
+                                 for momentum.
+ 3.0000E-04  rdrg              Linear bottom drag coefficient (m/s).
+ 3.0000E-03  rdrg2             Quadratic bottom drag coefficient.
+ 2.0000E-02  Zob               Bottom roughness (m).
+          2  Vtransform        S-coordinate transformation equation.
+          4  Vstretching       S-coordinate stretching function.
+ 3.0000E+00  theta_s           S-coordinate surface control parameter.
+ 0.0000E+00  theta_b           S-coordinate bottom  control parameter.
+     25.000  Tcline            S-coordinate surface/bottom layer width (m) used
+                                 in vertical coordinate stretching.
+   1025.000  rho0              Mean density (kg/m3) for Boussinesq approximation.
+      0.000  dstart            Time-stamp assigned to model initialization (days).
+       0.00  time_ref          Reference time for units attribute (yyyymmdd.dd)
+ 0.0000E+00  Tnudg(01)         Nudging/relaxation time scale (days)
+                                 for tracer 01: temp
+ 0.0000E+00  Tnudg(02)         Nudging/relaxation time scale (days)
+                                 for tracer 02: salt
+ 0.0000E+00  Znudg             Nudging/relaxation time scale (days)
+                                 for free-surface.
+ 0.0000E+00  M2nudg            Nudging/relaxation time scale (days)
+                                 for 2D momentum.
+ 0.0000E+00  M3nudg            Nudging/relaxation time scale (days)
+                                 for 3D momentum.
+ 0.0000E+00  obcfac            Factor between passive and active
+                                 open boundary conditions.
+          F  VolCons(1)        NLM western  edge boundary volume conservation.
+          F  VolCons(2)        NLM southern edge boundary volume conservation.
+          F  VolCons(3)        NLM eastern  edge boundary volume conservation.
+          F  VolCons(4)        NLM northern edge boundary volume conservation.
+     14.000  T0                Background potential temperature (C) constant.
+     35.000  S0                Background salinity (PSU) constant.
+   1027.000  R0                Background density (kg/m3) used in linear Equation
+                                 of State.
+ 1.7000E-04  Tcoef             Thermal expansion coefficient (1/Celsius).
+ 7.6000E-04  Scoef             Saline contraction coefficient (1/PSU).
+      1.000  gamma2            Slipperiness variable: free-slip (1.0) or 
+                                                      no-slip (-1.0).
+          F  LuvSrc            Turning OFF momentum point Sources/Sinks.
+          F  LwSrc             Turning OFF volume influx point Sources/Sinks.
+          F  LtracerSrc(01)    Turning OFF point Sources/Sinks on tracer 01: temp
+          F  LtracerSrc(02)    Turning OFF point Sources/Sinks on tracer 02: salt
+          F  LsshCLM           Turning OFF processing of SSH climatology.
+          F  Lm2CLM            Turning OFF processing of 2D momentum climatology.
+          F  Lm3CLM            Turning OFF processing of 3D momentum climatology.
+          F  LtracerCLM(01)    Turning OFF processing of climatology tracer 01: temp
+          F  LtracerCLM(02)    Turning OFF processing of climatology tracer 02: salt
+          F  LnudgeM2CLM       Turning OFF nudging of 2D momentum climatology.
+          F  LnudgeM3CLM       Turning OFF nudging of 3D momentum climatology.
+          F  LnudgeTCLM(01)    Turning OFF nudging of climatology tracer 01: temp
+          F  LnudgeTCLM(02)    Turning OFF nudging of climatology tracer 02: salt
+
+          T  Hout(idFsur)      Write out free-surface.
+          T  Hout(idUbar)      Write out 2D U-momentum component.
+          T  Hout(idVbar)      Write out 2D V-momentum component.
+          T  Hout(idUvel)      Write out 3D U-momentum component.
+          T  Hout(idVvel)      Write out 3D V-momentum component.
+          T  Hout(idWvel)      Write out W-momentum component.
+          T  Hout(idOvel)      Write out omega vertical velocity.
+          T  Hout(idTvar)      Write out tracer 01: temp
+          T  Hout(idTvar)      Write out tracer 02: salt
+          T  Hout(idDano)      Write out density anomaly.
+
+          T  Aout(idFsur)      Write out averaged free-surface.
+          T  Aout(idUbar)      Write out averaged 2D U-momentum component.
+          T  Aout(idVbar)      Write out averaged 2D V-momentum component.
+          T  Aout(idUvel)      Write out averaged 3D U-momentum component.
+          T  Aout(idVvel)      Write out averaged 3D V-momentum component.
+          T  Aout(idWvel)      Write out averaged W-momentum component.
+          T  Aout(idOvel)      Write out averaged omega vertical velocity.
+          T  Aout(idTvar)      Write out averaged tracer 01: temp
+          T  Aout(idTvar)      Write out averaged tracer 02: salt
+          T  Aout(idDano)      Write out averaged density anomaly.
+          T  Aout(idZZav)      Write out averaged quadratic <zeta*zeta> term.
+          T  Aout(idU2av)      Write out averaged quadratic <ubar*ubar> term.
+          T  Aout(idV2av)      Write out averaged quadratic <vbar*vbar> term.
+          T  Aout(idHUav)      Write out averaged u-volume flux, Huon.
+          T  Aout(idHVav)      Write out averaged v-volume flux, Hvom.
+          T  Aout(idUUav)      Write out averaged quadratic <u*u> term.
+          T  Aout(idUVav)      Write out averaged quadratic <u*v> term.
+          T  Aout(idVVav)      Write out averaged quadratic <v*v> term.
+          T  Aout(idTTav)      Write out averaged <t*t> for tracer 01: temp
+          T  Aout(idTTav)      Write out averaged <t*t> for tracer 02: salt
+          T  Aout(idUTav)      Write out averaged <u*t> for tracer 01: temp
+          T  Aout(idUTav)      Write out averaged <u*t> for tracer 02: salt
+          T  Aout(idVTav)      Write out averaged <v*t> for tracer 01: temp
+          T  Aout(idVTav)      Write out averaged <v*t> for tracer 02: salt
+          T  Aout(iHUTav)      Write out averaged <Huon*t> for tracer 01: temp
+          T  Aout(iHUTav)      Write out averaged <Huon*t> for tracer 02: salt
+          T  Aout(iHVTav)      Write out averaged <Hvom*t> for tracer 01: temp
+          T  Aout(iHVTav)      Write out averaged <Hvom*t> for tracer 02: salt
+
+          T  Dout(M2rate)      Write out 2D momentum acceleration.
+          T  Dout(M2pgrd)      Write out 2D momentum pressure gradient.
+          T  Dout(M2fcor)      Write out 2D momentum Coriolis force.
+          T  Dout(M2hadv)      Write out 2D momentum horizontal advection.
+          T  Dout(M2xadv)      Write out 2D momentum horizontal X-advection.
+          T  Dout(M2yadv)      Write out 2D momentum horizontal Y-advection.
+          T  Dout(M2hvis)      Write out 2D momentum horizontal viscosity.
+          T  Dout(M2xvis)      Write out 2D momentum horizontal X-viscosity.
+          T  Dout(M2yvis)      Write out 2D momentum horizontal Y-viscosity.
+          T  Dout(M2sstr)      Write out 2D momentum surface stress.
+          T  Dout(M2bstr)      Write out 2D momentum bottom stress.
+
+          T  Dout(M3rate)      Write out 3D momentum acceleration.
+          T  Dout(M3pgrd)      Write out 3D momentum pressure gradient.
+          T  Dout(M3fcor)      Write out 3D momentum Coriolis force.
+          T  Dout(M3hadv)      Write out 3D momentum horizontal advection.
+          T  Dout(M3xadv)      Write out 3D momentum horizontal X-advection.
+          T  Dout(M3yadv)      Write out 3D momentum horizontal Y-advection.
+          T  Dout(M3vadv)      Write out 3D momentum vertical advection.
+          T  Dout(M3hvis)      Write out 3D momentum horizontal viscosity.
+          T  Dout(M3xvis)      Write out 3D momentum horizontal X-viscosity.
+          T  Dout(M3yvis)      Write out 3D momentum horizontal Y-viscosity.
+          T  Dout(M3vvis)      Write out 3D momentum vertical viscosity.
+
+          T  Dout(iTrate)      Write out rate of change of tracer 01: temp
+          T  Dout(iTrate)      Write out rate of change of tracer 02: salt
+          T  Dout(iThadv)      Write out horizontal advection, tracer 01: temp
+          T  Dout(iThadv)      Write out horizontal advection, tracer 02: salt
+          T  Dout(iTxadv)      Write out horizontal X-advection, tracer 01: temp
+          T  Dout(iTxadv)      Write out horizontal X-advection, tracer 02: salt
+          T  Dout(iTyadv)      Write out horizontal Y-advection, tracer 01: temp
+          T  Dout(iTyadv)      Write out horizontal Y-advection, tracer 02: salt
+          T  Dout(iTvadv)      Write out vertical advection, tracer 01: temp
+          T  Dout(iTvadv)      Write out vertical advection, tracer 02: salt
+          T  Dout(iTvdif)      Write out vertical diffusion, tracer 01: temp
+          T  Dout(iTvdif)      Write out vertical diffusion, tracer 02: salt
+
+          1  inp_lib           Using standard NetCDF library for input files.
+          1  out_lib           Using standard NetCDF library for output files.
+
+ Output/Input Files:
+
+               Output Restart File:  roms_rst.nc
+               Output History File:  roms_his.nc
+              Output Averages File:  roms_avg.nc
+           Output Diagnostics File:  roms_dia.nc
+              Output Stations File:  roms_sta.nc
+                Output Floats File:  roms_flt.nc
+            Station positions File:  stations.in
+     Initial Floats Positions File:  floats_upwelling.in
+           Biology Parameters File:  bio_Fennel.in
+  ROMS I/O variables Metadata File:  ../../ROMS/External/varinfo.yaml
+
+
+ Fennel Model Parameters, Grid: 01
+ =================================
+
+          1  BioIter           Number of iterations for nonlinear convergence.
+ 4.0000E-02  AttSW             Light attenuation of seawater (m-1).
+ 2.4860E-02  AttChl            Light attenuation by chlorophyll (1/(mg_Chl m-2)).
+ 4.3000E-01  PARfrac           Fraction of shortwave radiation that is
+                                 photosynthetically active (nondimensional).
+ 1.0000E+00  Vp0               Eppley temperature-limited growth parameter
+                                 (nondimensional).
+ 9.5000E-03  I_thNH4           Radiation threshold for nitrification (W/m2).
+ 1.0000E-01  D_p5NH4           Half-saturation radiation for nitrification (W/m2).
+ 5.0000E-02  NitriR            Nitrification rate (day-1).
+ 2.0000E+00  K_NO3             Inverse half-saturation for phytoplankton NO3
+                                 uptake (1/(mmol_N m-3)).
+ 2.0000E+00  K_NH4             Inverse half-saturation for phytoplankton NH4
+                                 uptake (1/(mmol_N m-3)).
+ 3.2000E+01  K_PO4             Inverse half-saturation for phytoplankton PO4
+                                 uptake (1/(mmol_P m-3)).
+ 2.0000E+00  K_Phy             Zooplankton half-saturation constant for ingestion
+                                 (mmol_N m-3)^2.
+ 5.3500E-02  Chl2C_m           Maximum chlorophyll to carbon ratio (mg_Chl/mg_C).
+ 1.0000E-03  ChlMin            Chlorophyll minimum threshold (mg_Chl/m3).
+ 6.6250E+00  PhyCN             Phytoplankton Carbon:Nitrogen ratio (mol_C/mol_N).
+ 6.2500E-02  R_P2N             Phytoplankton P:N ratio (mol_P/mol_N).
+ 1.5000E+00  PhyIP             Phytoplankton NH4 inhibition parameter (1/mmol_N).
+ 2.5000E-02  PhyIS             Phytoplankton growth, initial slope of P-I curve
+                                 (mg_C/(mg_Chl Watts m-2 day)).
+ 1.0000E-03  PhyMin            Phytoplankton minimum threshold (mmol_N/m3).
+ 1.5000E-01  PhyMR             Phytoplankton mortality rate (day-1).
+ 7.5000E-01  ZooAE_N           Zooplankton nitrogen assimilation efficiency
+                                 (nondimensional).
+ 1.0000E-01  ZooBM             Rate for zooplankton basal metabolism (1/day).
+ 6.6250E+00  ZooCN             Zooplankton Carbon:Nitrogen ratio (mol_C/mol_N).
+ 1.0000E-01  ZooER             Zooplankton specific excretion rate (day-1).
+ 6.0000E-01  ZooGR             Zooplankton maximum growth rate (day-1).
+ 1.0000E-03  ZooMin            Zooplankton minimum threshold (mmol_N/m3).
+ 2.5000E-02  ZooMR             Zooplankton mortality rate (day-1).
+ 1.0000E-02  LDeRRN            Large detritus N re-mineralization rate (day-1).
+ 1.0000E-02  LDeRRC            Large detritus C re-mineralization rate (day-1).
+ 5.0000E-03  CoagR             Coagulation rate (day-1).
+ 3.0000E-02  SDeRRN            Remineralization rate for small detritus N (day-1).
+ 3.0000E-02  SDeRRC            Remineralization rate for small detritus C (day-1).
+ 3.0000E-02  RDeRRN            Remineralization rate for river detritus N (day-1).
+ 3.0000E-02  RDeRRC            Remineralization rate for river detritus C (day-1).
+ 1.0000E-01  wPhy              Phytoplankton sinking velocity (m/day).
+ 1.0000E+00  wLDet             Large detritus sinking velocity (m/day).
+ 1.0000E-01  wSDet             Small detritus sinking velocity (m/day).
+ 3.7000E+02  pCO2air           CO2 partial pressure in air (ppm by volume).
+          F  LtracerSponge(03) Turning OFF sponge on tracer 03: NO3
+          F  LtracerSponge(04) Turning OFF sponge on tracer 04: NH4
+          F  LtracerSponge(05) Turning OFF sponge on tracer 05: chlorophyll
+          F  LtracerSponge(06) Turning OFF sponge on tracer 06: phytoplankton
+          F  LtracerSponge(07) Turning OFF sponge on tracer 07: zooplankton
+          F  LtracerSponge(08) Turning OFF sponge on tracer 08: LdetritusN
+          F  LtracerSponge(09) Turning OFF sponge on tracer 09: SdetritusN
+          F  LtracerSponge(10) Turning OFF sponge on tracer 10: LdetritusC
+          F  LtracerSponge(11) Turning OFF sponge on tracer 11: SdetritusC
+          F  LtracerSponge(12) Turning OFF sponge on tracer 12: TIC
+          F  LtracerSponge(13) Turning OFF sponge on tracer 13: alkalinity
+          F  LtracerSponge(14) Turning OFF sponge on tracer 14: oxygen
+ 1.0000E-06  Akt_bak(03)       Background vertical mixing coefficient (m2/s)
+                                 for tracer 03: NO3
+ 1.0000E-06  Akt_bak(04)       Background vertical mixing coefficient (m2/s)
+                                 for tracer 04: NH4
+ 1.0000E-06  Akt_bak(05)       Background vertical mixing coefficient (m2/s)
+                                 for tracer 05: chlorophyll
+ 1.0000E-06  Akt_bak(06)       Background vertical mixing coefficient (m2/s)
+                                 for tracer 06: phytoplankton
+ 1.0000E-06  Akt_bak(07)       Background vertical mixing coefficient (m2/s)
+                                 for tracer 07: zooplankton
+ 1.0000E-06  Akt_bak(08)       Background vertical mixing coefficient (m2/s)
+                                 for tracer 08: LdetritusN
+ 1.0000E-06  Akt_bak(09)       Background vertical mixing coefficient (m2/s)
+                                 for tracer 09: SdetritusN
+ 1.0000E-06  Akt_bak(10)       Background vertical mixing coefficient (m2/s)
+                                 for tracer 10: LdetritusC
+ 1.0000E-06  Akt_bak(11)       Background vertical mixing coefficient (m2/s)
+                                 for tracer 11: SdetritusC
+ 1.0000E-06  Akt_bak(12)       Background vertical mixing coefficient (m2/s)
+                                 for tracer 12: TIC
+ 1.0000E-06  Akt_bak(13)       Background vertical mixing coefficient (m2/s)
+                                 for tracer 13: alkalinity
+ 1.0000E-06  Akt_bak(14)       Background vertical mixing coefficient (m2/s)
+                                 for tracer 14: oxygen
+ 0.0000E+00  Tnudg(03)         Nudging/relaxation time scale (days)
+                                 for tracer 03: NO3
+ 0.0000E+00  Tnudg(04)         Nudging/relaxation time scale (days)
+                                 for tracer 04: NH4
+ 0.0000E+00  Tnudg(05)         Nudging/relaxation time scale (days)
+                                 for tracer 05: chlorophyll
+ 0.0000E+00  Tnudg(06)         Nudging/relaxation time scale (days)
+                                 for tracer 06: phytoplankton
+ 0.0000E+00  Tnudg(07)         Nudging/relaxation time scale (days)
+                                 for tracer 07: zooplankton
+ 0.0000E+00  Tnudg(08)         Nudging/relaxation time scale (days)
+                                 for tracer 08: LdetritusN
+ 0.0000E+00  Tnudg(09)         Nudging/relaxation time scale (days)
+                                 for tracer 09: SdetritusN
+ 0.0000E+00  Tnudg(10)         Nudging/relaxation time scale (days)
+                                 for tracer 10: LdetritusC
+ 0.0000E+00  Tnudg(11)         Nudging/relaxation time scale (days)
+                                 for tracer 11: SdetritusC
+ 0.0000E+00  Tnudg(12)         Nudging/relaxation time scale (days)
+                                 for tracer 12: TIC
+ 0.0000E+00  Tnudg(13)         Nudging/relaxation time scale (days)
+                                 for tracer 13: alkalinity
+ 0.0000E+00  Tnudg(14)         Nudging/relaxation time scale (days)
+                                 for tracer 14: oxygen
+          F  LtracerSrc(03)    Turning OFF point sources/Sink on tracer 03: NO3
+          F  LtracerSrc(04)    Turning OFF point sources/Sink on tracer 04: NH4
+          F  LtracerSrc(05)    Turning OFF point sources/Sink on tracer 05: chlorophyll
+          F  LtracerSrc(06)    Turning OFF point sources/Sink on tracer 06: phytoplankton
+          F  LtracerSrc(07)    Turning OFF point sources/Sink on tracer 07: zooplankton
+          F  LtracerSrc(08)    Turning OFF point sources/Sink on tracer 08: LdetritusN
+          F  LtracerSrc(09)    Turning OFF point sources/Sink on tracer 09: SdetritusN
+          F  LtracerSrc(10)    Turning OFF point sources/Sink on tracer 10: LdetritusC
+          F  LtracerSrc(11)    Turning OFF point sources/Sink on tracer 11: SdetritusC
+          F  LtracerSrc(12)    Turning OFF point sources/Sink on tracer 12: TIC
+          F  LtracerSrc(13)    Turning OFF point sources/Sink on tracer 13: alkalinity
+          F  LtracerSrc(14)    Turning OFF point sources/Sink on tracer 14: oxygen
+          F  LtracerCLM(03)    Turning OFF processing of climatology tracer 03: NO3
+          F  LtracerCLM(04)    Turning OFF processing of climatology tracer 04: NH4
+          F  LtracerCLM(05)    Turning OFF processing of climatology tracer 05: chlorophyll
+          F  LtracerCLM(06)    Turning OFF processing of climatology tracer 06: phytoplankton
+          F  LtracerCLM(07)    Turning OFF processing of climatology tracer 07: zooplankton
+          F  LtracerCLM(08)    Turning OFF processing of climatology tracer 08: LdetritusN
+          F  LtracerCLM(09)    Turning OFF processing of climatology tracer 09: SdetritusN
+          F  LtracerCLM(10)    Turning OFF processing of climatology tracer 10: LdetritusC
+          F  LtracerCLM(11)    Turning OFF processing of climatology tracer 11: SdetritusC
+          F  LtracerCLM(12)    Turning OFF processing of climatology tracer 12: TIC
+          F  LtracerCLM(13)    Turning OFF processing of climatology tracer 13: alkalinity
+          F  LtracerCLM(14)    Turning OFF processing of climatology tracer 14: oxygen
+          F  LnudgeTCLM(03)    Turning OFF nudging of climatology tracer 03: NO3
+          F  LnudgeTCLM(04)    Turning OFF nudging of climatology tracer 04: NH4
+          F  LnudgeTCLM(05)    Turning OFF nudging of climatology tracer 05: chlorophyll
+          F  LnudgeTCLM(06)    Turning OFF nudging of climatology tracer 06: phytoplankton
+          F  LnudgeTCLM(07)    Turning OFF nudging of climatology tracer 07: zooplankton
+          F  LnudgeTCLM(08)    Turning OFF nudging of climatology tracer 08: LdetritusN
+          F  LnudgeTCLM(09)    Turning OFF nudging of climatology tracer 09: SdetritusN
+          F  LnudgeTCLM(10)    Turning OFF nudging of climatology tracer 10: LdetritusC
+          F  LnudgeTCLM(11)    Turning OFF nudging of climatology tracer 11: SdetritusC
+          F  LnudgeTCLM(12)    Turning OFF nudging of climatology tracer 12: TIC
+          F  LnudgeTCLM(13)    Turning OFF nudging of climatology tracer 13: alkalinity
+          F  LnudgeTCLM(14)    Turning OFF nudging of climatology tracer 14: oxygen
+
+          T  Hout(idTvar)      Write out tracer 03: NO3
+          T  Hout(idTvar)      Write out tracer 04: NH4
+          T  Hout(idTvar)      Write out tracer 05: chlorophyll
+          T  Hout(idTvar)      Write out tracer 06: phytoplankton
+          T  Hout(idTvar)      Write out tracer 07: zooplankton
+          T  Hout(idTvar)      Write out tracer 08: LdetritusN
+          T  Hout(idTvar)      Write out tracer 09: SdetritusN
+          T  Hout(idTvar)      Write out tracer 10: LdetritusC
+          T  Hout(idTvar)      Write out tracer 11: SdetritusC
+          T  Hout(idTvar)      Write out tracer 12: TIC
+          T  Hout(idTvar)      Write out tracer 13: alkalinity
+          T  Hout(idTvar)      Write out tracer 14: oxygen
+
+          T  Aout(idTvar)      Write out averaged tracer 03: NO3
+          T  Aout(idTvar)      Write out averaged tracer 04: NH4
+          T  Aout(idTvar)      Write out averaged tracer 05: chlorophyll
+          T  Aout(idTvar)      Write out averaged tracer 06: phytoplankton
+          T  Aout(idTvar)      Write out averaged tracer 07: zooplankton
+          T  Aout(idTvar)      Write out averaged tracer 08: LdetritusN
+          T  Aout(idTvar)      Write out averaged tracer 09: SdetritusN
+          T  Aout(idTvar)      Write out averaged tracer 10: LdetritusC
+          T  Aout(idTvar)      Write out averaged tracer 11: SdetritusC
+          T  Aout(idTvar)      Write out averaged tracer 12: TIC
+          T  Aout(idTvar)      Write out averaged tracer 13: alkalinity
+          T  Aout(idTvar)      Write out averaged tracer 14: oxygen
+
+          T  Dout(iTrate)      Write out rate of change of tracer 03: NO3
+          T  Dout(iTrate)      Write out rate of change of tracer 04: NH4
+          T  Dout(iTrate)      Write out rate of change of tracer 05: chlorophyll
+          T  Dout(iTrate)      Write out rate of change of tracer 06: phytoplankton
+          T  Dout(iTrate)      Write out rate of change of tracer 07: zooplankton
+          T  Dout(iTrate)      Write out rate of change of tracer 08: LdetritusN
+          T  Dout(iTrate)      Write out rate of change of tracer 09: SdetritusN
+          T  Dout(iTrate)      Write out rate of change of tracer 10: LdetritusC
+          T  Dout(iTrate)      Write out rate of change of tracer 11: SdetritusC
+          T  Dout(iTrate)      Write out rate of change of tracer 12: TIC
+          T  Dout(iTrate)      Write out rate of change of tracer 13: alkalinity
+          T  Dout(iTrate)      Write out rate of change of tracer 14: oxygen
+          T  Dout(iThadv)      Write out horizontal advection, tracer 03: NO3
+          T  Dout(iThadv)      Write out horizontal advection, tracer 04: NH4
+          T  Dout(iThadv)      Write out horizontal advection, tracer 05: chlorophyll
+          T  Dout(iThadv)      Write out horizontal advection, tracer 06: phytoplankton
+          T  Dout(iThadv)      Write out horizontal advection, tracer 07: zooplankton
+          T  Dout(iThadv)      Write out horizontal advection, tracer 08: LdetritusN
+          T  Dout(iThadv)      Write out horizontal advection, tracer 09: SdetritusN
+          T  Dout(iThadv)      Write out horizontal advection, tracer 10: LdetritusC
+          T  Dout(iThadv)      Write out horizontal advection, tracer 11: SdetritusC
+          T  Dout(iThadv)      Write out horizontal advection, tracer 12: TIC
+          T  Dout(iThadv)      Write out horizontal advection, tracer 13: alkalinity
+          T  Dout(iThadv)      Write out horizontal advection, tracer 14: oxygen
+          T  Dout(iTxadv)      Write out horizontal X-advection, tracer 03: NO3
+          T  Dout(iTxadv)      Write out horizontal X-advection, tracer 04: NH4
+          T  Dout(iTxadv)      Write out horizontal X-advection, tracer 05: chlorophyll
+          T  Dout(iTxadv)      Write out horizontal X-advection, tracer 06: phytoplankton
+          T  Dout(iTxadv)      Write out horizontal X-advection, tracer 07: zooplankton
+          T  Dout(iTxadv)      Write out horizontal X-advection, tracer 08: LdetritusN
+          T  Dout(iTxadv)      Write out horizontal X-advection, tracer 09: SdetritusN
+          T  Dout(iTxadv)      Write out horizontal X-advection, tracer 10: LdetritusC
+          T  Dout(iTxadv)      Write out horizontal X-advection, tracer 11: SdetritusC
+          T  Dout(iTxadv)      Write out horizontal X-advection, tracer 12: TIC
+          T  Dout(iTxadv)      Write out horizontal X-advection, tracer 13: alkalinity
+          T  Dout(iTxadv)      Write out horizontal X-advection, tracer 14: oxygen
+          T  Dout(iTyadv)      Write out horizontal Y-advection, tracer 03: NO3
+          T  Dout(iTyadv)      Write out horizontal Y-advection, tracer 04: NH4
+          T  Dout(iTyadv)      Write out horizontal Y-advection, tracer 05: chlorophyll
+          T  Dout(iTyadv)      Write out horizontal Y-advection, tracer 06: phytoplankton
+          T  Dout(iTyadv)      Write out horizontal Y-advection, tracer 07: zooplankton
+          T  Dout(iTyadv)      Write out horizontal Y-advection, tracer 08: LdetritusN
+          T  Dout(iTyadv)      Write out horizontal Y-advection, tracer 09: SdetritusN
+          T  Dout(iTyadv)      Write out horizontal Y-advection, tracer 10: LdetritusC
+          T  Dout(iTyadv)      Write out horizontal Y-advection, tracer 11: SdetritusC
+          T  Dout(iTyadv)      Write out horizontal Y-advection, tracer 12: TIC
+          T  Dout(iTyadv)      Write out horizontal Y-advection, tracer 13: alkalinity
+          T  Dout(iTyadv)      Write out horizontal Y-advection, tracer 14: oxygen
+          T  Dout(iTvadv)      Write out vertical advection, tracer 03: NO3
+          T  Dout(iTvadv)      Write out vertical advection, tracer 04: NH4
+          T  Dout(iTvadv)      Write out vertical advection, tracer 05: chlorophyll
+          T  Dout(iTvadv)      Write out vertical advection, tracer 06: phytoplankton
+          T  Dout(iTvadv)      Write out vertical advection, tracer 07: zooplankton
+          T  Dout(iTvadv)      Write out vertical advection, tracer 08: LdetritusN
+          T  Dout(iTvadv)      Write out vertical advection, tracer 09: SdetritusN
+          T  Dout(iTvadv)      Write out vertical advection, tracer 10: LdetritusC
+          T  Dout(iTvadv)      Write out vertical advection, tracer 11: SdetritusC
+          T  Dout(iTvadv)      Write out vertical advection, tracer 12: TIC
+          T  Dout(iTvadv)      Write out vertical advection, tracer 13: alkalinity
+          T  Dout(iTvadv)      Write out vertical advection, tracer 14: oxygen
+          T  Dout(iTvdif)      Write out vertical diffusion, tracer 03: NO3
+          T  Dout(iTvdif)      Write out vertical diffusion, tracer 04: NH4
+          T  Dout(iTvdif)      Write out vertical diffusion, tracer 05: chlorophyll
+          T  Dout(iTvdif)      Write out vertical diffusion, tracer 06: phytoplankton
+          T  Dout(iTvdif)      Write out vertical diffusion, tracer 07: zooplankton
+          T  Dout(iTvdif)      Write out vertical diffusion, tracer 08: LdetritusN
+          T  Dout(iTvdif)      Write out vertical diffusion, tracer 09: SdetritusN
+          T  Dout(iTvdif)      Write out vertical diffusion, tracer 10: LdetritusC
+          T  Dout(iTvdif)      Write out vertical diffusion, tracer 11: SdetritusC
+          T  Dout(iTvdif)      Write out vertical diffusion, tracer 12: TIC
+          T  Dout(iTvdif)      Write out vertical diffusion, tracer 13: alkalinity
+          T  Dout(iTvdif)      Write out vertical diffusion, tracer 14: oxygen
+          T  Dout(iDbio2)      Write out diagnostics for denitrification
+          T  Dout(iDbio2)      Write out diagnostics for CO2_airsea
+          T  Dout(iDbio2)      Write out diagnostics for pCO2
+          T  Dout(iDbio2)      Write out diagnostics for O2_airsea
+          T  Dout(iDbio3)      Write out diagnostics for P_Production
+          T  Dout(iDbio3)      Write out diagnostics for NO3_uptake
+          T  Dout(iDbio3)      Write out diagnostics for Nitrif_flux
+
+ Tile partition information for Grid 01:  41x80x16  tiling: 2x2
+
+     tile     Istr     Iend     Jstr     Jend     Npts
+
+        0        1       21        1       40    13440
+        1       22       41        1       40    12800
+        2        1       21       41       80    13440
+        3       22       41       41       80    12800
+
+ Tile minimum and maximum fractional coordinates for Grid 01:
+   (interior points only)
+
+     tile     Xmin     Xmax     Ymin     Ymax     grid
+
+        0     0.50    21.50     0.50    40.50  RHO-points
+        1    21.50    41.50     0.50    40.50  RHO-points
+        2     0.50    21.50    40.50    80.50  RHO-points
+        3    21.50    41.50    40.50    80.50  RHO-points
+
+        0     1.00    21.50     0.50    40.50    U-points
+        1    21.50    41.00     0.50    40.50    U-points
+        2     1.00    21.50    40.50    80.50    U-points
+        3    21.50    41.00    40.50    80.50    U-points
+
+        0     0.50    21.50     1.00    40.50    V-points
+        1    21.50    41.50     1.00    40.50    V-points
+        2     0.50    21.50    40.50    80.00    V-points
+        3    21.50    41.50    40.50    80.00    V-points
+
+ Maximum halo size in XI and ETA directions:
+
+               HaloSizeI(1) =     144
+               HaloSizeJ(1) =     212
+                TileSide(1) =      47
+                TileSize(1) =    1410
+
+
+
+ Floats Initial Locations, Grid: 01
+ ==================================
+
+               Ft0     Fx0     Fy0     Fz0      Fdt      Fdx      Fdy      Fdz
+
+0 1    1    0.1000   10.00    5.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   10.00   10.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   10.00   15.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   10.00   20.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   15.00    5.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   15.00   10.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   15.00   15.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   15.00   20.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   20.00    5.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   20.00   10.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   20.00   15.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   20.00   20.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   10.00   55.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   10.00   60.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   10.00   65.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   10.00   70.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   15.00   55.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   15.00   60.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   15.00   65.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   15.00   70.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   20.00   55.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   20.00   60.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   20.00   65.00   -1.00    0.000    0.000    0.000    0.000
+0 1    1    0.1000   20.00   70.00   -1.00    0.000    0.000    0.000    0.000
+
+         24  Nfloats         Number of float trajectories to compute.
+
+
+ Stations Parameters, Grid: 01
+ =============================
+
+          1  Nstation        Number of stations to write out into stations file.
+          T  Sout(idFsur)    Write out free-surface.
+          T  Sout(idUbar)    Write out 2D U-momentum component.
+          T  Sout(idVbar)    Write out 2D V-momentum component.
+          T  Sout(idUvel)    Write out 3D U-momentum component.
+          T  Sout(idVvel)    Write out 3D V-momentum component.
+          T  Sout(idWvel)    Write out W-momentum component.
+          T  Sout(idOvel)    Write out omega vertical velocity.
+          T  Sout(idTvar)    Write out tracer 01: temp
+          T  Sout(idTvar)    Write out tracer 02: salt
+          T  Sout(idTvar)    Write out tracer 03: NO3
+          T  Sout(idTvar)    Write out tracer 04: NH4
+          T  Sout(idTvar)    Write out tracer 05: chlorophyll
+          T  Sout(idTvar)    Write out tracer 06: phytoplankton
+          T  Sout(idTvar)    Write out tracer 07: zooplankton
+          T  Sout(idTvar)    Write out tracer 08: LdetritusN
+          T  Sout(idTvar)    Write out tracer 09: SdetritusN
+          T  Sout(idTvar)    Write out tracer 10: LdetritusC
+          T  Sout(idTvar)    Write out tracer 11: SdetritusC
+          T  Sout(idTvar)    Write out tracer 12: TIC
+          T  Sout(idTvar)    Write out tracer 13: alkalinity
+          T  Sout(idTvar)    Write out tracer 14: oxygen
+          T  Sout(idDano)    Write out density anomaly.
+          T  Sout(idVvis)    Write out vertical viscosity coefficient.
+          T  Sout(idTdif)    Write out vertical T-diffusion coefficient.
+          T  Sout(idSdif)    Write out vertical S-diffusion coefficient.
+ 
+             Flag and positions for station 0001:  0    20.0000   40.0000
+
+ Tracer Advection Scheme: NLM
+ ========================
+
+ Variable               Grid  Horizontal         Vertical
+ ---------              ----  ------------       ------------
+
+ temp                     1   Upstream3          Centered4
+
+ salt                     1   HSIMT              HSIMT
+
+ NO3                      1   HSIMT              HSIMT
+
+ NH4                      1   HSIMT              HSIMT
+
+ chlorophyll              1   HSIMT              HSIMT
+
+ phytoplankton            1   HSIMT              HSIMT
+
+ zooplankton              1   HSIMT              HSIMT
+
+ LdetritusN               1   HSIMT              HSIMT
+
+ SdetritusN               1   HSIMT              HSIMT
+
+ LdetritusC               1   HSIMT              HSIMT
+
+ SdetritusC               1   HSIMT              HSIMT
+
+ TIC                      1   HSIMT              HSIMT
+
+ alkalinity               1   HSIMT              HSIMT
+
+ oxygen                   1   HSIMT              HSIMT
+
+ Akima4     Fourth-order Akima advection
+ Centered2  Second-order centered differences advection
+ Centered4  Fourth-order centered differences advection
+ HSIMT      Third High-order Spatial Inteporlation at Middle Time Advection with TVD limiter
+ MPDATA     Multidimensional Positive Definite Advection Algorithm, recursive method
+ Splines    Conservative Parabolic Splines Reconstruction Advection (only vertical; not recommended)
+ Split_U3   Split third-order Upstream Advection
+ Upstream3  Third-order Upstream-biased Advection (only horizontal)
+
+
+ Lateral Boundary Conditions: NLM
+ ============================
+
+ Variable               Grid  West Edge    South Edge   East Edge    North Edge
+ ---------              ----  ----------   ----------   ----------   ----------
+
+ zeta                     1   Periodic     Closed       Periodic     Closed
+
+ ubar                     1   Periodic     Closed       Periodic     Closed
+
+ vbar                     1   Periodic     Closed       Periodic     Closed
+
+ u                        1   Periodic     Closed       Periodic     Closed
+
+ v                        1   Periodic     Closed       Periodic     Closed
+
+ temp                     1   Periodic     Closed       Periodic     Closed
+
+ salt                     1   Periodic     Closed       Periodic     Closed
+
+ NO3                      1   Periodic     Closed       Periodic     Closed
+
+ NH4                      1   Periodic     Closed       Periodic     Closed
+
+ chlorophyll              1   Periodic     Closed       Periodic     Closed
+
+ phytoplankton            1   Periodic     Closed       Periodic     Closed
+
+ zooplankton              1   Periodic     Closed       Periodic     Closed
+
+ LdetritusN               1   Periodic     Closed       Periodic     Closed
+
+ SdetritusN               1   Periodic     Closed       Periodic     Closed
+
+ LdetritusC               1   Periodic     Closed       Periodic     Closed
+
+ SdetritusC               1   Periodic     Closed       Periodic     Closed
+
+ TIC                      1   Periodic     Closed       Periodic     Closed
+
+ alkalinity               1   Periodic     Closed       Periodic     Closed
+
+ oxygen                   1   Periodic     Closed       Periodic     Closed
+
+ Activated C-preprocessing Options:
+
+ UPWELLING                Wind-Driven Upwelling/Downwelling over a Periodic Channel
+ ANA_BIOLOGY              Analytical biology initial conditions
+ ANA_BPFLUX               Analytical bottom passive tracers fluxes
+ ANA_BSFLUX               Analytical kinematic bottom salinity flux
+ ANA_BTFLUX               Analytical kinematic bottom temperature flux
+ ANA_DRAG_GRID            Analytical spatially varying linear drag coefficient
+ ANA_GRID                 Analytical grid set-up
+ ANA_INITIAL              Analytical initial conditions
+ ANA_SMFLUX               Analytical kinematic surface momentum flux
+ ANA_SPFLUX               Analytical surface passive tracer fluxes
+ ANA_SRFLUX               Analytical kinematic shortwave radiation flux
+ ANA_SSFLUX               Analytical kinematic surface salinity flux
+ ANA_STFLUX               Analytical kinematic surface temperature flux
+ ANA_VMIX                 Analytical vertical mixing coefficients
+ ASSUMED_SHAPE            Using assumed-shape arrays
+ AVERAGES                 Writing out time-averaged nonlinear model fields
+ BIO_FENNEL               Fennel et al. (2006) nitrogen-based model
+ BIO_SEDIMENT             Restore fallen particulate material to the nutrient pool
+ BOUNDARY_ALLREDUCE       Using mpi_allreduce in mp_boundary routine
+ CARBON                   Add Carbon constituents
+ COLLECT_ALLREDUCE        Using mpi_allreduce in mp_collect routine
+ DENITRIFICATION          Add denitrification processes
+ DIAGNOSTICS_BIO          Computing and writing biological diagnostic terms
+ DIAGNOSTICS_TS           Computing and writing tracer diagnostic terms
+ DIAGNOSTICS_UV           Computing and writing momentum diagnostic terms
+ DJ_GRADPS                Parabolic Splines density Jacobian (Shchepetkin, 2002)
+ DOUBLE_PRECISION         Double precision arithmetic numerical kernel
+ FLOATS                   Simulated Lagrangian drifters
+ FLOAT_VWALK              Lagrangian drifters with vertical diffusion, random walk
+ MIX_S_UV                 Mixing of momentum along constant S-surfaces
+ MPI                      MPI distributed-memory configuration
+ NONLINEAR                Nonlinear Model
+ !NONLIN_EOS              Linear Equation of State for seawater
+ !OCMIP_OXYGEN_SC         Schmidt number from Wanninkhof (1992)
+ OXYGEN                   Add oxygen dynamics
+ POWER_LAW                Power-law shape time-averaging barotropic filter
+ PROFILE                  Time profiling activated
+ !RW14_OXYGEN_SC          Schmidt number from Wanninkhof (1992)
+ REDUCE_ALLREDUCE         Using mpi_allreduce in mp_reduce routine
+ !RST_SINGLE              Double precision fields in restart NetCDF file
+ SALINITY                 Using salinity
+ STEP2D_LF_AM3            Predictor/Corrector LF-AM3 stepping scheme
+ SOLVE3D                  Solving 3D Primitive Equations
+ SPLINES_VDIFF            Parabolic Spline Reconstruction for Vertical Diffusion
+ SPLINES_VVISC            Parabolic Spline Reconstruction for Vertical Viscosity
+ STATIONS                 Writing out station data
+ !TALK_NONCONSERV         Alkalinity is passive and unaffected by nitrate or ammonium
+ UV_ADV                   Advection of momentum
+ UV_COR                   Coriolis term
+ UV_U3HADVECTION          Third-order upstream horizontal advection of 3D momentum
+ UV_C4VADVECTION          Fourth-order centered vertical advection of momentum
+ UV_DRAG_GRID             Spatially varying linear drag coefficient
+ UV_LDRAG                 Linear bottom stress
+ UV_VIS2                  Harmonic mixing of momentum
+ VAR_RHO_2D               Variable density barotropic mode
+ !VWALK_FORWARD           Lagrangian drifters, predictor/corrector random walk
+
+ Process Information:
+
+ Node #    0 (pid=  357092) is active.
+ Node #    1 (pid=  357093) is active.
+ Node #    2 (pid=  357094) is active.
+ Node #    3 (pid=  357095) is active.
+
+
+ INITIAL: Configuring and initializing forward nonlinear model ...
+ *******
+    ANA_GRID    - x-location of PSI-points: x_psi
+                   (Grid = 01, Min =  0.00000000E+00 Max =  4.00000000E+04)
+    ANA_GRID    - y-location of PSI-points: y_psi
+                   (Grid = 01, Min =  0.00000000E+00 Max =  8.00000000E+04)
+    ANA_GRID    - x-location of RHO-points: x_rho
+                   (Grid = 01, Min =  5.00000000E+02 Max =  4.05000000E+04)
+    ANA_GRID    - y-location of RHO-points: y_rho
+                   (Grid = 01, Min = -5.00000000E+02 Max =  8.05000000E+04)
+    ANA_GRID    - x-location of U-points: x_u
+                   (Grid = 01, Min =  0.00000000E+00 Max =  4.00000000E+04)
+    ANA_GRID    - y-location of U-points: y_u
+                   (Grid = 01, Min = -5.00000000E+02 Max =  8.05000000E+04)
+    ANA_GRID    - x-location of V-points: x_v
+                   (Grid = 01, Min =  5.00000000E+02 Max =  4.05000000E+04)
+    ANA_GRID    - y-location of V-points: y_v
+                   (Grid = 01, Min =  0.00000000E+00 Max =  8.00000000E+04)
+    ANA_GRID    - reciprocal XI-grid spacing: pm
+                   (Grid = 01, Min =  1.00000000E-03 Max =  1.00000000E-03)
+    ANA_GRID    - reciprocal ETA-grid spacing: pn
+                   (Grid = 01, Min =  1.00000000E-03 Max =  1.00000000E-03)
+    ANA_GRID    - angle between XI-axis and EAST: angler
+                   (Grid = 01, Min =  0.00000000E+00 Max =  0.00000000E+00)
+    ANA_GRID    - Coriolis parameter at RHO-points: f
+                   (Grid = 01, Min = -8.26000000E-05 Max = -8.26000000E-05)
+    ANA_GRID    - bathymetry at RHO-points: h
+                   (Grid = 01, Min =  2.52004887E+01 Max =  1.50000000E+02)
+
+ Vertical S-coordinate System, Grid 01:
+
+ level   S-coord     Cs-curve   Z   at hmin       at hc    half way     at hmax
+
+    16   0.0000000   0.0000000        0.000       0.000       0.000       0.000
+    15  -0.0625000  -0.0019442       -0.809      -0.806      -1.348      -1.589
+    14  -0.1250000  -0.0078455       -1.668      -1.661      -2.966      -3.687
+    13  -0.1875000  -0.0179119       -2.580      -2.568      -4.867      -6.321
+    12  -0.2500000  -0.0324983       -3.549      -3.531      -7.077      -9.535
+    11  -0.3125000  -0.0521190       -4.581      -4.558      -9.630     -13.397
+    10  -0.3750000  -0.0774659       -5.686      -5.656     -12.573     -17.996
+     9  -0.4375000  -0.1094327       -6.875      -6.837     -15.967     -23.445
+     8  -0.5000000  -0.1491465       -8.162      -8.114     -19.889     -29.890
+     7  -0.5625000  -0.1980075       -9.564      -9.506     -24.435     -37.512
+     6  -0.6250000  -0.2577387      -11.104     -11.034     -29.721     -46.531
+     5  -0.6875000  -0.3304460      -12.808     -12.724     -35.892     -57.218
+     4  -0.7500000  -0.4186931      -14.709     -14.609     -43.121     -69.903
+     3  -0.8125000  -0.5255915      -16.846     -16.726     -51.622     -84.987
+     2  -0.8750000  -0.6549105      -19.266     -19.124     -61.651    -102.953
+     1  -0.9375000  -0.8112096      -22.028     -21.859     -73.518    -124.388
+     0  -1.0000000  -1.0000000      -25.200     -25.000     -87.600    -150.000
+
+ Time Splitting Weights for Grid 01:    ndtfast =  30    nfast =  42
+ ==================================
+
+    Primary            Secondary            Accumulated to Current Step
+
+  1-0.0008094437383769 0.0333333333333333-0.0008094437383769 0.0333333333333333
+  2-0.0014053566728197 0.0333603147912792-0.0022148004111966 0.0666936481246126
+  3-0.0017877524645903 0.0334071600137066-0.0040025528757869 0.1001008081383191
+  4-0.0019566842408176 0.0334667517625262-0.0059592371166046 0.1335675599008453
+  5-0.0019122901320372 0.0335319745705535-0.0078715272486418 0.1670995344713988
+  6-0.0016548570247459 0.0335957175749547-0.0095263842733877 0.2006952520463536
+  7-0.0011849025289723 0.0336508794757796-0.0107112868023600 0.2343461315221331
+  8-0.0005032751608631 0.0336903762267453-0.0112145619632232 0.2680365077488784
+  9 0.0003887272597151 0.0337071520654408-0.0108258347035081 0.3017436598143192
+ 10 0.0014892209965583 0.0336941944901169-0.0093366137069498 0.3354378543044362
+ 11 0.0027955815694920 0.0336445537902317-0.0065410321374578 0.3690824080946679
+ 12 0.0043042707117221 0.0335513677379153-0.0022367614257356 0.4026337758325831
+ 13 0.0060106451121704 0.0334078920475245 0.0037738836864348 0.4360416678801076
+ 14 0.0079087469427945 0.0332075372104522 0.0116826306292293 0.4692492050905598
+ 15 0.0099910761708920 0.0329439123123590 0.0216737068001213 0.5021931174029188
+ 16 0.0122483446563884 0.0326108764399960 0.0339220514565097 0.5348039938429148
+ 17 0.0146692120341107 0.0322025982847830 0.0485912634906204 0.5670065921276978
+ 18 0.0172400033810439 0.0317136245503127 0.0658312668716643 0.5987202166780105
+ 19 0.0199444086685725 0.0311389577709445 0.0857756755402368 0.6298591744489550
+ 20 0.0227631639997064 0.0304741441486588 0.1085388395399432 0.6603333185976138
+ 21 0.0256737146312911 0.0297153720153352 0.1342125541712342 0.6900486906129490
+ 22 0.0286498597812016 0.0288595815276255 0.1628624139524359 0.7189082721405746
+ 23 0.0316613792205220 0.0279045862015855 0.1945237931729578 0.7468128583421600
+ 24 0.0346736416507075 0.0268492068942347 0.2291974348236653 0.7736620652363948
+ 25 0.0376471948657328 0.0256934188392112 0.2668446296893981 0.7993554840756060
+ 26 0.0405373376992232 0.0244385123436867 0.3073819673886213 0.8237939964192927
+ 27 0.0432936737565710 0.0230872677537126 0.3506756411451924 0.8468812641730054
+ 28 0.0458596469320356 0.0216441452951603 0.3965352880772280 0.8685254094681656
+ 29 0.0481720587108284 0.0201154903974257 0.4447073467880565 0.8886408998655914
+ 30 0.0501605672561820 0.0185097551070648 0.4948679140442384 0.9071506549726561
+ 31 0.0517471682814030 0.0168377361985254 0.5466150823256415 0.9239883911711815
+ 32 0.0528456577069106 0.0151128305891453 0.5994607400325521 0.9391012217603267
+ 33 0.0533610761022577 0.0133513086655816 0.6528218161348098 0.9524525304259084
+ 34 0.0531891349131379 0.0115726061288397 0.7060109510479478 0.9640251365547481
+ 35 0.0522156244733761 0.0097996349650684 0.7582265755213239 0.9738247715198165
+ 36 0.0503158038019030 0.0080591141492892 0.8085423793232269 0.9818838856691057
+ 37 0.0473537721847153 0.0063819206892258 0.8558961515079423 0.9882658063583315
+ 38 0.0431818225418188 0.0048034616164019 0.8990779740497611 0.9930692679747334
+ 39 0.0376397765791564 0.0033640675316746 0.9367177506289175 0.9964333355064080
+ 40 0.0305543017255206 0.0021094083123694 0.9672720523544381 0.9985427438187774
+ 41 0.0217382098544504 0.0010909315881854 0.9890102622088885 0.9996336754069628
+ 42 0.0109897377911118 0.0003663245930371 1.0000000000000004 0.9999999999999999
+
+ ndtfast, nfast =   30  42   nfast/ndtfast =  1.40000
+
+ Centers of gravity and integrals (values must be 1, 1, approx 1/2, 1, 1):
+
+    1.000000000000 1.047601458608 0.523800729304 1.000000000000 1.000000000000
+
+ Power filter parameters, Fgamma, gamma =  0.28400   0.18933
+
+ Metrics information for Grid 01:
+ ===============================
+
+ Minimum X-grid spacing, DXmin =  1.00000000E+00 km
+ Maximum X-grid spacing, DXmax =  1.00000000E+00 km
+ Minimum Y-grid spacing, DYmin =  1.00000000E+00 km
+ Maximum Y-grid spacing, DYmax =  1.00000000E+00 km
+ Minimum Z-grid spacing, DZmin =  8.08965824E-01 m
+ Maximum Z-grid spacing, DZmax =  2.56123321E+01 m
+
+ Minimum barotropic Courant Number =  2.22358627E-01
+ Maximum barotropic Courant Number =  5.42494240E-01
+ Maximum Coriolis   Courant Number =  2.47800000E-02
+
+    ANA_INITIAL - vertically integrated u-momentum component: ubar
+                   (Grid = 01, Min =  0.00000000E+00 Max =  0.00000000E+00)
+    ANA_INITIAL - vertically integrated v-momentum component: vbar
+                   (Grid = 01, Min =  0.00000000E+00 Max =  0.00000000E+00)
+    ANA_INITIAL - free-surface: zeta
+                   (Grid = 01, Min =  0.00000000E+00 Max =  0.00000000E+00)
+    ANA_INITIAL - u-momentum component: u
+                   (Grid = 01, Min =  0.00000000E+00 Max =  0.00000000E+00)
+    ANA_INITIAL - v-momentum component: v
+                   (Grid = 01, Min =  0.00000000E+00 Max =  0.00000000E+00)
+    ANA_INITIAL - potential temperature: temp
+                   (Grid = 01, Min =  1.45204834E+01 Max =  2.19365219E+01)
+    ANA_INITIAL - salinity: salt
+                   (Grid = 01, Min =  3.50000000E+01 Max =  3.50000000E+01)
+    ANA_BIOLOGY - nitrate concentration: NO3
+                   (Grid = 01, Min =  1.67000000E+00 Max =  2.26358685E+00)
+    ANA_BIOLOGY - ammonium concentration: NH4
+                   (Grid = 01, Min =  1.00000000E-01 Max =  1.00000000E-01)
+    ANA_BIOLOGY - chlorophyll concentration: chlorophyll
+                   (Grid = 01, Min =  2.00000000E-02 Max =  2.00000000E-02)
+    ANA_BIOLOGY - phytoplankton concentration: phytoplankton
+                   (Grid = 01, Min =  8.00000000E-02 Max =  8.00000000E-02)
+    ANA_BIOLOGY - zooplankton concentration: zooplankton
+                   (Grid = 01, Min =  6.00000000E-02 Max =  6.00000000E-02)
+    ANA_BIOLOGY - large nitrogen-detritus concentration: LdetritusN
+                   (Grid = 01, Min =  2.00000000E-02 Max =  2.00000000E-02)
+    ANA_BIOLOGY - small nitrogen-detritus concentration: SdetritusN
+                   (Grid = 01, Min =  4.00000000E-02 Max =  4.00000000E-02)
+    ANA_BIOLOGY - large carbon-detritus concentration: LdetritusC
+                   (Grid = 01, Min =  2.00000000E-03 Max =  2.00000000E-03)
+    ANA_BIOLOGY - small carbon-detritus concentration: SdetritusC
+                   (Grid = 01, Min =  6.00000000E-02 Max =  6.00000000E-02)
+    ANA_BIOLOGY - total inorganic carbon: TIC
+                   (Grid = 01, Min =  2.10000000E+03 Max =  2.10000000E+03)
+    ANA_BIOLOGY - total alkalinity: alkalinity
+                   (Grid = 01, Min =  2.35000000E+03 Max =  2.35000000E+03)
+    ANA_BIOLOGY - dissolved oxygen concentration: oxygen
+                   (Grid = 01, Min =  4.46229362E+02 Max =  4.46229362E+02)
+    ANA_DRAG    - linear bottom drag coefficient: rdrag
+                   (Grid = 01, Min =  4.76811688E-04 Max =  1.66711947E-03)
+
+ Basin information for Grid 01:
+
+ Maximum grid stiffness ratios:  rx0 =   6.931666E-02 (Beckmann and Haidvogel)
+                                 rx1 =   8.661243E-01 (Haney)
+
+ Initial domain volumes:  TotVolume =  3.8843755884E+11 m3
+                         MinCellVol =  8.4521383562E+05 m3
+                         MaxCellVol =  2.5612332106E+07 m3
+                            Max/Min =  3.0302783777E+01
+
+
+ NL ROMS/TOMS: started time-stepping: (Grid: 01 TimeSteps: 000000000001 - 000000000288)
+
+
+ TIME-STEP YYYY-MM-DD hh:mm:ss.ss  KINETIC_ENRG   POTEN_ENRG    TOTAL_ENRG    NET_VOLUME
+                     C => (i,j,k)       Cu            Cv            Cw         Max Speed
+
+         0 0001-01-01 00:00:00.00  0.000000E+00  6.585677E+02  6.585677E+02  3.884376E+11
+                       (00,00,00)  0.000000E+00  0.000000E+00  0.000000E+00  0.000000E+00
+  DEF_HIS_NF90     - creating history file,            Grid 01: roms_his.nc
+  WRT_HIS_NF90     - writing history     fields (Index=1,1) in record = 1
+  DEF_AVG_NF90     - creating average file,            Grid 01: roms_avg.nc
+  DEF_DIAGS_NF90   - creating diagnostics file,        Grid 01: roms_dia.nc
+  DEF_STATION_NF90 - creating stations file,           Grid 01: roms_sta.nc
+  DEF_FLOATS_NF90  - creating floats file,             Grid 01: roms_flt.nc
+  DEF_RST_NF90     - creating restart file,            Grid 01: roms_rst.nc
+         1 0001-01-01 00:05:00.00  6.479416E-13  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,01)  1.068554E-09  1.950202E-06  0.000000E+00  9.216771E-06
+         2 0001-01-01 00:10:00.00  9.248042E-12  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,02,08)  6.747438E-08  1.759579E-06  1.433645E-05  3.656753E-05
+         3 0001-01-01 00:15:00.00  5.902091E-11  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  2.683678E-05  3.803593E-06  5.384387E-06  9.265969E-05
+         4 0001-01-01 00:20:00.00  2.028560E-10  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  4.853723E-05  5.341073E-06  3.841985E-06  1.660389E-04
+         5 0001-01-01 00:25:00.00  5.077161E-10  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,80,16)  7.515716E-05  6.393533E-06  5.171529E-06  2.537886E-04
+         6 0001-01-01 00:30:00.00  1.051964E-09  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  1.041387E-04  9.140823E-06  6.081369E-06  3.541278E-04
+         7 0001-01-01 00:35:00.00  1.924005E-09  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,80,16)  1.382722E-04  9.417400E-06  7.976227E-06  4.658335E-04
+         8 0001-01-01 00:40:00.00  3.221219E-09  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,80,16)  1.746104E-04  1.114893E-05  9.671671E-06  5.879848E-04
+         9 0001-01-01 00:45:00.00  5.049021E-09  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  2.122044E-04  1.714787E-05  1.115250E-05  7.198200E-04
+        10 0001-01-01 00:50:00.00  7.520172E-09  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  2.538286E-04  2.045752E-05  1.283452E-05  8.607482E-04
+        11 0001-01-01 00:55:00.00  1.075440E-08  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  2.979749E-04  2.399447E-05  1.468262E-05  1.010258E-03
+        12 0001-01-01 01:00:00.00  1.487793E-08  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  3.445154E-04  2.783906E-05  1.412236E-05  1.167919E-03
+        13 0001-01-01 01:05:00.00  2.002297E-08  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  3.933347E-04  3.214236E-05  1.262244E-05  1.333359E-03
+        14 0001-01-01 01:10:00.00  2.632728E-08  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  4.443309E-04  3.681592E-05  1.325094E-05  1.506248E-03
+        15 0001-01-01 01:15:00.00  3.393401E-08  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  4.974151E-04  4.182858E-05  1.405720E-05  1.686292E-03
+        16 0001-01-01 01:20:00.00  4.299134E-08  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  5.525062E-04  4.727120E-05  1.429084E-05  1.873226E-03
+        17 0001-01-01 01:25:00.00  5.365206E-08  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  6.095300E-04  5.308189E-05  1.573371E-05  2.066815E-03
+        18 0001-01-01 01:30:00.00  6.607332E-08  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  6.684211E-04  5.919969E-05  1.702134E-05  2.266841E-03
+        19 0001-01-01 01:35:00.00  8.041644E-08  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  7.291191E-04  6.566540E-05  1.686404E-05  2.473107E-03
+        20 0001-01-01 01:40:00.00  9.684670E-08  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  7.915687E-04  7.245957E-05  1.601115E-05  2.685429E-03
+        21 0001-01-01 01:45:00.00  1.155329E-07  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  8.557172E-04  7.968266E-05  1.427467E-05  2.903634E-03
+        22 0001-01-01 01:50:00.00  1.366475E-07  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  9.215137E-04  8.734383E-05  1.380456E-05  3.127565E-03
+        23 0001-01-01 01:55:00.00  1.603659E-07  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  9.889124E-04  9.534963E-05  1.483383E-05  3.357084E-03
+        24 0001-01-01 02:00:00.00  1.868671E-07  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  1.057871E-03  1.037038E-04  1.543699E-05  3.592052E-03
+        25 0001-01-01 02:05:00.00  2.163326E-07  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  1.128350E-03  1.124202E-04  1.571935E-05  3.832342E-03
+        26 0001-01-01 02:10:00.00  2.489468E-07  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  1.200311E-03  1.214403E-04  1.601788E-05  4.077837E-03
+        27 0001-01-01 02:15:00.00  2.848966E-07  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  1.273721E-03  1.307631E-04  1.522284E-05  4.328424E-03
+        28 0001-01-01 02:20:00.00  3.243714E-07  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  1.348546E-03  1.404090E-04  1.339950E-05  4.583995E-03
+        29 0001-01-01 02:25:00.00  3.675627E-07  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  1.424755E-03  1.504149E-04  1.115531E-05  4.844447E-03
+        30 0001-01-01 02:30:00.00  4.146636E-07  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  1.502316E-03  1.608215E-04  9.482670E-06  5.109683E-03
+        31 0001-01-01 02:35:00.00  4.658692E-07  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  1.581199E-03  1.715672E-04  9.344778E-06  5.379619E-03
+        32 0001-01-01 02:40:00.00  5.213760E-07  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,79,16)  1.661377E-03  1.825907E-04  9.530623E-06  5.654175E-03
+        33 0001-01-01 02:45:00.00  5.813818E-07  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,78,16)  1.738422E-03  1.996290E-04  7.924466E-06  5.933268E-03
+        34 0001-01-01 02:50:00.00  6.460857E-07  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,78,16)  1.820571E-03  2.133266E-04  7.862735E-06  6.216821E-03
+        35 0001-01-01 02:55:00.00  7.156879E-07  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,78,16)  1.903893E-03  2.274148E-04  7.406231E-06  6.504760E-03
+        36 0001-01-01 03:00:00.00  7.903894E-07  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,78,16)  1.988364E-03  2.419217E-04  6.527375E-06  6.797013E-03
+        37 0001-01-01 03:05:00.00  8.703922E-07  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,80,15)  1.921787E-03  1.127292E-04  3.044216E-04  7.093511E-03
+        38 0001-01-01 03:10:00.00  9.558992E-07  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,80,15)  2.005812E-03  1.180211E-04  3.193090E-04  7.394189E-03
+        39 0001-01-01 03:15:00.00  1.047114E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,07,16)  2.189411E-03  3.583229E-04  3.993682E-07  7.698988E-03
+        40 0001-01-01 03:20:00.00  1.144240E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,07,16)  2.275259E-03  3.799095E-04  3.567989E-07  8.007857E-03
+        41 0001-01-01 03:25:00.00  1.247482E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,07,16)  2.362006E-03  4.022298E-04  1.049010E-06  8.320742E-03
+        42 0001-01-01 03:30:00.00  1.357044E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,07,16)  2.449626E-03  4.252412E-04  1.412815E-06  8.637585E-03
+        43 0001-01-01 03:35:00.00  1.473130E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,08,16)  2.521866E-03  4.660514E-04  7.744342E-07  8.958332E-03
+        44 0001-01-01 03:40:00.00  1.595946E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,08,16)  2.610423E-03  4.914819E-04  7.487246E-07  9.282933E-03
+        45 0001-01-01 03:45:00.00  1.725694E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,08,16)  2.699751E-03  5.175516E-04  9.560755E-07  9.611340E-03
+        46 0001-01-01 03:50:00.00  1.862577E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,08,16)  2.789828E-03  5.442508E-04  1.498550E-06  9.943506E-03
+        47 0001-01-01 03:55:00.00  2.006798E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,08,16)  2.880630E-03  5.716163E-04  2.330007E-06  1.027939E-02
+        48 0001-01-01 04:00:00.00  2.158557E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,09,16)  2.954154E-03  6.188273E-04  2.069213E-06  1.061896E-02
+        49 0001-01-01 04:05:00.00  2.318056E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,09,16)  3.045570E-03  6.488421E-04  2.492153E-06  1.096216E-02
+        50 0001-01-01 04:10:00.00  2.485494E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,71,16)  3.130801E-03  6.881575E-04  1.030651E-06  1.130897E-02
+        51 0001-01-01 04:15:00.00  2.661069E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,71,16)  3.222956E-03  7.207363E-04  1.493668E-06  1.165932E-02
+        52 0001-01-01 04:20:00.00  2.844980E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,71,16)  3.315660E-03  7.541005E-04  2.049865E-06  1.201320E-02
+        53 0001-01-01 04:25:00.00  3.037422E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,71,16)  3.408890E-03  7.882460E-04  2.446418E-06  1.237055E-02
+        54 0001-01-01 04:30:00.00  3.238592E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,71,16)  3.502624E-03  8.231500E-04  2.612150E-06  1.273135E-02
+        55 0001-01-01 04:35:00.00  3.448683E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,71,16)  3.596838E-03  8.587708E-04  2.674487E-06  1.309557E-02
+        56 0001-01-01 04:40:00.00  3.667889E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,70,16)  3.673572E-03  9.145008E-04  1.571622E-06  1.346317E-02
+        57 0001-01-01 04:45:00.00  3.896399E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,70,16)  3.767971E-03  9.524821E-04  1.973251E-06  1.383412E-02
+        58 0001-01-01 04:50:00.00  4.134404E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,70,16)  3.862766E-03  9.911632E-04  2.527621E-06  1.420839E-02
+        59 0001-01-01 04:55:00.00  4.382089E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,70,16)  3.957936E-03  1.030588E-03  3.155992E-06  1.458595E-02
+        60 0001-01-01 05:00:00.00  4.639640E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,70,16)  4.053461E-03  1.070783E-03  3.805144E-06  1.496675E-02
+        61 0001-01-01 05:05:00.00  4.907237E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,14)  3.885913E-03  2.449213E-04  1.139498E-03  1.535078E-02
+        62 0001-01-01 05:10:00.00  5.185060E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,14)  3.989325E-03  2.519086E-04  1.173358E-03  1.573801E-02
+        63 0001-01-01 05:15:00.00  5.473287E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,14)  4.093690E-03  2.589136E-04  1.207359E-03  1.612842E-02
+        64 0001-01-01 05:20:00.00  5.772093E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,14)  4.198998E-03  2.659393E-04  1.241213E-03  1.652196E-02
+        65 0001-01-01 05:25:00.00  6.081649E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,14)  4.305242E-03  2.729873E-04  1.274679E-03  1.691863E-02
+        66 0001-01-01 05:30:00.00  6.402128E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,14)  4.412415E-03  2.800519E-04  1.307612E-03  1.731838E-02
+        67 0001-01-01 05:35:00.00  6.733696E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  4.102822E-03  2.660191E-04  1.780687E-03  1.772119E-02
+        68 0001-01-01 05:40:00.00  7.076521E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  4.204902E-03  2.726559E-04  1.824982E-03  1.812704E-02
+        69 0001-01-01 05:45:00.00  7.430765E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  4.307884E-03  2.792916E-04  1.870023E-03  1.853589E-02
+        70 0001-01-01 05:50:00.00  7.796590E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  4.411763E-03  2.859346E-04  1.915596E-03  1.894772E-02
+        71 0001-01-01 05:55:00.00  8.174153E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  4.516530E-03  2.925906E-04  1.961245E-03  1.936252E-02
+        72 0001-01-01 06:00:00.00  8.563610E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  4.622179E-03  2.992610E-04  2.006664E-03  1.978026E-02
+  WRT_HIS_NF90     - writing history     fields (Index=1,1) in record = 2
+  WRT_AVG_NF90     - writing averaged    fields             in record = 1
+  WRT_DIAGS_NF90   - writing diagnostics fields             in record = 1
+  WRT_RST_NF90     - writing re-start    fields (Index=1,1) in record = 1
+        73 0001-01-01 06:05:00.00  8.965112E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  4.728703E-03  3.059455E-04  2.051756E-03  2.020091E-02
+        74 0001-01-01 06:10:00.00  9.378807E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  4.836094E-03  3.126406E-04  2.096536E-03  2.062444E-02
+        75 0001-01-01 06:15:00.00  9.804839E-06  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  4.944346E-03  3.193386E-04  2.141164E-03  2.105084E-02
+        76 0001-01-01 06:20:00.00  1.024335E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  5.053452E-03  3.260328E-04  2.186019E-03  2.148008E-02
+        77 0001-01-01 06:25:00.00  1.069448E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  5.163405E-03  3.327258E-04  2.231420E-03  2.191213E-02
+        78 0001-01-01 06:30:00.00  1.115835E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  5.274199E-03  3.394270E-04  2.277223E-03  2.234698E-02
+        79 0001-01-01 06:35:00.00  1.163511E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  5.385828E-03  3.461432E-04  2.322951E-03  2.278460E-02
+        80 0001-01-01 06:40:00.00  1.212489E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  5.498284E-03  3.528742E-04  2.368264E-03  2.322497E-02
+        81 0001-01-01 06:45:00.00  1.262780E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  5.611561E-03  3.596151E-04  2.413189E-03  2.366807E-02
+        82 0001-01-01 06:50:00.00  1.314397E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  5.725652E-03  3.663605E-04  2.457975E-03  2.411388E-02
+        83 0001-01-01 06:55:00.00  1.367353E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  5.840551E-03  3.731054E-04  2.502904E-03  2.456236E-02
+        84 0001-01-01 07:00:00.00  1.421658E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  5.956253E-03  3.798469E-04  2.548229E-03  2.501350E-02
+        85 0001-01-01 07:05:00.00  1.477325E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  6.072750E-03  3.865882E-04  2.594094E-03  2.546727E-02
+        86 0001-01-01 07:10:00.00  1.534365E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  6.190036E-03  3.933384E-04  2.640335E-03  2.592367E-02
+        87 0001-01-01 07:15:00.00  1.592787E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  6.308106E-03  4.001051E-04  2.686500E-03  2.638266E-02
+        88 0001-01-01 07:20:00.00  1.652603E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  6.426953E-03  4.068881E-04  2.732229E-03  2.684423E-02
+        89 0001-01-01 07:25:00.00  1.713823E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  6.546570E-03  4.136818E-04  2.777545E-03  2.730836E-02
+        90 0001-01-01 07:30:00.00  1.776455E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  6.666951E-03  4.204806E-04  2.822748E-03  2.777501E-02
+        91 0001-01-01 07:35:00.00  1.840509E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  6.788092E-03  4.272816E-04  2.868135E-03  2.824418E-02
+        92 0001-01-01 07:40:00.00  1.905993E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  6.909984E-03  4.340846E-04  2.913847E-03  2.871583E-02
+        93 0001-01-01 07:45:00.00  1.972917E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  7.032624E-03  4.408925E-04  2.959901E-03  2.918995E-02
+        94 0001-01-01 07:50:00.00  2.041288E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  7.156004E-03  4.477114E-04  3.006156E-03  2.966653E-02
+        95 0001-01-01 07:55:00.00  2.111114E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  7.280119E-03  4.545467E-04  3.052313E-03  3.014554E-02
+        96 0001-01-01 08:00:00.00  2.182404E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  7.404963E-03  4.613976E-04  3.098115E-03  3.062696E-02
+        97 0001-01-01 08:05:00.00  2.255164E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  7.530529E-03  4.682573E-04  3.143621E-03  3.111076E-02
+        98 0001-01-01 08:10:00.00  2.329402E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  7.656813E-03  4.751191E-04  3.189179E-03  3.159694E-02
+        99 0001-01-01 08:15:00.00  2.405124E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  7.783808E-03  4.819811E-04  3.235130E-03  3.208546E-02
+       100 0001-01-01 08:20:00.00  2.482338E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  7.911510E-03  4.888465E-04  3.281561E-03  3.257631E-02
+       101 0001-01-01 08:25:00.00  2.561049E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  8.039911E-03  4.957203E-04  3.328319E-03  3.306947E-02
+       102 0001-01-01 08:30:00.00  2.641263E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  8.169008E-03  5.026082E-04  3.375143E-03  3.356493E-02
+       103 0001-01-01 08:35:00.00  2.722986E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  8.298794E-03  5.095137E-04  3.421761E-03  3.406266E-02
+       104 0001-01-01 08:40:00.00  2.806221E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,13)  8.429263E-03  5.164354E-04  3.468002E-03  3.456265E-02
+       105 0001-01-01 08:45:00.00  2.890975E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  7.880089E-03  4.741854E-04  4.243707E-03  3.506487E-02
+       106 0001-01-01 08:50:00.00  2.977252E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  8.004725E-03  4.805768E-04  4.299637E-03  3.556930E-02
+       107 0001-01-01 08:55:00.00  3.065055E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  8.130027E-03  4.869708E-04  4.355898E-03  3.607593E-02
+       108 0001-01-01 09:00:00.00  3.154388E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  8.255990E-03  4.933710E-04  4.412550E-03  3.658473E-02
+       109 0001-01-01 09:05:00.00  3.245257E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  8.382608E-03  4.997821E-04  4.469432E-03  3.709570E-02
+       110 0001-01-01 09:10:00.00  3.337663E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  8.509877E-03  5.062073E-04  4.526319E-03  3.760880E-02
+       111 0001-01-01 09:15:00.00  3.431611E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  8.637791E-03  5.126475E-04  4.583067E-03  3.812403E-02
+       112 0001-01-01 09:20:00.00  3.527104E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  8.766345E-03  5.191001E-04  4.639648E-03  3.864137E-02
+       113 0001-01-01 09:25:00.00  3.624145E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  8.895534E-03  5.255599E-04  4.696170E-03  3.916079E-02
+       114 0001-01-01 09:30:00.00  3.722737E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  9.025352E-03  5.320222E-04  4.752862E-03  3.968227E-02
+       115 0001-01-01 09:35:00.00  3.822882E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  9.155795E-03  5.384866E-04  4.809931E-03  4.020581E-02
+       116 0001-01-01 09:40:00.00  3.924583E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  9.286858E-03  5.449579E-04  4.867380E-03  4.073137E-02
+       117 0001-01-01 09:45:00.00  4.027841E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  9.418536E-03  5.514422E-04  4.924982E-03  4.125896E-02
+       118 0001-01-01 09:50:00.00  4.132657E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  9.550825E-03  5.579428E-04  4.982456E-03  4.178854E-02
+       119 0001-01-01 09:55:00.00  4.239034E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  9.683717E-03  5.644586E-04  5.039654E-03  4.232011E-02
+       120 0001-01-01 10:00:00.00  4.346972E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  9.817210E-03  5.709855E-04  5.096624E-03  4.285364E-02
+       121 0001-01-01 10:05:00.00  4.456472E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  9.951298E-03  5.775183E-04  5.153545E-03  4.338911E-02
+       122 0001-01-01 10:10:00.00  4.567536E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  1.008598E-02  5.840532E-04  5.210644E-03  4.392651E-02
+       123 0001-01-01 10:15:00.00  4.680164E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  1.022124E-02  5.905899E-04  5.268084E-03  4.446582E-02
+       124 0001-01-01 10:20:00.00  4.794357E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  1.035708E-02  5.971326E-04  5.325853E-03  4.500703E-02
+       125 0001-01-01 10:25:00.00  4.910117E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  1.049350E-02  6.036863E-04  5.383754E-03  4.555011E-02
+       126 0001-01-01 10:30:00.00  5.027443E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  1.063050E-02  6.102530E-04  5.441552E-03  4.609506E-02
+       127 0001-01-01 10:35:00.00  5.146338E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  1.076806E-02  6.168305E-04  5.499153E-03  4.664185E-02
+       128 0001-01-01 10:40:00.00  5.266800E-05  6.585677E+02  6.585677E+02  3.884376E+11
+                       (01,01,12)  1.090618E-02  6.234144E-04  5.556653E-03  4.719047E-02
+       129 0001-01-01 10:45:00.00  5.388832E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.104486E-02  6.300011E-04  5.614236E-03  4.774090E-02
+       130 0001-01-01 10:50:00.00  5.512432E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.118409E-02  6.365892E-04  5.672054E-03  4.829313E-02
+       131 0001-01-01 10:55:00.00  5.637601E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.132387E-02  6.431804E-04  5.730153E-03  4.884713E-02
+       132 0001-01-01 11:00:00.00  5.764339E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.146419E-02  6.497789E-04  5.788443E-03  4.940290E-02
+       133 0001-01-01 11:05:00.00  5.892645E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.160505E-02  6.563892E-04  5.846718E-03  4.996042E-02
+       134 0001-01-01 11:10:00.00  6.022519E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.174645E-02  6.630124E-04  5.904776E-03  5.051967E-02
+       135 0001-01-01 11:15:00.00  6.153961E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.188838E-02  6.696452E-04  5.962559E-03  5.108065E-02
+       136 0001-01-01 11:20:00.00  6.286971E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.203084E-02  6.762821E-04  6.020209E-03  5.164332E-02
+       137 0001-01-01 11:25:00.00  6.421548E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.217381E-02  6.829190E-04  6.077962E-03  5.220767E-02
+       138 0001-01-01 11:30:00.00  6.557693E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.231730E-02  6.895550E-04  6.135992E-03  5.277369E-02
+       139 0001-01-01 11:35:00.00  6.695406E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.246131E-02  6.961922E-04  6.194319E-03  5.334136E-02
+       140 0001-01-01 11:40:00.00  6.834687E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.260583E-02  7.028347E-04  6.252827E-03  5.391068E-02
+       141 0001-01-01 11:45:00.00  6.975536E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.275085E-02  7.094857E-04  6.311326E-03  5.448161E-02
+       142 0001-01-01 11:50:00.00  7.117954E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.289637E-02  7.161454E-04  6.369663E-03  5.505416E-02
+       143 0001-01-01 11:55:00.00  7.261941E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.304238E-02  7.228110E-04  6.427812E-03  5.562831E-02
+       144 0001-01-01 12:00:00.00  7.407498E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.318889E-02  7.294779E-04  6.485904E-03  5.620403E-02
+  WRT_HIS_NF90     - writing history     fields (Index=1,1) in record = 3
+  WRT_AVG_NF90     - writing averaged    fields             in record = 2
+  WRT_DIAGS_NF90   - writing diagnostics fields             in record = 2
+  WRT_RST_NF90     - writing re-start    fields (Index=1,1) in record = 2
+       145 0001-01-01 12:05:00.00  7.554624E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.333589E-02  7.361436E-04  6.544125E-03  5.678131E-02
+       146 0001-01-01 12:10:00.00  7.703319E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.348336E-02  7.428090E-04  6.602574E-03  5.736014E-02
+       147 0001-01-01 12:15:00.00  7.853584E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.363132E-02  7.494774E-04  6.661194E-03  5.794050E-02
+       148 0001-01-01 12:20:00.00  8.005419E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.377976E-02  7.561521E-04  6.719825E-03  5.852239E-02
+       149 0001-01-01 12:25:00.00  8.158824E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.392866E-02  7.628348E-04  6.778303E-03  5.910578E-02
+       150 0001-01-01 12:30:00.00  8.313800E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.407803E-02  7.695241E-04  6.836550E-03  5.969067E-02
+       151 0001-01-01 12:35:00.00  8.470348E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.422787E-02  7.762160E-04  6.894618E-03  6.027702E-02
+       152 0001-01-01 12:40:00.00  8.628468E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.437816E-02  7.829061E-04  6.952674E-03  6.086484E-02
+       153 0001-01-01 12:45:00.00  8.788164E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.452891E-02  7.895917E-04  7.010911E-03  6.145411E-02
+       154 0001-01-01 12:50:00.00  8.949436E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.468011E-02  7.962740E-04  7.069422E-03  6.204481E-02
+       155 0001-01-01 12:55:00.00  9.112286E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.483175E-02  8.029568E-04  7.128139E-03  6.263692E-02
+       156 0001-01-01 13:00:00.00  9.276716E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.498384E-02  8.096434E-04  7.186881E-03  6.323045E-02
+       157 0001-01-01 13:05:00.00  9.442730E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.513637E-02  8.163351E-04  7.245479E-03  6.382536E-02
+       158 0001-01-01 13:10:00.00  9.610328E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.528933E-02  8.230305E-04  7.303870E-03  6.442166E-02
+       159 0001-01-01 13:15:00.00  9.779513E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.544273E-02  8.297260E-04  7.362115E-03  6.501932E-02
+       160 0001-01-01 13:20:00.00  9.950287E-05  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.559655E-02  8.364185E-04  7.420354E-03  6.561833E-02
+       161 0001-01-01 13:25:00.00  1.012265E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.575080E-02  8.431070E-04  7.478716E-03  6.621867E-02
+       162 0001-01-01 13:30:00.00  1.029661E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.590546E-02  8.497931E-04  7.537235E-03  6.682033E-02
+       163 0001-01-01 13:35:00.00  1.047217E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.606055E-02  8.564803E-04  7.595813E-03  6.742331E-02
+       164 0001-01-01 13:40:00.00  1.064933E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.621604E-02  8.631708E-04  7.654286E-03  6.802758E-02
+       165 0001-01-01 13:45:00.00  1.082810E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.637195E-02  8.698639E-04  7.712545E-03  6.863314E-02
+       166 0001-01-01 13:50:00.00  1.100847E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.652825E-02  8.765568E-04  7.770603E-03  6.923996E-02
+       167 0001-01-01 13:55:00.00  1.119045E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.668496E-02  8.832454E-04  7.828591E-03  6.984804E-02
+       168 0001-01-01 14:00:00.00  1.137406E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.684207E-02  8.899272E-04  7.886666E-03  7.045736E-02
+       169 0001-01-01 14:05:00.00  1.155929E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.699957E-02  8.966017E-04  7.944933E-03  7.106791E-02
+       170 0001-01-01 14:10:00.00  1.174615E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.715746E-02  9.032715E-04  8.003383E-03  7.167967E-02
+       171 0001-01-01 14:15:00.00  1.193464E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.731573E-02  9.099401E-04  8.061891E-03  7.229264E-02
+       172 0001-01-01 14:20:00.00  1.212477E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.747439E-02  9.166098E-04  8.120286E-03  7.290680E-02
+       173 0001-01-01 14:25:00.00  1.231655E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.763343E-02  9.232802E-04  8.178451E-03  7.352214E-02
+       174 0001-01-01 14:30:00.00  1.250999E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.779285E-02  9.299484E-04  8.236394E-03  7.413864E-02
+       175 0001-01-01 14:35:00.00  1.270508E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.795263E-02  9.366112E-04  8.294233E-03  7.475630E-02
+       176 0001-01-01 14:40:00.00  1.290184E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.811279E-02  9.432666E-04  8.352103E-03  7.537509E-02
+       177 0001-01-01 14:45:00.00  1.310027E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.827331E-02  9.499150E-04  8.410073E-03  7.599501E-02
+       178 0001-01-01 14:50:00.00  1.330038E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.843419E-02  9.565586E-04  8.468108E-03  7.661604E-02
+       179 0001-01-01 14:55:00.00  1.350218E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.859542E-02  9.631997E-04  8.526093E-03  7.723817E-02
+       180 0001-01-01 15:00:00.00  1.370568E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.875702E-02  9.698391E-04  8.583909E-03  7.786139E-02
+       181 0001-01-01 15:05:00.00  1.391088E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.891896E-02  9.764749E-04  8.641513E-03  7.848569E-02
+       182 0001-01-01 15:10:00.00  1.411780E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.908125E-02  9.831038E-04  8.698973E-03  7.911106E-02
+       183 0001-01-01 15:15:00.00  1.432644E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.924388E-02  9.897227E-04  8.756429E-03  7.973747E-02
+       184 0001-01-01 15:20:00.00  1.453681E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.940686E-02  9.963306E-04  8.814002E-03  8.036492E-02
+       185 0001-01-01 15:25:00.00  1.474894E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.957017E-02  1.002929E-03  8.871710E-03  8.099340E-02
+       186 0001-01-01 15:30:00.00  1.496281E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.973381E-02  1.009522E-03  8.929463E-03  8.162289E-02
+       187 0001-01-01 15:35:00.00  1.517846E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  1.989779E-02  1.016110E-03  8.987114E-03  8.225339E-02
+       188 0001-01-01 15:40:00.00  1.539588E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  2.006209E-02  1.022695E-03  9.044537E-03  8.288487E-02
+       189 0001-01-01 15:45:00.00  1.561509E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  2.022672E-02  1.029275E-03  9.101699E-03  8.351734E-02
+       190 0001-01-01 15:50:00.00  1.583609E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  2.039166E-02  1.035847E-03  9.158668E-03  8.415077E-02
+       191 0001-01-01 15:55:00.00  1.605891E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  2.055692E-02  1.042407E-03  9.215571E-03  8.478516E-02
+       192 0001-01-01 16:00:00.00  1.628355E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  2.072250E-02  1.048956E-03  9.272514E-03  8.542049E-02
+       193 0001-01-01 16:05:00.00  1.651003E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  2.088838E-02  1.055495E-03  9.329512E-03  8.605674E-02
+       194 0001-01-01 16:10:00.00  1.673836E-04  6.585677E+02  6.585678E+02  3.884376E+11
+                       (01,01,12)  2.105457E-02  1.062025E-03  9.386487E-03  8.669392E-02
+       195 0001-01-01 16:15:00.00  1.696854E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.122107E-02  1.068548E-03  9.443327E-03  8.733201E-02
+       196 0001-01-01 16:20:00.00  1.720061E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.138786E-02  1.075064E-03  9.499961E-03  8.797099E-02
+       197 0001-01-01 16:25:00.00  1.743457E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.155496E-02  1.081569E-03  9.556405E-03  8.861085E-02
+       198 0001-01-01 16:30:00.00  1.767043E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.172234E-02  1.088062E-03  9.612754E-03  8.925159E-02
+       199 0001-01-01 16:35:00.00  1.790821E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.189002E-02  1.094540E-03  9.669116E-03  8.989318E-02
+       200 0001-01-01 16:40:00.00  1.814793E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.205798E-02  1.101004E-03  9.725547E-03  9.053562E-02
+       201 0001-01-01 16:45:00.00  1.838960E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.222622E-02  1.107457E-03  9.782002E-03  9.117890E-02
+       202 0001-01-01 16:50:00.00  1.863324E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.239475E-02  1.113900E-03  9.838358E-03  9.182301E-02
+       203 0001-01-01 16:55:00.00  1.887887E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.256356E-02  1.120336E-03  9.894483E-03  9.246793E-02
+       204 0001-01-01 17:00:00.00  1.912649E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.273263E-02  1.126763E-03  9.950320E-03  9.311365E-02
+       205 0001-01-01 17:05:00.00  1.937612E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.290198E-02  1.133178E-03  1.000591E-02  9.376017E-02
+       206 0001-01-01 17:10:00.00  1.962779E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.307160E-02  1.139578E-03  1.006135E-02  9.440747E-02
+       207 0001-01-01 17:15:00.00  1.988151E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.324148E-02  1.145962E-03  1.011676E-02  9.505553E-02
+       208 0001-01-01 17:20:00.00  2.013729E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.341162E-02  1.152331E-03  1.017220E-02  9.570435E-02
+       209 0001-01-01 17:25:00.00  2.039516E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.358202E-02  1.158685E-03  1.022762E-02  9.635392E-02
+       210 0001-01-01 17:30:00.00  2.065513E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.375268E-02  1.165027E-03  1.028293E-02  9.700422E-02
+       211 0001-01-01 17:35:00.00  2.091722E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.392359E-02  1.171357E-03  1.033805E-02  9.765524E-02
+       212 0001-01-01 17:40:00.00  2.118146E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.409475E-02  1.177674E-03  1.039294E-02  9.830698E-02
+       213 0001-01-01 17:45:00.00  2.144785E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.426615E-02  1.183974E-03  1.044765E-02  9.895942E-02
+       214 0001-01-01 17:50:00.00  2.171643E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.443779E-02  1.190258E-03  1.050229E-02  9.961255E-02
+       215 0001-01-01 17:55:00.00  2.198720E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.460968E-02  1.196523E-03  1.055691E-02  1.002664E-01
+       216 0001-01-01 18:00:00.00  2.226020E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.478180E-02  1.202772E-03  1.061151E-02  1.009208E-01
+  WRT_HIS_NF90     - writing history     fields (Index=1,1) in record = 4
+  WRT_AVG_NF90     - writing averaged    fields             in record = 3
+  WRT_DIAGS_NF90   - writing diagnostics fields             in record = 3
+  WRT_RST_NF90     - writing re-start    fields (Index=1,1) in record = 3
+       217 0001-01-01 18:05:00.00  2.253543E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.495415E-02  1.209006E-03  1.066600E-02  1.015760E-01
+       218 0001-01-01 18:10:00.00  2.281292E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.512674E-02  1.215228E-03  1.072028E-02  1.022318E-01
+       219 0001-01-01 18:15:00.00  2.309269E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.529955E-02  1.221437E-03  1.077426E-02  1.028882E-01
+       220 0001-01-01 18:20:00.00  2.337475E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.547259E-02  1.227631E-03  1.082795E-02  1.035452E-01
+       221 0001-01-01 18:25:00.00  2.365914E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.564584E-02  1.233807E-03  1.088143E-02  1.042029E-01
+       222 0001-01-01 18:30:00.00  2.394586E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.581932E-02  1.239962E-03  1.093482E-02  1.048611E-01
+       223 0001-01-01 18:35:00.00  2.423494E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.599301E-02  1.246098E-03  1.098819E-02  1.055200E-01
+       224 0001-01-01 18:40:00.00  2.452641E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.616691E-02  1.252214E-03  1.104154E-02  1.061794E-01
+       225 0001-01-01 18:45:00.00  2.482028E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.634102E-02  1.258313E-03  1.109479E-02  1.068394E-01
+       226 0001-01-01 18:50:00.00  2.511658E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.651534E-02  1.264396E-03  1.114786E-02  1.075000E-01
+       227 0001-01-01 18:55:00.00  2.541533E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.668985E-02  1.270462E-03  1.120067E-02  1.081611E-01
+       228 0001-01-01 19:00:00.00  2.571655E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.686457E-02  1.276510E-03  1.125326E-02  1.088227E-01
+       229 0001-01-01 19:05:00.00  2.602027E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.703949E-02  1.282537E-03  1.130567E-02  1.094849E-01
+       230 0001-01-01 19:10:00.00  2.632650E-04  6.585677E+02  6.585679E+02  3.884376E+11
+                       (01,01,12)  2.721460E-02  1.288544E-03  1.135799E-02  1.101476E-01
+       231 0001-01-01 19:15:00.00  2.663526E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  2.738990E-02  1.294529E-03  1.141023E-02  1.108108E-01
+       232 0001-01-01 19:20:00.00  2.694659E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  2.756539E-02  1.300496E-03  1.146236E-02  1.114745E-01
+       233 0001-01-01 19:25:00.00  2.726050E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  2.774106E-02  1.306445E-03  1.151428E-02  1.121387E-01
+       234 0001-01-01 19:30:00.00  2.757701E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  2.791691E-02  1.312378E-03  1.156591E-02  1.128033E-01
+       235 0001-01-01 19:35:00.00  2.789615E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  2.809295E-02  1.318291E-03  1.161723E-02  1.134685E-01
+       236 0001-01-01 19:40:00.00  2.821794E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  2.826916E-02  1.324184E-03  1.166831E-02  1.141340E-01
+       237 0001-01-01 19:45:00.00  2.854239E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  2.844554E-02  1.330054E-03  1.171923E-02  1.148000E-01
+       238 0001-01-01 19:50:00.00  2.886955E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  2.862209E-02  1.335900E-03  1.177008E-02  1.154665E-01
+       239 0001-01-01 19:55:00.00  2.919942E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  2.879881E-02  1.341723E-03  1.182089E-02  1.161334E-01
+       240 0001-01-01 20:00:00.00  2.953203E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  2.897569E-02  1.347524E-03  1.187161E-02  1.168006E-01
+       241 0001-01-01 20:05:00.00  2.986741E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  2.915274E-02  1.353306E-03  1.192215E-02  1.174683E-01
+       242 0001-01-01 20:10:00.00  3.020558E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  2.932994E-02  1.359067E-03  1.197242E-02  1.181364E-01
+       243 0001-01-01 20:15:00.00  3.054656E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  2.950730E-02  1.364808E-03  1.202242E-02  1.188048E-01
+       244 0001-01-01 20:20:00.00  3.089037E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  2.968481E-02  1.370527E-03  1.207219E-02  1.194737E-01
+       245 0001-01-01 20:25:00.00  3.123704E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  2.986247E-02  1.376222E-03  1.212178E-02  1.201428E-01
+       246 0001-01-01 20:30:00.00  3.158659E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  3.004027E-02  1.381893E-03  1.217124E-02  1.208124E-01
+       247 0001-01-01 20:35:00.00  3.193904E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  3.021822E-02  1.387541E-03  1.222057E-02  1.214822E-01
+       248 0001-01-01 20:40:00.00  3.229441E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  3.039631E-02  1.393168E-03  1.226970E-02  1.221524E-01
+       249 0001-01-01 20:45:00.00  3.265273E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  3.057454E-02  1.398775E-03  1.231857E-02  1.228230E-01
+       250 0001-01-01 20:50:00.00  3.301402E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  3.075290E-02  1.404360E-03  1.236714E-02  1.234938E-01
+       251 0001-01-01 20:55:00.00  3.337830E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  3.093139E-02  1.409922E-03  1.241543E-02  1.241649E-01
+       252 0001-01-01 21:00:00.00  3.374559E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  3.111002E-02  1.415459E-03  1.246352E-02  1.248363E-01
+       253 0001-01-01 21:05:00.00  3.411592E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  3.128876E-02  1.420970E-03  1.251150E-02  1.255080E-01
+       254 0001-01-01 21:10:00.00  3.448930E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  3.146764E-02  1.426455E-03  1.255940E-02  1.261799E-01
+       255 0001-01-01 21:15:00.00  3.486577E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  3.164663E-02  1.431915E-03  1.260720E-02  1.268521E-01
+       256 0001-01-01 21:20:00.00  3.524534E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  3.182574E-02  1.437353E-03  1.265483E-02  1.275246E-01
+       257 0001-01-01 21:25:00.00  3.562804E-04  6.585677E+02  6.585680E+02  3.884376E+11
+                       (01,01,12)  3.200496E-02  1.442768E-03  1.270220E-02  1.281973E-01
+       258 0001-01-01 21:30:00.00  3.601388E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.218430E-02  1.448161E-03  1.274927E-02  1.288702E-01
+       259 0001-01-01 21:35:00.00  3.640290E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.236374E-02  1.453531E-03  1.279605E-02  1.295433E-01
+       260 0001-01-01 21:40:00.00  3.679510E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.254329E-02  1.458876E-03  1.284260E-02  1.302167E-01
+       261 0001-01-01 21:45:00.00  3.719051E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.272294E-02  1.464194E-03  1.288898E-02  1.308902E-01
+       262 0001-01-01 21:50:00.00  3.758914E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.290270E-02  1.469488E-03  1.293521E-02  1.315639E-01
+       263 0001-01-01 21:55:00.00  3.799103E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.308255E-02  1.474758E-03  1.298126E-02  1.322378E-01
+       264 0001-01-01 22:00:00.00  3.839619E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.326249E-02  1.480004E-03  1.302708E-02  1.329119E-01
+       265 0001-01-01 22:05:00.00  3.880463E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.344252E-02  1.485228E-03  1.307261E-02  1.335861E-01
+       266 0001-01-01 22:10:00.00  3.921639E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.362265E-02  1.490427E-03  1.311786E-02  1.342604E-01
+       267 0001-01-01 22:15:00.00  3.963147E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.380286E-02  1.495600E-03  1.316289E-02  1.349349E-01
+       268 0001-01-01 22:20:00.00  4.004991E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.398315E-02  1.500746E-03  1.320776E-02  1.356095E-01
+       269 0001-01-01 22:25:00.00  4.047171E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.416352E-02  1.505865E-03  1.325252E-02  1.362843E-01
+       270 0001-01-01 22:30:00.00  4.089690E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.434397E-02  1.510957E-03  1.329717E-02  1.369591E-01
+       271 0001-01-01 22:35:00.00  4.132551E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.452449E-02  1.516025E-03  1.334165E-02  1.376340E-01
+       272 0001-01-01 22:40:00.00  4.175753E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.470509E-02  1.521071E-03  1.338588E-02  1.383090E-01
+       273 0001-01-01 22:45:00.00  4.219300E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.488575E-02  1.526093E-03  1.342981E-02  1.389841E-01
+       274 0001-01-01 22:50:00.00  4.263193E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.506648E-02  1.531091E-03  1.347343E-02  1.396593E-01
+       275 0001-01-01 22:55:00.00  4.307434E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.524727E-02  1.536065E-03  1.351678E-02  1.403345E-01
+       276 0001-01-01 23:00:00.00  4.352024E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.542812E-02  1.541012E-03  1.355993E-02  1.410097E-01
+       277 0001-01-01 23:05:00.00  4.396965E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.560903E-02  1.545932E-03  1.360293E-02  1.416850E-01
+       278 0001-01-01 23:10:00.00  4.442258E-04  6.585677E+02  6.585681E+02  3.884376E+11
+                       (01,01,12)  3.578999E-02  1.550828E-03  1.364575E-02  1.423603E-01
+       279 0001-01-01 23:15:00.00  4.487906E-04  6.585677E+02  6.585682E+02  3.884376E+11
+                       (01,01,12)  3.597101E-02  1.555699E-03  1.368838E-02  1.430356E-01
+       280 0001-01-01 23:20:00.00  4.533909E-04  6.585677E+02  6.585682E+02  3.884376E+11
+                       (01,01,12)  3.615207E-02  1.560546E-03  1.373075E-02  1.437109E-01
+       281 0001-01-01 23:25:00.00  4.580270E-04  6.585677E+02  6.585682E+02  3.884376E+11
+                       (01,01,12)  3.633318E-02  1.565369E-03  1.377286E-02  1.443862E-01
+       282 0001-01-01 23:30:00.00  4.626989E-04  6.585677E+02  6.585682E+02  3.884376E+11
+                       (01,01,12)  3.651433E-02  1.570166E-03  1.381474E-02  1.450615E-01
+       283 0001-01-01 23:35:00.00  4.674069E-04  6.585677E+02  6.585682E+02  3.884376E+11
+                       (01,01,12)  3.669552E-02  1.574936E-03  1.385642E-02  1.457368E-01
+       284 0001-01-01 23:40:00.00  4.721511E-04  6.585677E+02  6.585682E+02  3.884376E+11
+                       (01,01,12)  3.687675E-02  1.579680E-03  1.389797E-02  1.464121E-01
+       285 0001-01-01 23:45:00.00  4.769316E-04  6.585677E+02  6.585682E+02  3.884376E+11
+                       (01,01,12)  3.705801E-02  1.584398E-03  1.393940E-02  1.470873E-01
+       286 0001-01-01 23:50:00.00  4.817485E-04  6.585677E+02  6.585682E+02  3.884376E+11
+                       (01,01,12)  3.723931E-02  1.589091E-03  1.398066E-02  1.477624E-01
+       287 0001-01-01 23:55:00.00  4.866021E-04  6.585677E+02  6.585682E+02  3.884376E+11
+                       (01,01,12)  3.742063E-02  1.593761E-03  1.402170E-02  1.484375E-01
+       288 0001-01-02 00:00:00.00  4.914923E-04  6.585677E+02  6.585682E+02  3.884376E+11
+                       (01,01,12)  3.760198E-02  1.598408E-03  1.406244E-02  1.491125E-01
+  WRT_HIS_NF90     - writing history     fields (Index=1,1) in record = 5
+  WRT_AVG_NF90     - writing averaged    fields             in record = 4
+  WRT_DIAGS_NF90   - writing diagnostics fields             in record = 4
+  WRT_RST_NF90     - writing re-start    fields (Index=1,1) in record = 2
+
+Elapsed wall CPU time for each process (seconds):
+
+ Node   #    0 CPU:      13.834
+ Node   #    1 CPU:      14.175
+ Node   #    2 CPU:      14.170
+ Node   #    3 CPU:      14.175
+ Total:                  56.354
+ Average:                14.089
+ Minimum:                13.834
+ Maximum:                14.175
+
+ Nonlinear model elapsed CPU time profile, Grid: 01
+
+  Allocation and array initialization ..............         0.114  ( 0.2029 %)
+  Ocean state initialization .......................         0.036  ( 0.0645 %)
+  Reading of input data ............................         0.003  ( 0.0045 %)
+  Processing of input data .........................         0.149  ( 0.2646 %)
+  Processing of output time averaged data ..........         3.788  ( 6.7213 %)
+  Computation of vertical boundary conditions ......         0.078  ( 0.1378 %)
+  Computation of global information integrals ......         0.208  ( 0.3692 %)
+  Writing of output data ...........................         3.376  ( 5.9911 %)
+  Model 2D kernel ..................................        21.478  (38.1128 %)
+  Lagrangian floats trajectories ...................         0.057  ( 0.1004 %)
+  2D/3D coupling, vertical metrics .................         0.225  ( 0.3999 %)
+  Omega vertical velocity ..........................         0.134  ( 0.2371 %)
+  Equation of state for seawater ...................         0.172  ( 0.3053 %)
+  Biological module, source/sink terms .............         4.997  ( 8.8669 %)
+  3D equations right-side terms ....................         0.699  ( 1.2412 %)
+  3D equations predictor step ......................         5.596  ( 9.9296 %)
+  Pressure gradient ................................         0.301  ( 0.5333 %)
+  Harmonic stress tensor, S-surfaces ...............         0.266  ( 0.4715 %)
+  Corrector time-step for 3D momentum ..............         1.801  ( 3.1952 %)
+  Corrector time-step for tracers ..................        12.339  (21.8949 %)
+                                              Total:        55.815   99.0439 %
+
+  Unique kernel(s) regions profiled ................        55.815   99.0439 %
+  Residual, non-profiled code ......................         0.539    0.9561 %
+
+
+ All percentages are with respect to total time =           56.354
+
+
+ MPI communications profile, Grid: 01
+
+  Message Passage: 2D halo exchanges ...............         2.597  ( 4.6084 %)
+  Message Passage: 3D halo exchanges ...............         1.174  ( 2.0828 %)
+  Message Passage: 4D halo exchanges ...............         1.891  ( 3.3553 %)
+  Message Passage: data broadcast ..................         2.417  ( 4.2888 %)
+  Message Passage: data reduction ..................         0.052  ( 0.0920 %)
+  Message Passage: data gathering ..................         0.169  ( 0.2997 %)
+  Message Passage: point data gathering ............         0.288  ( 0.5118 %)
+  Message Passage: synchronization barrier .........         0.001  ( 0.0015 %)
+                                              Total:         8.589   15.2402 %
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+ Dynamic and Automatic memory (MB) usage for Grid 01:  41x80x16  tiling: 2x2
+
+     tile          Dynamic        Automatic            USAGE      MPI-Buffers
+
+        0            67.19             5.10            72.29             5.10
+        1             0.00             2.99             2.99             0.00
+        2             0.00             3.10             3.10             0.00
+        3             0.00             2.99             2.99             0.00
+
+    TOTAL            67.19            14.19            81.38             5.10
+
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+Pool Memory High Water Mark:       0
+Pool Memory High Water Efficiency: Pool Memory High Water Mark:       0
+Pool Memory High Water Efficiency: 0
+Pool Memory High Water Mark:       0
+Pool Memory High Water Efficiency: 0
+Pool Memory High Water Mark:       0
+Pool Memory High Water Efficiency: 0
+0
+
+ ROMS/TOMS - Output NetCDF summary for Grid 01:
+             number of time records written in HISTORY file = 5
+             number of time records written in RESTART file = 2
+             number of time records written in AVERAGE file = 4
+             number of time records written in STATION file = 289
+
+ Analytical header files used:
+
+     ROMS/Functionals/ana_biology.h
+     ROMS/Functionals/ana_drag.h
+     ROMS/Functionals/ana_btflux.h
+     ROMS/Functionals/ana_grid.h
+     /staff/liyuanhang/work/2024OCT/roms_8/roms/project/upwelling/ana_initial.h
+     ROMS/Functionals/ana_smflux.h
+     ROMS/Functionals/ana_srflux.h
+     ROMS/Functionals/ana_stflux.h
+     ROMS/Functionals/ana_vmix.h
+
+ Biology model header files used:
+
+     /staff/liyuanhang/work/2024OCT/roms_8/roms/project/upwelling/fennel.h
+
+ ROMS/TOMS: DONE... Monday - August 12, 2024 - 11:10:42 AM

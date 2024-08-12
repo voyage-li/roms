@@ -9,6 +9,120 @@
 !=======================================================================
 !
       implicit none
+      interface init
+        subroutine pass_const(                                                  &
+        &      Istr_f, IstrB_f, IstrP_f, IstrR_f, IstrT_f,                      &
+        &      IstrM_f, IstrU_f,                                                &
+        &      Iend_f, IendB_f, IendP_f, IendR_f, IendT_f,                      &
+        &      Jstr_f, JstrB_f, JstrP_f, JstrR_f, JstrT_f,                      &
+        &      JstrM_f, JstrV_f,                                                &
+        &      Jend_f, JendB_f, JendP_f, JendR_f, JendT_f,                      &
+        &      Istrm3_f, Istrm2_f, Istrm1_f, IstrUm2_f, IstrUm1_f,              &
+        &      Iendp1_f, Iendp2_f, Iendp2i_f, Iendp3_f,                         &
+        &      Jstrm3_f, Jstrm2_f, Jstrm1_f, JstrVm2_f, JstrVm1_f,              &
+        &      Jendp1_f, Jendp2_f, Jendp2i_f, Jendp3_f,                         &
+        &      ng_f, tile_f,                                                    &
+        &      LBi_f, UBi_f, LBj_f, UBj_f, UBk_f,                               &
+        &      IminS_f, ImaxS_f, JminS_f, JmaxS_f,                              &
+        &      krhs_f, kstp_f, knew_f                                           &
+#ifdef SOLVE3D
+        &      ,nstp_f, nnew_f                                                  &
+#endif
+        &       ) bind(C,name="pass_const")
+            use iso_c_binding
+            integer :: Istr_f, IstrB_f, IstrP_f, IstrR_f, IstrT_f, IstrM_f, IstrU_f
+            integer :: Iend_f, IendB_f, IendP_f, IendR_f, IendT_f
+            integer :: Jstr_f, JstrB_f, JstrP_f, JstrR_f, JstrT_f, JstrM_f, JstrV_f
+            integer :: Jend_f, JendB_f, JendP_f, JendR_f, JendT_f
+            integer :: Istrm3_f, Istrm2_f, Istrm1_f, IstrUm2_f, IstrUm1_f
+            integer :: Iendp1_f, Iendp2_f, Iendp2i_f, Iendp3_f
+            integer :: Jstrm3_f, Jstrm2_f, Jstrm1_f, JstrVm2_f, JstrVm1_f
+            integer :: Jendp1_f, Jendp2_f, Jendp2i_f, Jendp3_f
+            integer :: ng_f, tile_f
+            integer :: LBi_f, UBi_f, LBj_f, UBj_f, UBk_f
+            integer :: IminS_f, ImaxS_f, JminS_f, JmaxS_f
+            integer :: krhs_f, kstp_f, knew_f
+#ifdef SOLVE3D
+            integer :: nstp_f, nnew_f
+#endif
+        end subroutine pass_const
+        subroutine step_loop1(                                                      &
+        &       Drhs_f, zeta_f, zetax, zetay, zetaz,                                &
+        &       h_f, hx, hy,                                                        &
+        &       on_u_f, on_ux, on_uy,                                               &
+        &       DUon_f, ubar_f, ubarx, ubary, ubarz,                                &
+#ifdef WEC
+#ifdef WET_DRY
+        &       umask_wet_f, umask_wetx, umask_wety,                                &
+#endif
+        &       DUson_f, ubar_stokes_f,                                             &
+        &       ubar_stokesx, ubar_stokesy, ubar_stokesz,                           &
+#endif
+        &       om_v_f, om_vx, om_vy,                                               &
+        &       DVom_f, vbar_f, vbarx, vbary, vbarz                                 &
+#ifdef WEC
+#ifdef WET_DRY
+        &       ,vmask_wet_f, vmask_wetx, vmask_wety                                &
+#endif
+        &       ,DVsom_f, vbar_stokes_f,                                            &
+        &       vbar_stokesx, vbar_stokesy, vbar_stokesz                            &
+#endif
+        &       ) bind(C,name="step_loop1")
+            use iso_c_binding
+            real(8), dimension(*) :: Drhs_f, zeta_f
+            integer :: zetax, zetay, zetaz
+            real(8), dimension(*) :: h_f
+            integer :: hx, hy
+            real(8), dimension(*) :: on_u_f
+            integer :: on_ux, on_uy
+            real(8), dimension(*) :: DUon_f, ubar_f
+            integer :: ubarx, ubary, ubarz
+#ifdef WEC
+#ifdef WET_DRY
+            real(8), dimension(*) :: umask_wet_f
+            integer :: umask_wetx, umask_wety
+#endif
+            real(8), dimension(*) :: DUson_f, ubar_stokes_f
+            integer :: ubar_stokesx, ubar_stokesy, ubar_stokesz
+#endif
+            real(8), dimension(*) :: om_v_f
+            integer :: om_vx, om_vy
+            real(8), dimension(*) :: DVom_f, vbar_f
+            integer :: vbarx, vbary, vbarz
+#ifdef WEC
+#ifdef WET_DRY
+            real(8), dimension(*) :: vmask_wet_f
+            integer :: vmask_wetx, vmask_wety   
+#endif
+            real(8), dimension(*) :: DVsom_f, vbar_stokes_f
+            integer :: vbar_stokesx, vbar_stokesy, vbar_stokesz
+#endif
+        end subroutine step_loop1
+        subroutine step_loop2(                                                      &
+        &        cff2,                                                              &
+        &        Zt_avg1_f, Zt_avg1x, Zt_avg1y,                                     &
+        &        DU_avg1_f, DU_avg1x, DU_avg1y,                                     &
+        &        DU_avg2_f, DU_avg2x, DU_avg2y,                                     &
+        &        DUon_f,                                                            &
+        &        DV_avg1_f, DV_avg1x, DV_avg1y,                                     &
+        &        DV_avg2_f, DV_avg2x, DV_avg2y,                                     &
+        &        DVom_f) bind(C, name="step_loop2")
+            use iso_c_binding
+            real(8) :: cff2
+            real(8), dimension(*) :: Zt_avg1_f
+            integer :: Zt_avg1x, Zt_avg1y
+            real(8), dimension(*) :: DU_avg1_f
+            integer :: DU_avg1x, DU_avg1y
+            real(8), dimension(*) :: DU_avg2_f
+            integer :: DU_avg2x, DU_avg2y
+            real(8), dimension(*) :: DUon_f
+            real(8), dimension(*) :: DV_avg1_f
+            integer :: DV_avg1x, DV_avg1y
+            real(8), dimension(*) :: DV_avg2_f
+            integer :: DV_avg2x, DV_avg2y
+            real(8), dimension(*) :: DVom_f
+        end subroutine step_loop2
+      end interface
 !
       PRIVATE
       PUBLIC  :: step2d
@@ -553,7 +667,7 @@
 #ifdef DIAGNOSTICS_UV
       integer :: idiag
 #endif
-!
+!.
       real(r8) :: cff, cff1, cff2, cff3, cff4, cff5, cff6, cff7
       real(r8) :: fac, fac1, fac2, fac3
 !
@@ -610,97 +724,144 @@
 !  Compute total depth (m) and vertically integrated mass fluxes.
 !-----------------------------------------------------------------------
 !
-#if defined DISTRIBUTE && !defined NESTING
-
-!  In distributed-memory, the I- and J-ranges are different and a
-!  special exchange is done to avoid having three ghost points for
-!  high order numerical stencils. Notice that a private array is
-!  passed below to the exchange routine. It also applies periodic
-!  boundary conditions, if appropriate and no partitions in I- or
-!  J-directions.
-!
-      DO j=JstrV-2,Jendp2
-        DO i=IstrU-2,Iendp2
-          Drhs(i,j)=zeta(i,j,krhs)+h(i,j)
-        END DO
-      END DO
-      DO j=JstrV-2,Jendp2
-        DO i=IstrU-1,Iendp2
-          cff=0.5_r8*on_u(i,j)
-          cff1=cff*(Drhs(i,j)+Drhs(i-1,j))
-          DUon(i,j)=ubar(i,j,krhs)*cff1
-# ifdef WEC
-#  ifdef WET_DRY
-          cff5=ABS(ABS(umask_wet(i,j))-1.0_r8)
-          cff6=0.5_r8+DSIGN(0.5_r8,ubar_stokes(i,j))*umask_wet(i,j)
-          cff7=0.5_r8*umask_wet(i,j)*cff5+cff6*(1.0_r8-cff5)
-          cff1=cff1*cff7
-#  endif
-          DUSon(i,j)=ubar_stokes(i,j)*cff1
-          DUon(i,j)=DUon(i,j)+DUSon(i,j)
-# endif
-        END DO
-      END DO
-      DO j=JstrV-1,Jendp2
-        DO i=IstrU-2,Iendp2
-          cff=0.5_r8*om_v(i,j)
-          cff1=cff*(Drhs(i,j)+Drhs(i,j-1))
-          DVom(i,j)=vbar(i,j,krhs)*cff1
-# ifdef WEC
-#  ifdef WET_DRY
-          cff5=ABS(ABS(vmask_wet(i,j))-1.0_r8)
-          cff6=0.5_r8+DSIGN(0.5_r8,vbar_stokes(i,j))*vmask_wet(i,j)
-          cff7=0.5_r8*vmask_wet(i,j)*cff5+cff6*(1.0_r8-cff5)
-          cff1=cff1*cff7
-#  endif
-          DVSom(i,j)=vbar_stokes(i,j)*cff1
-          DVom(i,j)=DVom(i,j)+DVSom(i,j)
-# endif
-        END DO
-      END DO
-
-#else
-
-      DO j=JstrVm2-1,Jendp2
-        DO i=IstrUm2-1,Iendp2
-          Drhs(i,j)=zeta(i,j,krhs)+h(i,j)
-        END DO
-      END DO
-      DO j=JstrVm2-1,Jendp2
-        DO i=IstrUm2,Iendp2
-          cff=0.5_r8*on_u(i,j)
-          cff1=cff*(Drhs(i,j)+Drhs(i-1,j))
-          DUon(i,j)=ubar(i,j,krhs)*cff1
-# ifdef WEC
-#  ifdef WET_DRY
-          cff5=ABS(ABS(umask_wet(i,j))-1.0_r8)
-          cff6=0.5_r8+DSIGN(0.5_r8,ubar_stokes(i,j))*umask_wet(i,j)
-          cff7=0.5_r8*umask_wet(i,j)*cff5+cff6*(1.0_r8-cff5)
-          cff1=cff1*cff7
-#  endif
-          DUSon(i,j)=ubar_stokes(i,j)*cff1
-          DUon(i,j)=DUon(i,j)+DUSon(i,j)
-# endif
-        END DO
-      END DO
-      DO j=JstrVm2,Jendp2
-        DO i=IstrUm2-1,Iendp2
-          cff=0.5_r8*om_v(i,j)
-          cff1=cff*(Drhs(i,j)+Drhs(i,j-1))
-          DVom(i,j)=vbar(i,j,krhs)*cff1
-# ifdef WEC
-#  ifdef WET_DRY
-          cff5=ABS(ABS(vmask_wet(i,j))-1.0_r8)
-          cff6=0.5_r8+DSIGN(0.5_r8,vbar_stokes(i,j))*vmask_wet(i,j)
-          cff7=0.5_r8*vmask_wet(i,j)*cff5+cff6*(1.0_r8-cff5)
-          cff1=cff1*cff7
-#  endif
-          DVSom(i,j)=vbar_stokes(i,j)*cff1
-          DVom(i,j)=DVom(i,j)+DVSom(i,j)
-# endif
-        END DO
-      END DO
+      call pass_const(                                                  &
+        Istr, IstrB, IstrP, IstrR, IstrT, IstrM, IstrU,                  &
+        Iend, IendB, IendP, IendR, IendT,                               &
+        Jstr, JstrB, JstrP, JstrR, JstrT, JstrM, JstrV,                 &
+        Jend, JendB, JendP, JendR, JendT,                               &
+        Istrm3, Istrm2, Istrm1, IstrUm2, IstrUm1,                       &
+        Iendp1, Iendp2, Iendp2i, Iendp3,                                &
+        Jstrm3, Jstrm2, Jstrm1, JstrVm2, JstrVm1,                       &
+        Jendp1, Jendp2, Jendp2i, Jendp3,                                &
+        ng, tile,                                                       &
+        LBi, UBi, LBj, UBj, UBk,                                        &
+        IminS, ImaxS, JminS, JmaxS,                                      &
+        krhs, kstp, knew                                                &
+#ifdef SOLVE3D
+        ,nstp, nnew                                                     &
 #endif
+        )
+
+        call step_loop1(                                                &
+            Drhs, zeta,                                                 &
+            size(zeta,1),size(zeta,2),size(zeta,3),                     &
+            h,size(h,1),size(h,2),                                      &
+            on_u,size(on_u,1),size(on_u,2),                             &
+            DUon, ubar,                                                 &
+            size(ubar,1),size(ubar,2),size(ubar,3),                     &
+#ifdef WEC
+#ifdef WET_DRY
+            umask_wet,                                                  &
+            size(umask_wet,1),size(umask_wet,2),                        &
+#endif
+            DUson, ubar_stokes,                                         &
+            size(ubar_stokes,1),size(ubar_stokes,2),                    &
+            size(ubar_stokes,3),                                        &
+#endif
+            om_v,size(om_v,1),size(om_v,2),                             &
+            DVom, vbar,                                                 &
+            size(vbar,1),size(vbar,2),size(vbar,3)                      &
+#ifdef WEC
+#ifdef WET_DRY
+            ,vmask_wet,                                                 &
+            size(vmask_wet,1),size(vmask_wet,2)                         &
+#endif
+            ,DVsom, vbar_stokes,                                        &
+            size(vbar_stokes,1),size(vbar_stokes,2),                    &
+            size(vbar_stokes,3)                                         &
+#endif
+        )
+! #if defined DISTRIBUTE && !defined NESTING
+! 
+! !  In distributed-memory, the I- and J-ranges are different and a
+! !  special exchange is done to avoid having three ghost points for
+! !  high order numerical stencils. Notice that a private array is
+! !  passed below to the exchange routine. It also applies periodic
+! !  boundary conditions, if appropriate and no partitions in I- or
+! !  J-directions.
+! !
+!       DO j=JstrV-2,Jendp2
+!         DO i=IstrU-2,Iendp2
+!           Drhs(i,j)=zeta(i,j,krhs)+h(i,j)
+!         END DO
+!       END DO
+!       DO j=JstrV-2,Jendp2
+!         DO i=IstrU-1,Iendp2
+!           cff=0.5_r8*on_u(i,j)
+!           cff1=cff*(Drhs(i,j)+Drhs(i-1,j))
+!           DUon(i,j)=ubar(i,j,krhs)*cff1
+! # ifdef WEC
+! #  ifdef WET_DRY
+!           cff5=ABS(ABS(umask_wet(i,j))-1.0_r8)
+!           cff6=0.5_r8+DSIGN(0.5_r8,ubar_stokes(i,j))*umask_wet(i,j)
+!           cff7=0.5_r8*umask_wet(i,j)*cff5+cff6*(1.0_r8-cff5)
+!           cff1=cff1*cff7
+! #  endif
+!           DUSon(i,j)=ubar_stokes(i,j)*cff1
+!           DUon(i,j)=DUon(i,j)+DUSon(i,j)
+! # endif
+!         END DO
+!       END DO
+!       DO j=JstrV-1,Jendp2
+!         DO i=IstrU-2,Iendp2
+!           cff=0.5_r8*om_v(i,j)
+!           cff1=cff*(Drhs(i,j)+Drhs(i,j-1))
+!           DVom(i,j)=vbar(i,j,krhs)*cff1
+! # ifdef WEC
+! #  ifdef WET_DRY
+!           cff5=ABS(ABS(vmask_wet(i,j))-1.0_r8)
+!           cff6=0.5_r8+DSIGN(0.5_r8,vbar_stokes(i,j))*vmask_wet(i,j)
+!           cff7=0.5_r8*vmask_wet(i,j)*cff5+cff6*(1.0_r8-cff5)
+!           cff1=cff1*cff7
+! #  endif
+!           DVSom(i,j)=vbar_stokes(i,j)*cff1
+!           DVom(i,j)=DVom(i,j)+DVSom(i,j)
+! # endif
+!         END DO
+!       END DO
+! 
+! #else
+! 
+!       DO j=JstrVm2-1,Jendp2
+!         DO i=IstrUm2-1,Iendp2
+!           Drhs(i,j)=zeta(i,j,krhs)+h(i,j)
+!         END DO
+!       END DO
+!       DO j=JstrVm2-1,Jendp2
+!         DO i=IstrUm2,Iendp2
+!           cff=0.5_r8*on_u(i,j)
+!           cff1=cff*(Drhs(i,j)+Drhs(i-1,j))
+!           DUon(i,j)=ubar(i,j,krhs)*cff1
+! # ifdef WEC
+! #  ifdef WET_DRY
+!           cff5=ABS(ABS(umask_wet(i,j))-1.0_r8)
+!           cff6=0.5_r8+DSIGN(0.5_r8,ubar_stokes(i,j))*umask_wet(i,j)
+!           cff7=0.5_r8*umask_wet(i,j)*cff5+cff6*(1.0_r8-cff5)
+!           cff1=cff1*cff7
+! #  endif
+!           DUSon(i,j)=ubar_stokes(i,j)*cff1
+!           DUon(i,j)=DUon(i,j)+DUSon(i,j)
+! # endif
+!         END DO
+!       END DO
+!       DO j=JstrVm2,Jendp2
+!         DO i=IstrUm2-1,Iendp2
+!           cff=0.5_r8*om_v(i,j)
+!           cff1=cff*(Drhs(i,j)+Drhs(i,j-1))
+!           DVom(i,j)=vbar(i,j,krhs)*cff1
+! # ifdef WEC
+! #  ifdef WET_DRY
+!           cff5=ABS(ABS(vmask_wet(i,j))-1.0_r8)
+!           cff6=0.5_r8+DSIGN(0.5_r8,vbar_stokes(i,j))*vmask_wet(i,j)
+!           cff7=0.5_r8*vmask_wet(i,j)*cff5+cff6*(1.0_r8-cff5)
+!           cff1=cff1*cff7
+! #  endif
+!           DVSom(i,j)=vbar_stokes(i,j)*cff1
+!           DVom(i,j)=DVom(i,j)+DVSom(i,j)
+! # endif
+!         END DO
+!       END DO
+! #endif
 #ifdef DISTRIBUTE
 !
       IF (EWperiodic(ng).or.NSperiodic(ng)) THEN
@@ -745,21 +906,30 @@
 !  Reset arrays for 2D fields averaged within the short time-steps.
 !
           cff2=(-1.0_r8/12.0_r8)*weight(2,iif(ng)+1,ng)
-          DO j=JstrR,JendR
-            DO i=IstrR,IendR
-              Zt_avg1(i,j)=0.0_r8
-            END DO
-            DO i=Istr,IendR
-              DU_avg1(i,j)=0.0_r8
-              DU_avg2(i,j)=cff2*DUon(i,j)
-            END DO
-          END DO
-          DO j=Jstr,JendR
-            DO i=IstrR,IendR
-              DV_avg1(i,j)=0.0_r8
-              DV_avg2(i,j)=cff2*DVom(i,j)
-            END DO
-          END DO
+          call step_loop2(                                              &
+            cff2,                                                       &
+            Zt_avg1, size(Zt_avg1,1), size(Zt_avg1,2),                  &
+            DU_avg1, size(DU_avg1,1), size(DU_avg1,2),                  &
+            DU_avg2, size(DU_avg2,1), size(DU_avg2,2),                  &
+            DUon,                                                       &
+            DV_avg1, size(DV_avg1,1), size(DV_avg1,2),                  &
+            DV_avg2, size(DV_avg2,1), size(DV_avg2,2),                  &
+            DVom)
+!          DO j=JstrR,JendR
+!            DO i=IstrR,IendR
+!              Zt_avg1(i,j)=0.0_r8
+!            END DO
+!            DO i=Istr,IendR
+!              DU_avg1(i,j)=0.0_r8
+!              DU_avg2(i,j)=cff2*DUon(i,j)
+!            END DO
+!          END DO
+!          DO j=Jstr,JendR
+!            DO i=IstrR,IendR
+!              DV_avg1(i,j)=0.0_r8
+!              DV_avg2(i,j)=cff2*DVom(i,j)
+!            END DO
+!          END DO
         ELSE
 !
 !  Accumulate field averages of previous time-step after they are

@@ -26,6 +26,7 @@
       USE mod_param
       USE mod_parallel
       USE mod_iounits
+      use gator_mod, only: gator_init, gator_finalize
 !
 #ifdef DISTRIBUTE
       USE distribute_mod, ONLY : mp_collect
@@ -257,6 +258,7 @@
 !$OMP END MASTER
 !$OMP BARRIER
 !
+        call gator_finalize();
 #ifdef SOLVE3D
  10   FORMAT (/,' Dynamic and Automatic memory (MB) usage for Grid ',   &
      &          i2.2,':',2x,i0,'x',i0,'x',i0,2x,'tiling: ',i0,'x',i0,   &
