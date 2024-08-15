@@ -841,3 +841,298 @@ extern "C" void step_loop5(
 
     yakl::fence();
 }
+
+extern "C" void step_loop6(
+    real &cff1, real &cff4, real &cff5,
+    real *rhs_zeta_f, real *DUon_f, real *DVom_f,
+    real *zeta_new_f, real *zeta_f,
+    int &zetax, int &zetay, int &zetaz,
+    real *pm_f, int &pmx, int &pmy,
+    real *pn_f, int &pnx, int &pny,
+#ifdef MASKING
+    real *rmask_f, int &rmaskx, int &rmasky,
+#endif
+    real *Dnew_f, real *h_f, int &hx, int &hy,
+    real *zwrk_f
+#if defined VAR_RHO_2D && defined SOLVE3D
+    ,
+    real &fac,
+    real *gzeta_f, real *rhoS_f,
+    int &rhoSx, int &rhoSy,
+    real *gzeta2_f, real *gzetaSA_f, real *rhoA_f,
+    int &rhoAx, int &rhoAy
+#else
+    ,
+    real *gzeta_f, real *gzeta2_f
+#endif
+)
+{
+    int IminS = IminS_g;
+    int ImaxS = ImaxS_g;
+    int JminS = JminS_g;
+    int JmaxS = JmaxS_g;
+    int LBi = LBi_g;
+    int LBj = LBj_g;
+    int JstrV = JstrV_g;
+    int Jend = Jend_g;
+    int IstrU = IstrU_g;
+    int Iend = Iend_g;
+    int kstp = kstp_g;
+    int krhs = krhs_g;
+
+    realHost2d rhs_zeta_h("rhs_zeta_h", rhs_zeta_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d DUon_h("DUon_h", DUon_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d DVom_h("DVom_h", DVom_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d zeta_new_h("zeta_new_h", zeta_new_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost3d zeta_h("zeta_h", zeta_f, {LBi, LBi + zetax - 1}, {LBj, LBj + zetay - 1}, zetaz);
+    realHost2d pm_h("pm_h", pm_f, {LBi, LBi + pmx - 1}, {LBj, LBj + pmy - 1});
+    realHost2d pn_h("pn_h", pn_f, {LBi, LBi + pnx - 1}, {LBj, LBj + pny - 1});
+#ifdef MASKING
+    realHost2d rmask_h("rmask_h", rmask_f, {LBi, LBi + rmaskx - 1}, {LBj, LBj + rmasky - 1});
+#endif
+    realHost2d Dnew_h("Dnew_h", Dnew_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d h_h("h_h", h_f, {LBi, LBi + hx - 1}, {LBj, LBj + hy - 1});
+    realHost2d zwrk_h("zwrk_h", zwrk_f, {IminS, ImaxS}, {JminS, JmaxS});
+#if defined VAR_RHO_2D && defined SOLVE3D
+    realHost2d gzeta_h("gzeta_h", gzeta_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d rhoS_h("rhoS_h", rhoS_f, {LBi, LBi + rhoSx - 1}, {LBj, LBj + rhoSy - 1});
+    realHost2d gzeta2_h("gzeta2_h", gzeta2_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d gzetaSA_h("gzetaSA_h", gzetaSA_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d rhoA_h("rhoA_h", rhoA_f, {LBi, LBi + rhoAx - 1}, {LBj, LBj + rhoAy - 1});
+#else
+    realHost2d gzeta_h("gzeta_h", gzeta_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d gzeta2_h("gzeta2_h", gzeta2_f, {IminS, ImaxS}, {JminS, JmaxS});
+#endif
+
+    real2d rhs_zeta_d("rhs_zeta_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d DUon_d("DUon_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d DVom_d("DVom_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d zeta_new_d("zeta_new_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real3d zeta_d("zeta_d", {LBi, LBi + zetax - 1}, {LBj, LBj + zetay - 1}, zetaz);
+    real2d pm_d("pm_d", {LBi, LBi + pmx - 1}, {LBj, LBj + pmy - 1});
+    real2d pn_d("pn_d", {LBi, LBi + pnx - 1}, {LBj, LBj + pny - 1});
+#ifdef MASKING
+    real2d rmask_d("rmask_d", {LBi, LBi + rmaskx - 1}, {LBj, LBj + rmasky - 1});
+#endif
+    real2d Dnew_d("Dnew_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d h_d("h_d", {LBi, LBi + hx - 1}, {LBj, LBj + hy - 1});
+    real2d zwrk_d("zwrk_d", {IminS, ImaxS}, {JminS, JmaxS});
+#if defined VAR_RHO_2D && defined SOLVE3D
+    real2d gzeta_d("gzeta_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d rhoS_d("rhoS_d", {LBi, LBi + rhoSx - 1}, {LBj, LBj + rhoSy - 1});
+    real2d gzeta2_d("gzeta2_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d gzetaSA_d("gzetaSA_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d rhoA_d("rhoA_d", {LBi, LBi + rhoAx - 1}, {LBj, LBj + rhoAy - 1});
+#else
+    real2d gzeta_d("gzeta_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d gzeta2_d("gzeta2_d", {IminS, ImaxS}, {JminS, JmaxS});
+#endif
+
+    rhs_zeta_h.deep_copy_to(rhs_zeta_d);
+    DUon_h.deep_copy_to(DUon_d);
+    DVom_h.deep_copy_to(DVom_d);
+    zeta_new_h.deep_copy_to(zeta_new_d);
+    zeta_h.deep_copy_to(zeta_d);
+    pm_h.deep_copy_to(pm_d);
+    pn_h.deep_copy_to(pn_d);
+#ifdef MASKING
+    rmask_h.deep_copy_to(rmask_d);
+#endif
+    Dnew_h.deep_copy_to(Dnew_d);
+    h_h.deep_copy_to(h_d);
+    zwrk_h.deep_copy_to(zwrk_d);
+#if defined VAR_RHO_2D && defined SOLVE3D
+    gzeta_h.deep_copy_to(gzeta_d);
+    rhoS_h.deep_copy_to(rhoS_d);
+    gzeta2_h.deep_copy_to(gzeta2_d);
+    gzetaSA_h.deep_copy_to(gzetaSA_d);
+    rhoA_h.deep_copy_to(rhoA_d);
+#else
+    gzeta_h.deep_copy_to(gzeta_d);
+    gzeta2_h.deep_copy_to(gzeta2_d);
+#endif
+
+    yakl::fortran::parallel_for(
+        "step_loop6_1",
+        yakl::fortran::Bounds<2>({JstrV - 1, Jend}, {IstrU - 1, Iend}),
+        YAKL_LAMBDA(int j, int i) {
+            rhs_zeta_d(i, j) = (DUon_d(i, j) - DUon_d(i + 1, j)) + (DVom_d(i, j) - DVom_d(i, j + 1));
+            zeta_new_d(i, j) = zeta_d(i, j, kstp) + pm_d(i, j) * pn_d(i, j) * cff1 * rhs_zeta_d(i, j);
+#ifdef MASKING
+            zeta_new_d(i, j) = zeta_new_d(i, j) * rmask_d(i, j);
+#endif
+            Dnew_d(i, j) = zeta_new_d(i, j) + h_d(i, j);
+            zwrk_d(i, j) = cff5 * zeta_d(i, j, krhs) + cff4 * (zeta_d(i, j, kstp) + zeta_new_d(i, j));
+#if defined VAR_RHO_2D && defined SOLVE3D
+            gzeta_d(i, j) = (fac + rhoS_d(i, j)) * zwrk_d(i, j);
+            gzeta2_d(i, j) = gzeta_d(i, j) * zwrk_d(i, j);
+            gzetaSA_d(i, j) = zwrk_d(i, j) * (rhoS_d(i, j) - rhoA_d(i, j));
+#else
+            gzeta_d(i, j) = zwrk_d(i, j);
+            gzeta2_d(i, j) = zwrk_d(i, j) * zwrk_d(i, j);
+#endif
+        });
+
+    rhs_zeta_d.deep_copy_to(rhs_zeta_h);
+    zeta_new_d.deep_copy_to(zeta_new_h);
+    Dnew_d.deep_copy_to(Dnew_h);
+    zwrk_d.deep_copy_to(zwrk_h);
+#if defined VAR_RHO_2D && defined SOLVE3D
+    gzeta_d.deep_copy_to(gzeta_h);
+    gzeta2_d.deep_copy_to(gzeta2_h);
+    gzetaSA_d.deep_copy_to(gzetaSA_h);
+#else
+    gzeta_d.deep_copy_to(gzeta_h);
+    gzeta2_d.deep_copy_to(gzeta2_h);
+#endif
+
+    yakl::fence();
+}
+
+extern "C" void step_loop7(
+    real &cff1, real &cff2, real &cff3, real &cff4, real &cff5,
+    real *DUon_f, real *DVom_f,
+    real *zeta_new_f, real *zeta_f,
+    int &zetax, int &zetay, int &zetaz,
+    real *pm_f, int &pmx, int &pmy,
+    real *pn_f, int &pnx, int &pny,
+    real *rzeta_f, int &rzetax, int &rzetay, int &rzetaz,
+#ifdef MASKING
+    real *rmask_f, int &rmaskx, int &rmasky,
+#endif
+    real *Dnew_f, real *h_f, int &hx, int &hy,
+    real *zwrk_f
+#if defined VAR_RHO_2D && defined SOLVE3D
+    ,
+    real &fac,
+    real *gzeta_f, real *rhoS_f,
+    int &rhoSx, int &rhoSy,
+    real *gzeta2_f, real *gzetaSA_f, real *rhoA_f,
+    int &rhoAx, int &rhoAy
+#else
+    ,
+    real *gzeta_f, real *gzeta2_f
+#endif
+)
+{
+    int IminS = IminS_g;
+    int ImaxS = ImaxS_g;
+    int JminS = JminS_g;
+    int JmaxS = JmaxS_g;
+    int LBi = LBi_g;
+    int LBj = LBj_g;
+    int JstrV = JstrV_g;
+    int Jend = Jend_g;
+    int IstrU = IstrU_g;
+    int Iend = Iend_g;
+    int kstp = kstp_g;
+    int krhs = krhs_g;
+
+    realHost2d DUon_h("DUon_h", DUon_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d DVom_h("DVom_h", DVom_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d zeta_new_h("zeta_new_h", zeta_new_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost3d zeta_h("zeta_h", zeta_f, {LBi, LBi + zetax - 1}, {LBj, LBj + zetay - 1}, zetaz);
+    realHost2d pm_h("pm_h", pm_f, {LBi, LBi + pmx - 1}, {LBj, LBj + pmy - 1});
+    realHost2d pn_h("pn_h", pn_f, {LBi, LBi + pnx - 1}, {LBj, LBj + pny - 1});
+    realHost3d rzeta_h("rzeta_h", rzeta_f, {LBi, LBi + rzetax - 1}, {LBj, LBj + rzetay - 1}, rzetaz);
+#ifdef MASKING
+    realHost2d rmask_h("rmask_h", rmask_f, {LBi, LBi + rmaskx - 1}, {LBj, LBj + rmasky - 1});
+#endif
+    realHost2d Dnew_h("Dnew_h", Dnew_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d h_h("h_h", h_f, {LBi, LBi + hx - 1}, {LBj, LBj + hy - 1});
+    realHost2d zwrk_h("zwrk_h", zwrk_f, {IminS, ImaxS}, {JminS, JmaxS});
+#if defined VAR_RHO_2D && defined SOLVE3D
+    realHost2d gzeta_h("gzeta_h", gzeta_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d rhoS_h("rhoS_h", rhoS_f, {LBi, LBi + rhoSx - 1}, {LBj, LBj + rhoSy - 1});
+    realHost3d gzeta2_h("gzeta2_h", gzeta2_f, {IminS, ImaxS}, {JminS, JmaxS}, {1, 2});
+    realHost2d gzetaSA_h("gzetaSA_h", gzetaSA_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d rhoA_h("rhoA_h", rhoA_f, {LBi, LBi + rhoAx - 1}, {LBj, LBj + rhoAy - 1});
+#else
+    realHost2d gzeta_h("gzeta_h", gzeta_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d gzeta2_h("gzeta2_h", gzeta2_f, {IminS, ImaxS}, {JminS, JmaxS});
+#endif
+
+    real2d DUon_d("DUon_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d DVom_d("DVom_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d zeta_new_d("zeta_new_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real3d zeta_d("zeta_d", {LBi, LBi + zetax - 1}, {LBj, LBj + zetay - 1}, zetaz);
+    real2d pm_d("pm_d", {LBi, LBi + pmx - 1}, {LBj, LBj + pmy - 1});
+    real2d pn_d("pn_d", {LBi, LBi + pnx - 1}, {LBj, LBj + pny - 1});
+    real3d rzeta_d("rzeta_d", {LBi, LBi + rzetax - 1}, {LBj, LBj + rzetay - 1}, rzetaz);
+#ifdef MASKING
+    real2d rmask_d("rmask_d", {LBi, LBi + rmaskx - 1}, {LBj, LBj + rmasky - 1});
+#endif
+    real2d Dnew_d("Dnew_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d h_d("h_d", {LBi, LBi + hx - 1}, {LBj, LBj + hy - 1});
+    real2d zwrk_d("zwrk_d", {IminS, ImaxS}, {JminS, JmaxS});
+#if defined VAR_RHO_2D && defined SOLVE3D
+    real2d gzeta_d("gzeta_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d rhoS_d("rhoS_d", {LBi, LBi + rhoSx - 1}, {LBj, LBj + rhoSy - 1});
+    real3d gzeta2_d("gzeta2_d", {IminS, ImaxS}, {JminS, JmaxS}, {1, 2});
+    real2d gzetaSA_d("gzetaSA_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d rhoA_d("rhoA_d", {LBi, LBi + rhoAx - 1}, {LBj, LBj + rhoAy - 1});
+#else
+    real2d gzeta_d("gzeta_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d gzeta2_d("gzeta2_d", {IminS, ImaxS}, {JminS, JmaxS});
+#endif
+
+    DUon_h.deep_copy_to(DUon_d);
+    DVom_h.deep_copy_to(DVom_d);
+    zeta_new_h.deep_copy_to(zeta_new_d);
+    zeta_h.deep_copy_to(zeta_d);
+    pm_h.deep_copy_to(pm_d);
+    pn_h.deep_copy_to(pn_d);
+    rzeta_h.deep_copy_to(rzeta_d);
+#ifdef MASKING
+    rmask_h.deep_copy_to(rmask_d);
+#endif
+    Dnew_h.deep_copy_to(Dnew_d);
+    h_h.deep_copy_to(h_d);
+    zwrk_h.deep_copy_to(zwrk_d);
+#if defined VAR_RHO_2D && defined SOLVE3D
+    gzeta_h.deep_copy_to(gzeta_d);
+    rhoS_h.deep_copy_to(rhoS_d);
+    gzeta2_h.deep_copy_to(gzeta2_d);
+    gzetaSA_h.deep_copy_to(gzetaSA_d);
+    rhoA_h.deep_copy_to(rhoA_d);
+#else
+    gzeta_h.deep_copy_to(gzeta_d);
+    gzeta2_h.deep_copy_to(gzeta2_d);
+#endif
+
+    yakl::fortran::parallel_for(
+        "step_loop7_1",
+        yakl::fortran::Bounds<2>({JstrV - 1, Jend}, {IstrU - 1, Iend}),
+        YAKL_LAMBDA(int j, int i) {
+            zeta_new_d(i, j) = zeta_d(i, j, kstp) + pm_d(i, j) * pn_d(i, j) *
+                                                        (cff1 * (DUon_d(i, j) - DUon_d(i + 1, j) + DVom_d(i, j) - DVom_d(i, j + 1)) +
+                                                         cff2 * rzeta_d(i, j, kstp) +
+                                                         cff3 * rzeta_d(i, j, 3 - kstp));
+#ifdef MASKING
+            zeta_new_d(i, j) = zeta_new_d(i, j) * rmask_d(i, j);
+#endif
+            Dnew_d(i, j) = zeta_new_d(i, j) + h_d(i, j);
+            zwrk_d(i, j) = cff5 * zeta_new_d(i, j) + cff4 * zeta_d(i, j, krhs);
+#if defined VAR_RHO_2D && defined SOLVE3D
+            gzeta_d(i, j) = (fac + rhoS_d(i, j)) * zwrk_d(i, j);
+            gzeta2_d(i, j, 1) = gzeta_d(i, j) * zwrk_d(i, j);
+            gzetaSA_d(i, j) = zwrk_d(i, j) * (rhoS_d(i, j) - rhoA_d(i, j));
+#else
+            gzeta_d(i, j) = zwrk_d(i, j);
+            gzeta2_d(i, j) = zwrk_d(i, j) * zwrk_d(i, j);
+#endif
+        });
+
+    zeta_new_d.deep_copy_to(zeta_new_h);
+    Dnew_d.deep_copy_to(Dnew_h);
+    zwrk_d.deep_copy_to(zwrk_h);
+#if defined VAR_RHO_2D && defined SOLVE3D
+    gzeta_d.deep_copy_to(gzeta_h);
+    gzeta2_d.deep_copy_to(gzeta2_h);
+    gzetaSA_d.deep_copy_to(gzetaSA_h);
+#else
+    gzeta_d.deep_copy_to(gzeta_h);
+    gzeta2_d.deep_copy_to(gzeta2_h);
+#endif
+    yakl::fence();
+}

@@ -218,7 +218,105 @@
         real(8), dimension(*) :: gzeta_f, gzeta2_f
 #endif
         end subroutine step_loop5
-
+        subroutine step_loop6(                                                      &
+        &       cff1, cff4, cff5,                                                   &
+        &       rhs_zeta_f, DUon_f, DVom_f,                                         &
+        &       zeta_new_f, zeta_f,                                                 &
+        &       zetax, zetay, zetaz,                                                &
+        &       pm_f, pmx, pmy,                                                     &
+        &       pn_f, pnx, pny,                                                     &
+#ifdef MASKING
+        &       rmask_f, rmaskx, rmasky,                                            &
+#endif
+        &       Dnew_f, h_f, hx, hy,                                                &
+        &       zwrk_f                                                              &
+#if defined VAR_RHO_2D && defined SOLVE3D
+        &       ,fac, gzeta_f, rhoS_f,                                              &
+        &       rhoSx, rhoSy,                                                       &
+        &       gzeta2_f, gzetaSA_f, rhoA_f,                                        &
+        &       rhoAx, rhoAy                                                        &
+#else
+        &       ,gzeta_f, gzeta2_f                                                  &
+#endif
+        ) bind(C,name="step_loop6")
+        use iso_c_binding
+        real(8) :: cff1, cff4, cff5
+        real(8), dimension(*) :: rhs_zeta_f, DUon_f, DVom_f
+        real(8), dimension(*) :: zeta_new_f, zeta_f
+        integer :: zetax, zetay, zetaz
+        real(8), dimension(*) :: pm_f
+        integer :: pmx, pmy
+        real(8), dimension(*) :: pn_f
+        integer :: pnx, pny
+#ifdef MASKING
+        real(8), dimension(*) :: rmask_f
+        integer :: rmaskx, rmasky
+#endif
+        real(8), dimension(*) :: Dnew_f, h_f
+        integer :: hx, hy
+        real(8), dimension(*) :: zwrk_f
+#if defined VAR_RHO_2D && defined SOLVE3D
+        real(8) :: fac
+        real(8), dimension(*) :: gzeta_f, rhoS_f
+        integer :: rhoSx, rhoSy
+        real(8), dimension(*) :: gzeta2_f, gzetaSA_f
+        real(8), dimension(*) :: rhoA_f
+        integer :: rhoAx, rhoAy
+#else
+        real(8), dimension(*) :: gzeta_f, gzeta2_f
+#endif
+        end subroutine step_loop6
+        subroutine step_loop7(                                                      &
+        &       cff1, cff2, cff3, cff4, cff5,                               &
+        &       DUon_f, DVom_f,                                             &
+        &       zeta_new_f, zeta_f,                                         &
+        &       zetax, zetay, zetaz,                                        &
+        &       pm_f, pmx, pmy,                                             &
+        &       pn_f, pnx, pny,                                             &
+        &       rzeta_f, rzetax, rzetay, rzetaz,                            &
+#ifdef MASKING
+        &       rmask_f, rmaskx, rmasky,                                    &
+#endif
+        &       Dnew_f, h_f, hx, hy,                                        &
+        &       zwrk_f                                                      &
+#if defined VAR_RHO_2D && defined SOLVE3D
+        &       ,fac, gzeta_f, rhoS_f,                                      &
+        &       rhoSx, rhoSy,                                               &
+        &       gzeta2_f, gzetaSA_f, rhoA_f,                                &
+        &       rhoAx, rhoAy                                                &
+#else
+        &       ,gzeta_f, gzeta2_f                                          &       
+#endif
+        ) bind(C,name="step_loop7")
+        use iso_c_binding
+        real(8) :: cff1, cff2, cff3, cff4, cff5
+        real(8), dimension(*) :: DUon_f, DVom_f
+        real(8), dimension(*) :: zeta_new_f, zeta_f
+        integer :: zetax, zetay, zetaz
+        real(8), dimension(*) :: pm_f
+        integer :: pmx, pmy
+        real(8), dimension(*) :: pn_f
+        integer :: pnx, pny
+        real(8), dimension(*) :: rzeta_f
+        integer :: rzetax, rzetay, rzetaz
+#ifdef MASKING
+        real(8), dimension(*) :: rmask_f
+        integer :: rmaskx, rmasky
+#endif
+        real(8), dimension(*) :: Dnew_f, h_f
+        integer :: hx, hy
+        real(8), dimension(*) :: zwrk_f
+#if defined VAR_RHO_2D && defined SOLVE3D
+        real(8) :: fac
+        real(8), dimension(*) :: gzeta_f, rhoS_f
+        integer :: rhoSx, rhoSy
+        real(8), dimension(*) :: gzeta2_f, gzetaSA_f
+        real(8), dimension(*) :: rhoA_f
+        integer :: rhoAx, rhoAy
+#else
+        real(8), dimension(*) :: gzeta_f, gzeta2_f
+#endif
+        end subroutine step_loop7
       end interface
 !
       PRIVATE
@@ -1232,59 +1330,102 @@
         cff1=2.0_r8*dtfast(ng)
         cff4=4.0_r8/25.0_r8
         cff5=1.0_r8-2.0_r8*cff4
-        DO j=JstrV-1,Jend
-          DO i=IstrU-1,Iend
-            rhs_zeta(i,j)=(DUon(i,j)-DUon(i+1,j))+                      &
-     &                    (DVom(i,j)-DVom(i,j+1))
-            zeta_new(i,j)=zeta(i,j,kstp)+                               &
-     &                    pm(i,j)*pn(i,j)*cff1*rhs_zeta(i,j)
+        call step_loop6(                                                    &
+            cff1, cff4, cff5,                                               &
+            rhs_zeta, DUon, DVom,                                           &
+            zeta_new, zeta,                                                 &
+            size(zeta,1),size(zeta,2),size(zeta,3),                         &
+            pm, size(pm,1),size(pm,2),                                      &
+            pn, size(pn,1),size(pn,2),                                      &
 #ifdef MASKING
-            zeta_new(i,j)=zeta_new(i,j)*rmask(i,j)
+            rmask, size(rmask,1),size(rmask,2),                             &
 #endif
-            Dnew(i,j)=zeta_new(i,j)+h(i,j)
-!
-            zwrk(i,j)=cff5*zeta(i,j,krhs)+                              &
-     &                cff4*(zeta(i,j,kstp)+zeta_new(i,j))
+            Dnew, h, size(h,1),size(h,2),                                   &
+            zwrk                                                            &
 #if defined VAR_RHO_2D && defined SOLVE3D
-            gzeta(i,j)=(fac+rhoS(i,j))*zwrk(i,j)
-            gzeta2(i,j)=gzeta(i,j)*zwrk(i,j)
-            gzetaSA(i,j)=zwrk(i,j)*(rhoS(i,j)-rhoA(i,j))
+            ,fac, gzeta, rhoS,                                              &
+            size(rhoS,1),size(rhoS,2),                                      &
+            gzeta2, gzetaSA, rhoA,                                          &
+            size(rhoA,1),size(rhoA,2)                                       &
 #else
-            gzeta(i,j)=zwrk(i,j)
-            gzeta2(i,j)=zwrk(i,j)*zwrk(i,j)
+            ,gzeta, gzeta2                                                  &
 #endif
-          END DO
-        END DO
+        )
+!         DO j=JstrV-1,Jend
+!           DO i=IstrU-1,Iend
+!             rhs_zeta(i,j)=(DUon(i,j)-DUon(i+1,j))+                      &
+!      &                    (DVom(i,j)-DVom(i,j+1))
+!             zeta_new(i,j)=zeta(i,j,kstp)+                               &
+!      &                    pm(i,j)*pn(i,j)*cff1*rhs_zeta(i,j)
+! #ifdef MASKING
+!             zeta_new(i,j)=zeta_new(i,j)*rmask(i,j)
+! #endif
+!             Dnew(i,j)=zeta_new(i,j)+h(i,j)
+! !
+!             zwrk(i,j)=cff5*zeta(i,j,krhs)+                              &
+!      &                cff4*(zeta(i,j,kstp)+zeta_new(i,j))
+! #if defined VAR_RHO_2D && defined SOLVE3D
+!             gzeta(i,j)=(fac+rhoS(i,j))*zwrk(i,j)
+!             gzeta2(i,j)=gzeta(i,j)*zwrk(i,j)
+!             gzetaSA(i,j)=zwrk(i,j)*(rhoS(i,j)-rhoA(i,j))
+! #else
+!             gzeta(i,j)=zwrk(i,j)
+!             gzeta2(i,j)=zwrk(i,j)*zwrk(i,j)
+! #endif
+!           END DO
+!         END DO
       ELSE IF (CORRECTOR_2D_STEP) THEN
         cff1=dtfast(ng)*5.0_r8/12.0_r8
         cff2=dtfast(ng)*8.0_r8/12.0_r8
         cff3=dtfast(ng)*1.0_r8/12.0_r8
         cff4=2.0_r8/5.0_r8
         cff5=1.0_r8-cff4
-        DO j=JstrV-1,Jend
-          DO i=IstrU-1,Iend
-            cff=cff1*((DUon(i,j)-DUon(i+1,j))+                          &
-     &                (DVom(i,j)-DVom(i,j+1)))
-            zeta_new(i,j)=zeta(i,j,kstp)+                               &
-     &                    pm(i,j)*pn(i,j)*(cff+                         &
-     &                                     cff2*rzeta(i,j,kstp)-        &
-     &                                     cff3*rzeta(i,j,ptsk))
+        call step_loop7(                                                    &
+            cff1, cff2, cff3, cff4, cff5,                                   &
+            DUon, DVom,                                                     &
+            zeta_new, zeta,                                                 &
+            size(zeta,1),size(zeta,2),size(zeta,3),                         &
+            pm, size(pm,1),size(pm,2),                                      &
+            pn, size(pn,1),size(pn,2),                                      &
+            rzeta, size(rzeta,1),size(rzeta,2),size(rzeta,3),               &
 #ifdef MASKING
-            zeta_new(i,j)=zeta_new(i,j)*rmask(i,j)
+            rmask, size(rmask,1),size(rmask,2),                             &
 #endif
-            Dnew(i,j)=zeta_new(i,j)+h(i,j)
-!
-            zwrk(i,j)=cff5*zeta_new(i,j)+cff4*zeta(i,j,krhs)
+            Dnew, h, size(h,1),size(h,2),                                   &
+            zwrk                                                            &
 #if defined VAR_RHO_2D && defined SOLVE3D
-            gzeta(i,j)=(fac+rhoS(i,j))*zwrk(i,j)
-            gzeta2(i,j)=gzeta(i,j)*zwrk(i,j)
-            gzetaSA(i,j)=zwrk(i,j)*(rhoS(i,j)-rhoA(i,j))
+            ,fac, gzeta, rhoS,                                              &
+            size(rhoS,1),size(rhoS,2),                                      &
+            gzeta2, gzetaSA, rhoA,                                          &
+            size(rhoA,1),size(rhoA,2)                                       &
 #else
-            gzeta(i,j)=zwrk(i,j)
-            gzeta2(i,j)=zwrk(i,j)*zwrk(i,j)
+            ,gzeta, gzeta2                                                  &
 #endif
-          END DO
-        END DO
+        )
+!         DO j=JstrV-1,Jend
+!           DO i=IstrU-1,Iend
+!             cff=cff1*((DUon(i,j)-DUon(i+1,j))+                          &
+!      &                (DVom(i,j)-DVom(i,j+1)))
+!             zeta_new(i,j)=zeta(i,j,kstp)+                               &
+!      &                    pm(i,j)*pn(i,j)*(cff+                         &
+!      &                                     cff2*rzeta(i,j,kstp)-        &
+!      &                                     cff3*rzeta(i,j,ptsk))
+! #ifdef MASKING
+!             zeta_new(i,j)=zeta_new(i,j)*rmask(i,j)
+! #endif
+!             Dnew(i,j)=zeta_new(i,j)+h(i,j)
+! !
+!             zwrk(i,j)=cff5*zeta_new(i,j)+cff4*zeta(i,j,krhs)
+! #if defined VAR_RHO_2D && defined SOLVE3D
+!             gzeta(i,j)=(fac+rhoS(i,j))*zwrk(i,j)
+!             gzeta2(i,j)=gzeta(i,j)*zwrk(i,j)
+!             gzetaSA(i,j)=zwrk(i,j)*(rhoS(i,j)-rhoA(i,j))
+! #else
+!             gzeta(i,j)=zwrk(i,j)
+!             gzeta2(i,j)=zwrk(i,j)*zwrk(i,j)
+! #endif
+!           END DO
+!         END DO
       END IF
 !
 !  Load new free-surface values into shared array at both predictor
