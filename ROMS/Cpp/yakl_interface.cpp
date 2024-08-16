@@ -1136,3 +1136,366 @@ extern "C" void step_loop7(
 #endif
     yakl::fence();
 }
+
+extern "C" void step_loop8(
+    real *zeta_f, int &zetax, int &zetay, int &zetaz,
+    real *zeta_new_f
+#if defined WET_DRY && defined MASKING
+    ,
+    real &Drict_ng, real *h_f, int &hx, int &hy,
+    real *rmask_f, int &rmaskx, int &rmasky
+#endif
+)
+{
+    int IminS = IminS_g;
+    int ImaxS = ImaxS_g;
+    int JminS = JminS_g;
+    int JmaxS = JmaxS_g;
+    int LBi = LBi_g;
+    int LBj = LBj_g;
+    int Jstr = Jstr_g;
+    int Istr = Istr_g;
+    int Jend = Jend_g;
+    int Iend = Iend_g;
+    int knew = knew_g;
+
+    realHost3d zeta_h("zeta_h", zeta_f, {LBi, LBi + zetax - 1}, {LBj, LBj + zetay - 1}, zetaz);
+    realHost2d zeta_new_h("zeta_new_h", zeta_new_f, {IminS, ImaxS}, {JminS, JmaxS});
+#if defined WET_DRY && defined MASKING
+    realHost2d h_h("h_h", h_f, {LBi, LBi + hx - 1}, {LBj, LBj + hy - 1});
+    realHost2d rmask_h("rmask_h", rmask_f, {LBi, LBi + rmaskx - 1}, {LBj, LBj + rmasky - 1});
+#endif
+
+    real3d zeta_d("zeta_d", {LBi, LBi + zetax - 1}, {LBj, LBj + zetay - 1}, zetaz);
+    real2d zeta_new_d("zeta_new_d", {IminS, ImaxS}, {JminS, JmaxS});
+#if defined WET_DRY && defined MASKING
+    real2d h_d("h_d", {LBi, LBi + hx - 1}, {LBj, LBj + hy - 1});
+    real2d rmask_d("rmask_d", {LBi, LBi + rmaskx - 1}, {LBj, LBj + rmasky - 1});
+#endif
+
+    zeta_h.deep_copy_to(zeta_d);
+    zeta_new_h.deep_copy_to(zeta_new_d);
+#if defined WET_DRY && defined MASKING
+    h_h.deep_copy_to(h_d);
+    rmask_h.deep_copy_to(rmask_d);
+#endif
+
+    yakl::fortran::parallel_for(
+        "step_loop8_1",
+        yakl::fortran::Bounds<2>({Jstr, Jend}, {Istr, Iend}),
+        YAKL_LAMBDA(int j, int i) {
+            zeta_d(i, j, knew) = zeta_new_d(i, j);
+#if defined WET_DRY && defined MASKING
+            zeta_d(i, j, knew) = zeta_d(i, j, knew) + (Drict_ng - h_d(i, j)) * (1.0 - rmask_d(i, j));
+#endif
+        });
+
+    zeta_d.deep_copy_to(zeta_h);
+    yakl::fence();
+}
+
+extern "C" void step_loop9(
+    real &fac, real *bed_thick_f,
+    int &bed_thickx, int &bed_thicky, int &bed_thickz,
+    real *h_f, int &hx, int &hy)
+{
+#if defined SEDIMENT && defined SED_MORPH
+    int LBi = LBi_g;
+    int LBj = LBj_g;
+    int Jstr = Jstr_g;
+    int Istr = Istr_g;
+    int Jend = Jend_g;
+    int nnew = nnew_g;
+    int nstp = nstp_g;
+
+    realHost3d bed_thick_h("bed_thick_h", bed_thick_f, {LBi, LBi + bed_thickx - 1}, {LBj, LBj + bed_thicky - 1}, bed_thickz);
+    realHost2d h_h("h_h", h_f, {LBi, LBi + hx - 1}, {LBj, LBj + hy - 1});
+
+    real3d bed_thick_d("bed_thick_d", {LBi, LBi + bed_thickx - 1}, {LBj, LBj + bed_thicky - 1}, bed_thickz);
+    real2d h_d("h_d", {LBi, LBi + hx - 1}, {LBj, LBj + hy - 1});
+
+    bed_thick_h.deep_copy_to(bed_thick_d);
+    h_h.deep_copy_to(h_d);
+
+    yakl::fortran::parallel_for(
+        "step_loop9_1",
+        yakl::fortran::Bounds<2>({Jstr, Jend}, {Istr, Istr}),
+        YAKL_LAMBDA(int j, int i) {
+            h_d(i, j) = h_d(i, j) - fac * (bed_thick_d(i, j, nstp) - bed_thick_d(i, j, nnew));
+        });
+
+    h_d.deep_copy_to(h_h);
+
+    yakl::fence();
+#endif
+}
+
+extern "C" void step_loop10(
+    real &cff1, real &cff2, real &g,
+#if !defined SOLVE3D && defined ATM_PRESS
+    real &fac3,
+#endif
+    real *rhs_ubar_f, real *on_u_f, int &on_ux, int &on_uy,
+    real *h_f, int &hx, int &hy,
+    real *gzeta_f,
+#if defined VAR_RHO_2D && defined SOLVE3D
+    real *gzetaSA_f, real *rhoA_f, int &rhoAx, int &rhoAy,
+    real *zwrk_f,
+#endif
+    real *gzeta2_f,
+#if defined ATM_PRESS && !defined SOLVE3D
+    real *Pair_f, int &Pairx, int &Pairy,
+#endif
+#if defined TIDE_GENERATING_FORCES && !defined SOLVE3D
+    real *eq_tide_f, int &eq_tidex, int &eq_tidey,
+#endif
+#ifdef DIAGNOSTICS_UV
+    real *DiaU2rhs_f, int &DiaU2rhsz,
+    int &M2pgrd,
+#if defined WEC_VF
+    int &M2zeta, int &M2zetw,
+    int &M2zqsp, int &M2zebh, int &M2kvrf,
+#endif
+#endif
+#if defined WEC_VF
+    real *zetaw_f, int &zetawx, int &zetawy,
+    real *qsp_f, int &qspx, int &qspy,
+    real *bh_f, int &bhx, int &bhy,
+    real *rukvf2d_f, int &rukvf2dx, int &rukvf2dy,
+#endif
+    real *rhs_vbar_f, real *om_v, int &om_vx, int &om_vy
+#ifdef DIAGNOSTICS_UV
+    ,
+    real *DiaV2rhs_f, int &DiaV2rhsz
+#endif
+#if defined WEC_VF
+    ,
+    real *rvkvf2d_f, int &rvkvf2dx, int &rvkvf2dy
+#endif
+)
+{
+    // TODO: 性能显著下降
+    int IminS = IminS_g;
+    int ImaxS = ImaxS_g;
+    int JminS = JminS_g;
+    int JmaxS = JmaxS_g;
+    int LBi = LBi_g;
+    int LBj = LBj_g;
+    int Jstr = Jstr_g;
+    int Jend = Jend_g;
+    int IstrU = IstrU_g;
+    int Iend = Iend_g;
+    int JstrV = JstrV_g;
+    int Istr = Istr_g;
+
+    realHost2d rhs_ubar_h("rhs_ubar_h", rhs_ubar_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d on_u_h("on_u_h", on_u_f, {LBi, LBi + on_ux - 1}, {LBj, LBj + on_uy - 1});
+    realHost2d h_h("h_h", h_f, {LBi, LBi + hx - 1}, {LBj, LBj + hy - 1});
+    realHost2d gzeta_h("gzeta_h", gzeta_f, {IminS, ImaxS}, {JminS, JmaxS});
+#if defined VAR_RHO_2D && defined SOLVE3D
+    realHost2d gzetaSA_h("gzetaSA_h", gzetaSA_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d rhoA_h("rhoA_h", rhoA_f, {LBi, LBi + rhoAx - 1}, {LBj, LBj + rhoAy - 1});
+    realHost2d zwrk_h("zwrk_h", zwrk_f, {IminS, ImaxS}, {JminS, JmaxS});
+#endif
+    realHost2d gzeta2_h("gzeta2_h", gzeta2_f, {IminS, ImaxS}, {JminS, JmaxS});
+#if defined ATM_PRESS && !defined SOLVE3D
+    realHost2d Pair_h("Pair_h", Pair_f, {LBi, LBi + Pairx - 1}, {LBj, LBj + Pairy - 1});
+#endif
+#if defined TIDE_GENERATING_FORCES && !defined SOLVE3D
+    realHost2d eq_tide_h("eq_tide_h", eq_tide_f, {LBi, LBi + eq_tidex - 1}, {LBj, LBj + eq_tidey - 1});
+#endif
+#ifdef DIAGNOSTICS_UV
+    realHost3d DiaU2rhs_h("DiaU2rhs_h", DiaU2rhs_f, {IminS, ImaxS}, {JminS, JmaxS}, DiaU2rhsz);
+#endif
+#if defined WEC_VF
+    realHost2d zetaw_h("zetaw_h", zetaw_f, {LBi, LBi + zetawx - 1}, {LBj, LBj + zetawy - 1});
+    realHost2d qsp_h("qsp_h", qsp_f, {LBi, LBi + qspx - 1}, {LBj, LBj + qspy - 1});
+    realHost2d bh_h("bh_h", bh_f, {LBi, LBi + bhx - 1}, {LBj, LBj + bhy - 1});
+    realHost2d rukvf2d_h("rukvf2d_h", rukvf2d_f, {LBi, LBi + rukvf2dx - 1}, {LBj, LBj + rukvf2dy - 1});
+#endif
+    realHost2d rhs_vbar_h("rhs_vbar_h", rhs_vbar_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d om_v_h("om_v_h", om_v, {LBi, LBi + om_vx - 1}, {LBj, LBj + om_vy - 1});
+#ifdef DIAGNOSTICS_UV
+    realHost3d DiaV2rhs_h("DiaV2rhs_h", DiaV2rhs_f, {IminS, ImaxS}, {JminS, JmaxS}, DiaV2rhsz);
+#endif
+#if defined WEC_VF
+    realHost2d rvkvf2d_h("rvkvf2d_h", rvkvf2d_f, {LBi, LBi + rvkvf2dx - 1}, {LBj, LBj + rvkvf2dy - 1});
+#endif
+
+    real2d rhs_ubar_d("rhs_ubar_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d on_u_d("on_u_d", {LBi, LBi + on_ux - 1}, {LBj, LBj + on_uy - 1});
+    real2d h_d("h_d", {LBi, LBi + hx - 1}, {LBj, LBj + hy});
+    real2d gzeta_d("gzeta_d", {IminS, ImaxS}, {JminS, JmaxS});
+#if defined VAR_RHO_2D && defined SOLVE3D
+    real2d gzetaSA_d("gzetaSA_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d rhoA_d("rhoA_d", {LBi, LBi + rhoAx - 1}, {LBj, LBj + rhoAy - 1});
+    real2d zwrk_d("zwrk_d", {IminS, ImaxS}, {JminS, JmaxS});
+#endif
+    real2d gzeta2_d("gzeta2_d", {IminS, ImaxS}, {JminS, JmaxS});
+#if defined ATM_PRESS && !defined SOLVE3D
+    real2d Pair_d("Pair_d", {LBi, LBi + Pairx - 1}, {LBj, LBj + Pairy - 1});
+#endif
+#if defined TIDE_GENERATING_FORCES && !defined SOLVE3D
+    real2d eq_tide_d("eq_tide_d", {LBi, LBi + eq_tidex - 1}, {LBj, LBj + eq_tidey - 1});
+#endif
+#ifdef DIAGNOSTICS_UV
+    real3d DiaU2rhs_d("DiaU2rhs_d", {IminS, ImaxS}, {JminS, JmaxS}, DiaU2rhsz);
+#endif
+#if defined WEC_VF
+    real2d zetaw_d("zetaw_d", {LBi, LBi + zetawx - 1}, {LBj, LBj + zetawy - 1});
+    real2d qsp_d("qsp_d", {LBi, LBi + qspx - 1}, {LBj, LBj + qspy - 1});
+    real2d bh_d("bh_d", {LBi, LBi + bhx - 1}, {LBj, LBj + bhy - 1});
+    real2d rukvf2d_d("rukvf2d_d", {LBi, LBi + rukvf2dx - 1}, {LBj, LBj + rukvf2dy - 1});
+#endif
+    real2d rhs_vbar_d("rhs_vbar_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d om_v_d("om_v_d", {LBi, LBi + om_vx - 1}, {LBj, LBj + om_vy - 1});
+#ifdef DIAGNOSTICS_UV
+    real3d DiaV2rhs_d("DiaV2rhs_d", {IminS, ImaxS}, {JminS, JmaxS}, DiaV2rhsz);
+#endif
+#if defined WEC_VF
+    real2d rvkvf2d_d("rvkvf2d_d", {LBi, LBi + rvkvf2dx - 1}, {LBj, LBj + rvkvf2dy - 1});
+#endif
+
+    rhs_ubar_h.deep_copy_to(rhs_ubar_d);
+    on_u_h.deep_copy_to(on_u_d);
+    h_h.deep_copy_to(h_d);
+    gzeta_h.deep_copy_to(gzeta_d);
+#if defined VAR_RHO_2D && defined SOLVE3D
+    gzetaSA_h.deep_copy_to(gzetaSA_d);
+    rhoA_h.deep_copy_to(rhoA_d);
+    zwrk_h.deep_copy_to(zwrk_d);
+#endif
+    gzeta2_h.deep_copy_to(gzeta2_d);
+#if defined ATM_PRESS && !defined SOLVE3D
+    Pair_h.deep_copy_to(Pair_d);
+#endif
+#if defined TIDE_GENERATING_FORCES && !defined SOLVE3D
+    eq_tide_h.deep_copy_to(eq_tide_d);
+#endif
+#ifdef DIAGNOSTICS_UV
+    DiaU2rhs_h.deep_copy_to(DiaU2rhs_d);
+#endif
+#if defined WEC_VF
+    zetaw_h.deep_copy_to(zetaw_d);
+    qsp_h.deep_copy_to(qsp_d);
+    bh_h.deep_copy_to(bh_d);
+    rukvf2d_h.deep_copy_to(rukvf2d_d);
+#endif
+    rhs_vbar_h.deep_copy_to(rhs_vbar_d);
+    om_v_h.deep_copy_to(om_v_d);
+#ifdef DIAGNOSTICS_UV
+    DiaV2rhs_h.deep_copy_to(DiaV2rhs_d);
+#endif
+#if defined WEC_VF
+    rvkvf2d_h.deep_copy_to(rvkvf2d_d);
+#endif
+
+    yakl::SArray<real, 1, 8> cff;
+    yakl::fortran::parallel_for(
+        "step_loop10_1",
+        yakl::fortran::Bounds<2>({Jstr, Jend}, {IstrU, Iend}),
+        YAKL_LAMBDA(int j, int i) {
+            rhs_ubar_d(i, j) = cff1 * on_u_d(i, j) * ((h_d(i - 1, j) + h_d(i, j)) * (gzeta_d(i - 1, j) - gzeta_d(i, j))) +
+#if defined VAR_RHO_2D && defined SOLVE3D
+                               (h_d(i - 1, j) - h_d(i, j)) * (gzetaSA_d(i - 1, j) + gzetaSA_d(i, j) + cff2 * (rhoA_d(i - 1, j) - rhoA_d(i, j)) * (zwrk_d(i - 1, j) - zwrk_d(i, j))) +
+#endif
+                               (gzeta2_d(i - 1, j) - gzeta2_d(i, j));
+#if defined ATM_PRESS && !defined SOLVE3D
+            rhs_ubar_d(i, j) = rhs_ubar_d(i, j) - fac3 * on_u_d(i, j) * (h_d(i - 1, j) + h_d(i, j) + gzeta_d(i - 1, j) + gzeta_d(i, j)) * (Pair_d(i, j) - Pair_d(i - 1, j));
+#endif
+#if defined TIDE_GENERATING_FORCES && !defined SOLVE3D
+            rhs_ubar_d(i, j) = rhs_ubar_d(i, j) - cff1 * on_u_d(i, j) * (h_d(i - 1, j) + h_d(i, j) + gzeta_d(i - 1, j) + gzeta_d(i, j)) * (eq_tide_d(i, j) - eq_tide_d(i - 1, j));
+#endif
+#ifdef DIAGNOSTICS_UV
+            DiaU2rhs_d(i, j, M2pgrd) = rhs_ubar_d(i, j);
+#endif
+#if defined WEC_VF
+            cff(3) = 0.5_r8 * on_u_d(i, j) *
+                     (h_d(i - 1, j) + h_d(i, j) +
+                      gzeta_d(i - 1, j) + gzeta_d(i, j));
+            cff(4) = cff(3) * g * (zetaw_d(i - 1, j) - zetaw_d(i, j));
+            cff(5) = cff(3) * g * (qsp_d(i - 1, j) - qsp_d(i, j));
+            cff(6) = cff(3) * (bh_d(i - 1, j) - bh_d(i, j));
+            cff(7) = rukvf2d_d(i, j);
+            rhs_ubar_d(i, j) = rhs_ubar_d(i, j) - cff(4) - cff(5) + cff(6) + cff(7);
+#ifdef DIAGNOSTICS_UV
+            DiaU2rhs_d(i, j, M2zeta) = DiaU2rhs_d(i, j, M2pgrd);
+            DiaU2rhs_d(i, j, M2pgrd) = DiaU2rhs_d(i, j, M2pgrd) - cff(4) - cff(5) + cff(6);
+            DiaU2rhs_d(i, j, M2zetw) = -cff(4);
+            DiaU2rhs_d(i, j, M2zqsp) = -cff(5);
+            DiaU2rhs_d(i, j, M2zbeh) = cff(6);
+            DiaU2rhs_d(i, j, M2kvrf) = cff(7);
+#ifndef UV_ADV
+            DiaU2rhs_d(i, j, M2hjvf) = 0.0;
+#endif
+#endif
+#endif
+        });
+
+    yakl::fortran::parallel_for(
+        "step_loop10_2",
+        yakl::fortran::Bounds<2>({JstrV, Jend}, {Istr, Iend}),
+        YAKL_LAMBDA(int j, int i) {
+            rhs_vbar_d(i, j) = cff1 * om_v_d(i, j) *
+                               ((h_d(i, j - 1) +
+                                 h_d(i, j)) *
+                                    (gzeta_d(i, j - 1) -
+                                     gzeta_d(i, j)) +
+#if defined VAR_RHO_2D && defined SOLVE3D
+                                (h_d(i, j - 1) -
+                                 h_d(i, j)) *
+                                    (gzetaSA_d(i, j - 1) +
+                                     gzetaSA_d(i, j) +
+                                     cff2 * (rhoA_d(i, j - 1) - rhoA_d(i, j)) *
+                                         (zwrk_d(i, j - 1) -
+                                          zwrk_d(i, j))) +
+#endif
+                                (gzeta2_d(i, j - 1) -
+                                 gzeta2_d(i, j)));
+#if defined ATM_PRESS && !defined SOLVE3D
+            rhs_vbar_d(i, j) = rhs_vbar_d(i, j) -
+                               fac3 * om_v_d(i, j) *
+                                   (h_d(i, j - 1) + h_d(i, j) +
+                                    gzeta_d(i, j - 1) + gzeta_d(i, j)) *
+                                   (Pair_d(i, j) - Pair_d(i, j - 1));
+#endif
+#if defined TIDE_GENERATING_FORCES && !defined SOLVE3D
+            rhs_vbar_d(i, j) = rhs_vbar_d(i, j) -
+                               cff1 * om_v_d(i, j) *
+                                   (h_d(i, j - 1) + h_d(i, j) +
+                                    gzeta_d(i, j - 1) + gzeta_d(i, j)) *
+                                   (eq_tide_d(i, j) - eq_tide_d(i, j - 1));
+#endif
+#ifdef DIAGNOSTICS_UV
+            DiaV2rhs_d(i, j, M2pgrd) = rhs_vbar_d(i, j);
+#endif
+#if defined WEC_VF
+            cff(3) = 0.5_r8 * om_v_d(i, j) *
+                     (h_d(i, j - 1) + h_d(i, j) +
+                      gzeta_d(i, j - 1) + gzeta_d(i, j));
+            cff(4) = cff(3) * g * (zetaw_d(i, j - 1) - zetaw_d(i, j));
+            cff(5) = cff(3) * g * (qsp_d(i, j - 1) - qsp_d(i, j));
+            cff(6) = cff(3) * (bh_d(i, j - 1) - bh_d(i, j));
+            cff(7) = rvkvf2d_d(i, j);
+            rhs_vbar_d(i, j) = rhs_vbar_d(i, j) - cff(4) - cff(5) + cff(6) + cff(7);
+#ifdef DIAGNOSTICS_UV
+            DiaV2rhs_d(i, j, M2zeta) = DiaV2rhs_d(i, j, M2pgrd);
+            DiaV2rhs_d(i, j, M2pgrd) = DiaV2rhs_d(i, j, M2pgrd) - cff(4) - cff(5) + cff(6);
+            DiaV2rhs_d(i, j, M2zetw) = -cff(4);
+            DiaV2rhs_d(i, j, M2zqsp) = -cff(5);
+            DiaV2rhs_d(i, j, M2zbeh) = cff(6);
+            DiaV2rhs_d(i, j, M2kvrf) = cff(7);
+#ifndef UV_ADV
+            DiaV2rhs_d(i, j, M2hjvf) = 0.0;
+#endif
+#endif
+#endif
+        });
+
+    rhs_ubar_d.deep_copy_to(rhs_ubar_h);
+    DiaU2rhs_d.deep_copy_to(DiaU2rhs_h);
+    rhs_vbar_d.deep_copy_to(rhs_vbar_h);
+    DiaV2rhs_d.deep_copy_to(DiaV2rhs_h);
+
+    yakl::fence();
+}

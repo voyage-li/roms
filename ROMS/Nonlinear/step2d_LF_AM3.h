@@ -317,7 +317,131 @@
         real(8), dimension(*) :: gzeta_f, gzeta2_f
 #endif
         end subroutine step_loop7
-      end interface
+        subroutine step_loop8(                                                      &
+        &      zeta_f, zetax, zetay, zetaz,                                         &
+        &      zeta_new_f                                                           &
+#if defined WET_DRY && defined MASKING
+        &      ,Drict_ng, h_f, hx, hy,                                              &
+        &      rmask_f, rmaskx, rmasky                                              &
+#endif
+        ) bind(C,name="step_loop8")
+        use iso_c_binding
+        real(8), dimension(*) :: zeta_f
+        integer :: zetax, zetay, zetaz
+        real(8), dimension(*) :: zeta_new_f
+#if defined WET_DRY && defined MASKING
+        real(8) :: Drict_ng
+        real(8), dimension(*) :: h_f
+        integer :: hx, hy
+        real(8), dimension(*) :: rmask_f
+        integer :: rmaskx, rmasky
+#endif
+        end subroutine step_loop8
+        subroutine step_loop9(                                                      &
+        &   fac, bed_thick_f,                                                       &
+        &   bed_thickx, bed_thicky,  bed_thickz,                                    &
+        &   h_f, hx, hy                                                             &
+        ) bind(C,name="step_loop9")
+        use iso_c_binding
+        real(8) :: fac
+        real(8), dimension(*) :: bed_thick_f
+        integer :: bed_thickx, bed_thicky, bed_thickz
+        real(8), dimension(*) :: h_f
+        integer :: hx, hy
+        end subroutine step_loop9                                               
+      subroutine step_loop10(                                                       &
+      &   cff1,cff2,g,                                                              &
+#if !defined SOLVE3D && defined ATM_PRESS
+      &   fac3,                                                                     &
+#endif
+      &   rhs_ubar_f, on_u_f, on_ux, on_uy,                                         &
+      &   h_f, hx, hy,                                                              &
+      &   gzeta_f,                                                                  &
+#if defined VAR_RHO_2D && defined SOLVE3D
+      &   gzetaSA_f, rhoA_f, rhoAx, rhoAy,                                          &
+      &   zwrk_f,                                                                   &
+#endif
+      &   gzeta2_f,                                                                 &
+#if defined ATM_PRESS && !defined SOLVE3D
+      &   Pair_f, Pairx, Pairy,                                                     &
+#endif
+#if defined TIDE_GENERATING_FORCES && !defined SOLVE3D
+      &   eq_tide_f, eq_tidex, eq_tidey,                                            &
+#endif
+#ifdef DIAGNOSTICS_UV
+      &   DiaU2rhs_f, DiaU2rhsz,                                                    &
+      &   M2pgrd,                                                                   &
+#if defined WEC_VF
+      &   M2zeta, M2zetw,                                                           &
+      &   M2zqsp, M2zebh, M2kvrf,                                                   &
+#endif
+#endif
+#if defined WEC_VF
+      &   zetaw_f, zetawx, zetawy,                                                  &
+      &   qsp_f, qspx, qspy,                                                        &
+      &   bh_f, bhx, bhy,                                                           &
+      &   rukvf2d_f, rukvf2dx, rukvf2dy,                                            &
+#endif
+      &   rhs_var_f, om_v_f, om_vx, om_vy                                           &
+#ifdef DIAGNOSTICS_UV
+      &   ,DiaV2rhs_f, DiaV2rhsz                                                    &
+#endif
+#if defined WEC_VF
+      &   ,rvkvf2d_f, rvkvf2dx, rvkvf2dy                                            &
+#endif
+        ) bind(C,name="step_loop10")
+        use iso_c_binding
+        real(8) :: cff1, cff2, g
+#if !defined SOLVE3D && defined ATM_PRESS
+        real(8) :: fac3
+#endif
+        real(8), dimension(*) :: rhs_ubar_f, on_u_f
+        integer :: on_ux, on_uy
+        real(8), dimension(*) :: h_f
+        integer :: hx, hy
+        real(8), dimension(*) :: gzeta_f
+#if defined VAR_RHO_2D && defined SOLVE3D
+        real(8), dimension(*) :: gzetaSA_f, rhoA_f
+        integer :: rhoAx, rhoAy
+        real(8), dimension(*) :: zwrk_f
+#endif
+        real(8), dimension(*) :: gzeta2_f
+#if defined ATM_PRESS && !defined SOLVE3D
+        real(8), dimension(*) :: Pair_f
+        integer :: Pairx, Pairy
+#endif
+#if defined TIDE_GENERATING_FORCES && !defined SOLVE3D
+        real(8), dimension(*) :: eq_tide_f
+        integer :: eq_tidex, eq_tidey
+#endif
+#ifdef DIAGNOSTICS_UV
+        real(8), dimension(*) :: DiaU2rhs_f
+        integer :: DiaU2rhsz
+        integer :: M2zeta, M2pgrd, M2zetw
+        integer :: M2zqsp, M2zebh, M2kvrf
+#endif
+#if defined WEC_VF
+        real(8), dimension(*) :: zetaw_f
+        integer :: zetawx, zetawy
+        real(8), dimension(*) :: qsp_f
+        integer :: qspx, qspy
+        real(8), dimension(*) :: bh_f
+        integer :: bhx, bhy
+        real(8), dimension(*) :: rukvf2d_f
+        integer :: rukvf2dx, rukvf2dy
+#endif
+        real(8), dimension(*) :: rhs_var_f, om_v_f
+        integer :: om_vx, om_vy
+#ifdef DIAGNOSTICS_UV
+        real(8), dimension(*) :: DiaV2rhs_f
+        integer :: DiaV2rhsz
+#endif
+#if defined WEC_VF
+        real(8), dimension(*) :: rvkvf2d_f
+        integer :: rvkvf2dx, rvkvf2dy
+#endif
+        end subroutine step_loop10
+      end interface        
 !
       PRIVATE
       PUBLIC  :: step2d
@@ -1435,15 +1559,23 @@
 !  cells.
 #endif
 !
-      DO j=Jstr,Jend
-        DO i=Istr,Iend
-          zeta(i,j,knew)=zeta_new(i,j)
+      call step_loop8(                                                      &
+          zeta,size(zeta,1),size(zeta,2),size(zeta,3),                      &
+          zeta_new                                                          &
 #if defined WET_DRY && defined MASKING
-          zeta(i,j,knew)=zeta(i,j,knew)+                                &
-     &                   (Dcrit(ng)-h(i,j))*(1.0_r8-rmask(i,j))
-#endif
-        END DO
-      END DO
+          ,Dcrit, h, size(h,1),size(h,2),                                   &
+          rmask, size(rmask,1),size(rmask,2)                                &
+#endif                                                          
+      )
+!       DO j=Jstr,Jend
+!         DO i=Istr,Iend
+!           zeta(i,j,knew)=zeta_new(i,j)
+! #if defined WET_DRY && defined MASKING
+!           zeta(i,j,knew)=zeta(i,j,knew)+                                &
+!      &                   (Dcrit(ng)-h(i,j))*(1.0_r8-rmask(i,j))
+! #endif
+!         END DO
+!       END DO
 !
 !  If predictor step, load right-side-term into shared array.
 !
@@ -1493,12 +1625,17 @@
 !  becasue we do "nfast" steps to here.
 !
       fac=0.5_r8*dtfast(ng)*ndtfast(ng)/(nfast(ng)*dt(ng))
-      DO j=Jstr,Jend
-        DO i=Istr,Iend
-          cff=fac*(bed_thick(i,j,nstp)-bed_thick(i,j,nnew))
-          h(i,j)=h(i,j)-cff
-        END DO
-      END DO
+      call step_loop9(                                                      &
+          fac, bed_thick,                                                   & 
+          size(bed_thick,1),size(bed_thick,2),size(bed_thick,3),            &
+          h,size(h,1),size(h,2)                                             &
+      )
+      ! DO j=Jstr,Jend
+      !   DO i=Istr,Iend
+      !     cff=fac*(bed_thick(i,j,nstp)-bed_thick(i,j,nnew))
+      !     h(i,j)=h(i,j)-cff
+      !   END DO
+      ! END DO
 #endif
 !
 !  Set free-surface lateral boundary conditions.
@@ -1534,124 +1671,165 @@
 #if !defined SOLVE3D && defined ATM_PRESS
       fac3=0.5_r8*100.0_r8/rho0
 #endif
-      DO j=Jstr,Jend
-        DO i=IstrU,Iend
-          rhs_ubar(i,j)=cff1*on_u(i,j)*                                 &
-     &                  ((h(i-1,j)+                                     &
-     &                    h(i ,j))*                                     &
-     &                   (gzeta(i-1,j)-                                 &
-     &                    gzeta(i  ,j))+                                &
-#if defined VAR_RHO_2D && defined SOLVE3D
-     &                   (h(i-1,j)-                                     &
-     &                    h(i  ,j))*                                    &
-     &                   (gzetaSA(i-1,j)+                               &
-     &                    gzetaSA(i  ,j)+                               &
-     &                    cff2*(rhoA(i-1,j)-                            &
-     &                          rhoA(i  ,j))*                           &
-     &                         (zwrk(i-1,j)-                            &
-     &                          zwrk(i  ,j)))+                          &
+      call step_loop10(                                                     &
+            cff1,cff2,g,                                                    &
+#if !defined SOLVE3D && defined ATM_PRESS
+            fac3,                                                           &
 #endif
-     &                   (gzeta2(i-1,j)-                                &
-     &                    gzeta2(i  ,j)))
-#if defined ATM_PRESS && !defined SOLVE3D
-          rhs_ubar(i,j)=rhs_ubar(i,j)-                                  &
-     &                  fac3*on_u(i,j)*                                 &
-     &                  (h(i-1,j)+h(i,j)+                               &
-     &                   gzeta(i-1,j)+gzeta(i,j))*                      &
-     &                  (Pair(i,j)-Pair(i-1,j))
+            rhs_ubar,on_u,size(on_u,1),size(on_u,2),                        &
+            h, size(h,1),size(h,2),                                         &
+            gzeta,                                                          &
+#if defined VAR_RHO_2D && defined SOLVE3D
+            gzetaSA,rhoA,size(rhoA,1),size(rhoA,2),                         &
+            zwrk,                                                           &
+#endif
+            gzeta2,                                                         &
+#if defined ATM_PRESS && !defined SOLVE3D            
+            Pair,size(Pair,1),size(Pair,2),                                 &
 #endif
 #if defined TIDE_GENERATING_FORCES && !defined SOLVE3D
-          rhs_ubar(i,j)=rhs_ubar(i,j)-                                  &
-     &                  cff1*on_u(i,j)*                                 &
-     &                  (h(i-1,j)+h(i,j)+                               &
-     &                   gzeta(i-1,j)+gzeta(i,j))*                      &
-     &                  (eq_tide(i,j)-eq_tide(i-1,j))
+            eq_tide,size(eq_tide,1),size(eq_tide,2),                        &
 #endif
-#ifdef DIAGNOSTICS_UV
-          DiaU2rhs(i,j,M2pgrd)=rhs_ubar(i,j)
+#ifdef DIAGNOSTICS_UV 
+            DiaU2rhs,size(DiaU2rhs,3),                                      &
+            M2pgrd,                                                         &
+#if defined WEC_VF
+            M2zeta,M2zetw,                                                  &
+            M2zqsp,M2zebh,M2kvrf,                                           &
+#endif
 #endif
 #if defined WEC_VF
-          cff3=0.5_r8*on_u(i,j)*                                        &
-     &         (h(i-1,j)+h(i,j)+                                        &
-     &         gzeta(i-1,j)+gzeta(i,j))
-          cff4=cff3*g*(zetaw(i-1,j)-zetaw(i,j))
-          cff5=cff3*g*(qsp(i-1,j)-qsp(i,j))
-          cff6=cff3*(bh(i-1,j)-bh(i,j))
-          cff7=rukvf2d(i,j)
-          rhs_ubar(i,j)=rhs_ubar(i,j)-cff4-cff5+cff6+cff7
-# ifdef DIAGNOSTICS_UV
-          DiaU2rhs(i,j,M2zeta)=DiaU2rhs(i,j,M2pgrd)
-          DiaU2rhs(i,j,M2pgrd)=DiaU2rhs(i,j,M2pgrd)-cff4-cff5+cff6
-          DiaU2rhs(i,j,M2zetw)=-cff4
-          DiaU2rhs(i,j,M2zqsp)=-cff5
-          DiaU2rhs(i,j,M2zbeh)=cff6
-          DiaU2rhs(i,j,M2kvrf)=cff7
-#  ifndef UV_ADV
-          DiaU2rhs(i,j,M2hjvf)=0.0_r8
-#  endif
-# endif
+            zetaw,size(zetaw,1),size(zetaw,2),                              &
+            qsp,size(qsp,1),size(qsp,2),                                    &
+            bh,size(bh,1),size(bh,2),                                       &
+            rukvf2d,size(rukvf2d,1),size(rukvf2d,2),                        &
 #endif
-        END DO
-        IF (j.ge.JstrV) THEN
-          DO i=Istr,Iend
-            rhs_vbar(i,j)=cff1*om_v(i,j)*                               &
-     &                    ((h(i,j-1)+                                   &
-     &                      h(i,j  ))*                                  &
-     &                     (gzeta(i,j-1)-                               &
-     &                      gzeta(i,j  ))+                              &
-#if defined VAR_RHO_2D && defined SOLVE3D
-     &                     (h(i,j-1)-                                   &
-     &                      h(i,j  ))*                                  &
-     &                     (gzetaSA(i,j-1)+                             &
-     &                      gzetaSA(i,j  )+                             &
-     &                      cff2*(rhoA(i,j-1)-                          &
-     &                            rhoA(i,j  ))*                         &
-     &                           (zwrk(i,j-1)-                          &
-     &                            zwrk(i,j  )))+                        &
-#endif
-     &                     (gzeta2(i,j-1)-                              &
-     &                      gzeta2(i,j  )))
-#if defined ATM_PRESS && !defined SOLVE3D
-            rhs_vbar(i,j)=rhs_vbar(i,j)-                                &
-     &                    fac3*om_v(i,j)*                               &
-     &                    (h(i,j-1)+h(i,j)+                             &
-     &                     gzeta(i,j-1)+gzeta(i,j))*                    &
-     &                    (Pair(i,j)-Pair(i,j-1))
-#endif
-#if defined TIDE_GENERATING_FORCES && !defined SOLVE3D
-            rhs_vbar(i,j)=rhs_vbar(i,j)-                                &
-     &                    cff1*om_v(i,j)*                               &
-     &                    (h(i,j-1)+h(i,j)+                             &
-     &                     gzeta(i,j-1)+gzeta(i,j))*                    &
-     &                    (eq_tide(i,j)-eq_tide(i,j-1))
-#endif
+            rhs_vbar,om_v,size(om_v,1),size(om_v,2)                         &
 #ifdef DIAGNOSTICS_UV
-            DiaV2rhs(i,j,M2pgrd)=rhs_vbar(i,j)
+            ,DiaV2rhs,size(DiaV2rhs,3)                                      &
 #endif
 #if defined WEC_VF
-            cff3=0.5_r8*om_v(i,j)*                                      &
-     &           (h(i,j-1)+h(i,j)+                                      &
-     &           gzeta(i,j-1)+gzeta(i,j))
-            cff4=cff3*g*(zetaw(i,j-1)-zetaw(i,j))
-            cff5=cff3*g*(qsp(i,j-1)-qsp(i,j))
-            cff6=cff3*(bh(i,j-1)-bh(i,j))
-            cff7=rvkvf2d(i,j)
-            rhs_vbar(i,j)=rhs_vbar(i,j)-cff4-cff5+cff6+cff7
-# ifdef DIAGNOSTICS_UV
-            DiaV2rhs(i,j,M2zeta)=DiaV2rhs(i,j,M2pgrd)
-            DiaV2rhs(i,j,M2pgrd)=DiaV2rhs(i,j,M2pgrd)-cff4-cff5+cff6
-            DiaV2rhs(i,j,M2zetw)=-cff4
-            DiaV2rhs(i,j,M2zqsp)=-cff5
-            DiaV2rhs(i,j,M2zbeh)=cff6
-            DiaV2rhs(i,j,M2kvrf)=cff7
-#  ifndef UV_ADV
-            DiaV2rhs(i,j,M2hjvf)=0.0_r8
-#  endif
-# endif
-#endif
-          END DO
-        END IF
-      END DO
+            ,rvkvf2d,size(rvkvf2d,1),size(rvkvf2d,2)                        &
+#endif                                      
+      )
+!       DO j=Jstr,Jend
+!         DO i=IstrU,Iend
+!           rhs_ubar(i,j)=cff1*on_u(i,j)*                                 &
+!      &                  ((h(i-1,j)+                                     &
+!      &                    h(i ,j))*                                     &
+!      &                   (gzeta(i-1,j)-                                 &
+!      &                    gzeta(i  ,j))+                                &
+! #if defined VAR_RHO_2D && defined SOLVE3D
+!      &                   (h(i-1,j)-                                     &
+!      &                    h(i  ,j))*                                    &
+!      &                   (gzetaSA(i-1,j)+                               &
+!      &                    gzetaSA(i  ,j)+                               &
+!      &                    cff2*(rhoA(i-1,j)-                            &
+!      &                          rhoA(i  ,j))*                           &
+!      &                         (zwrk(i-1,j)-                            &
+!      &                          zwrk(i  ,j)))+                          &
+! #endif
+!      &                   (gzeta2(i-1,j)-                                &
+!      &                    gzeta2(i  ,j)))
+! #if defined ATM_PRESS && !defined SOLVE3D
+!           rhs_ubar(i,j)=rhs_ubar(i,j)-                                  &
+!      &                  fac3*on_u(i,j)*                                 &
+!      &                  (h(i-1,j)+h(i,j)+                               &
+!      &                   gzeta(i-1,j)+gzeta(i,j))*                      &
+!      &                  (Pair(i,j)-Pair(i-1,j))
+! #endif
+! #if defined TIDE_GENERATING_FORCES && !defined SOLVE3D
+!           rhs_ubar(i,j)=rhs_ubar(i,j)-                                  &
+!      &                  cff1*on_u(i,j)*                                 &
+!      &                  (h(i-1,j)+h(i,j)+                               &
+!      &                   gzeta(i-1,j)+gzeta(i,j))*                      &
+!      &                  (eq_tide(i,j)-eq_tide(i-1,j))
+! #endif
+! #ifdef DIAGNOSTICS_UV
+!           DiaU2rhs(i,j,M2pgrd)=rhs_ubar(i,j)
+! #endif
+! #if defined WEC_VF
+!           cff3=0.5_r8*on_u(i,j)*                                        &
+!      &         (h(i-1,j)+h(i,j)+                                        &
+!      &         gzeta(i-1,j)+gzeta(i,j))
+!           cff4=cff3*g*(zetaw(i-1,j)-zetaw(i,j))
+!           cff5=cff3*g*(qsp(i-1,j)-qsp(i,j))
+!           cff6=cff3*(bh(i-1,j)-bh(i,j))
+!           cff7=rukvf2d(i,j)
+!           rhs_ubar(i,j)=rhs_ubar(i,j)-cff4-cff5+cff6+cff7
+! # ifdef DIAGNOSTICS_UV
+!           DiaU2rhs(i,j,M2zeta)=DiaU2rhs(i,j,M2pgrd)
+!           DiaU2rhs(i,j,M2pgrd)=DiaU2rhs(i,j,M2pgrd)-cff4-cff5+cff6
+!           DiaU2rhs(i,j,M2zetw)=-cff4
+!           DiaU2rhs(i,j,M2zqsp)=-cff5
+!           DiaU2rhs(i,j,M2zbeh)=cff6
+!           DiaU2rhs(i,j,M2kvrf)=cff7
+! #  ifndef UV_ADV
+!           DiaU2rhs(i,j,M2hjvf)=0.0_r8
+! #  endif
+! # endif
+! #endif
+!         END DO
+!         IF (j.ge.JstrV) THEN
+!           DO i=Istr,Iend
+!             rhs_vbar(i,j)=cff1*om_v(i,j)*                               &
+!      &                    ((h(i,j-1)+                                   &
+!      &                      h(i,j  ))*                                  &
+!      &                     (gzeta(i,j-1)-                               &
+!      &                      gzeta(i,j  ))+                              &
+! #if defined VAR_RHO_2D && defined SOLVE3D
+!      &                     (h(i,j-1)-                                   &
+!      &                      h(i,j  ))*                                  &
+!      &                     (gzetaSA(i,j-1)+                             &
+!      &                      gzetaSA(i,j  )+                             &
+!      &                      cff2*(rhoA(i,j-1)-                          &
+!      &                            rhoA(i,j  ))*                         &
+!      &                           (zwrk(i,j-1)-                          &
+!      &                            zwrk(i,j  )))+                        &
+! #endif
+!      &                     (gzeta2(i,j-1)-                              &
+!      &                      gzeta2(i,j  )))
+! #if defined ATM_PRESS && !defined SOLVE3D
+!             rhs_vbar(i,j)=rhs_vbar(i,j)-                                &
+!      &                    fac3*om_v(i,j)*                               &
+!      &                    (h(i,j-1)+h(i,j)+                             &
+!      &                     gzeta(i,j-1)+gzeta(i,j))*                    &
+!      &                    (Pair(i,j)-Pair(i,j-1))
+! #endif
+! #if defined TIDE_GENERATING_FORCES && !defined SOLVE3D
+!             rhs_vbar(i,j)=rhs_vbar(i,j)-                                &
+!      &                    cff1*om_v(i,j)*                               &
+!      &                    (h(i,j-1)+h(i,j)+                             &
+!      &                     gzeta(i,j-1)+gzeta(i,j))*                    &
+!      &                    (eq_tide(i,j)-eq_tide(i,j-1))
+! #endif
+! #ifdef DIAGNOSTICS_UV
+!             DiaV2rhs(i,j,M2pgrd)=rhs_vbar(i,j)
+! #endif
+! #if defined WEC_VF
+!             cff3=0.5_r8*om_v(i,j)*                                      &
+!      &           (h(i,j-1)+h(i,j)+                                      &
+!      &           gzeta(i,j-1)+gzeta(i,j))
+!             cff4=cff3*g*(zetaw(i,j-1)-zetaw(i,j))
+!             cff5=cff3*g*(qsp(i,j-1)-qsp(i,j))
+!             cff6=cff3*(bh(i,j-1)-bh(i,j))
+!             cff7=rvkvf2d(i,j)
+!             rhs_vbar(i,j)=rhs_vbar(i,j)-cff4-cff5+cff6+cff7
+! # ifdef DIAGNOSTICS_UV
+!             DiaV2rhs(i,j,M2zeta)=DiaV2rhs(i,j,M2pgrd)
+!             DiaV2rhs(i,j,M2pgrd)=DiaV2rhs(i,j,M2pgrd)-cff4-cff5+cff6
+!             DiaV2rhs(i,j,M2zetw)=-cff4
+!             DiaV2rhs(i,j,M2zqsp)=-cff5
+!             DiaV2rhs(i,j,M2zbeh)=cff6
+!             DiaV2rhs(i,j,M2kvrf)=cff7
+! #  ifndef UV_ADV
+!             DiaV2rhs(i,j,M2hjvf)=0.0_r8
+! #  endif
+! # endif
+! #endif
+!           END DO
+!         END IF
+!       END DO
 #ifdef UV_ADV
 !
 !-----------------------------------------------------------------------
