@@ -459,6 +459,35 @@
         integer :: vbarx, vbary, vbarz
         end subroutine step_loop11
 #else
+        subroutine step_loop12(                                                     &
+            grad_f, ubar_f,                                                         &
+            ubarx, ubary, ubarz,                                                    &
+            Dgrad_f, DUon_f                                                         &
+        ) bind(C,name="step_loop12")
+        use iso_c_binding
+        real(8), dimension(*) :: grad_f, ubar_f
+        integer :: ubarx, ubary, ubarz
+        real(8), dimension(*) :: Dgrad_f, DUon_f
+        end subroutine step_loop12
+        subroutine step_loop13(                                                     &
+            cff, UFx_f, ubar_f,                                                     &
+            ubarx, ubary, ubarz,                                                    &
+            grad_f, DUon_f, Dgrad_f                                                 &
+        ) bind(C,name="step_loop13")
+        use iso_c_binding
+        real(8) :: cff
+        real(8), dimension(*) :: UFx_f, ubar_f
+        integer :: ubarx, ubary, ubarz
+        real(8), dimension(*) :: grad_f, DUon_f, Dgrad_f
+        end subroutine step_loop13
+        subroutine step_loop14(                                                     &
+            grad_f, ubar_f,                                                         &
+            ubarx, ubary, ubarz                                                     &
+        ) bind(C,name="step_loop14")
+        use iso_c_binding
+        real(8), dimension(*) :: grad_f, ubar_f
+        integer :: ubarx, ubary, ubarz
+        end subroutine step_loop14
 #endif      
       end interface  
 
@@ -1902,13 +1931,18 @@
 !
 !  Fourth-order, centered differences advection fluxes.
 !
-      DO j=Jstr,Jend
-        DO i=IstrUm1,Iendp1
-          grad (i,j)=ubar(i-1,j,krhs)-2.0_r8*ubar(i,j,krhs)+            &
-     &               ubar(i+1,j,krhs)
-          Dgrad(i,j)=DUon(i-1,j)-2.0_r8*DUon(i,j)+DUon(i+1,j)
-        END DO
-      END DO
+      call step_loop12(                                                 &
+            grad, ubar,                                                 &
+            size(ubar,1),size(ubar,2),size(ubar,3),                     &
+            Dgrad, DUon                                                 &
+      )
+!       DO j=Jstr,Jend
+!         DO i=IstrUm1,Iendp1
+!           grad (i,j)=ubar(i-1,j,krhs)-2.0_r8*ubar(i,j,krhs)+            &
+!      &               ubar(i+1,j,krhs)
+!           Dgrad(i,j)=DUon(i-1,j)-2.0_r8*DUon(i,j)+DUon(i+1,j)
+!         END DO
+!       END DO
       IF (.not.(CompositeGrid(iwest,ng).or.EWperiodic(ng))) THEN
         IF (DOMAIN(ng)%Western_Edge(tile)) THEN
           DO j=Jstr,Jend
@@ -1927,22 +1961,31 @@
       END IF
 
       cff=1.0_r8/6.0_r8
-      DO j=Jstr,Jend
-        DO i=IstrU-1,Iend
-          UFx(i,j)=0.25_r8*(ubar(i  ,j,krhs)+                           &
-     &                      ubar(i+1,j,krhs)-                           &
-     &                      cff*(grad (i,j)+grad (i+1,j)))*             &
-     &                     (DUon(i,j)+DUon(i+1,j)-                      &
-     &                      cff*(Dgrad(i,j)+Dgrad(i+1,j)))
-        END DO
-      END DO
+      call step_loop13(                                                     &
+            cff, UFx, ubar,                                                 &
+            size(ubar,1),size(ubar,2),size(ubar,3),                         &
+            grad, DUon, Dgrad                                               &
+      )
+!       DO j=Jstr,Jend
+!         DO i=IstrU-1,Iend
+!           UFx(i,j)=0.25_r8*(ubar(i  ,j,krhs)+                           &
+!      &                      ubar(i+1,j,krhs)-                           &
+!      &                      cff*(grad (i,j)+grad (i+1,j)))*             &
+!      &                     (DUon(i,j)+DUon(i+1,j)-                      &
+!      &                      cff*(Dgrad(i,j)+Dgrad(i+1,j)))
+!         END DO
+!       END DO
 !
-      DO j=Jstrm1,Jendp1
-        DO i=IstrU,Iend
-          grad(i,j)=ubar(i,j-1,krhs)-2.0_r8*ubar(i,j,krhs)+             &
-     &              ubar(i,j+1,krhs)
-        END DO
-      END DO
+      call step_loop14(                                                     &
+            grad, ubar,                                                     &
+            size(vbar,1),size(vbar,2),size(vbar,3)                          &
+        )
+!       DO j=Jstrm1,Jendp1
+!         DO i=IstrU,Iend
+!           grad(i,j)=ubar(i,j-1,krhs)-2.0_r8*ubar(i,j,krhs)+             &
+!      &              ubar(i,j+1,krhs)
+!         END DO
+!       END DO
       IF (.not.(CompositeGrid(isouth,ng).or.NSperiodic(ng))) THEN
         IF (DOMAIN(ng)%Southern_Edge(tile)) THEN
           DO i=IstrU,Iend

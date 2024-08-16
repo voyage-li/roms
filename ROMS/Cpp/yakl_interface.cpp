@@ -1583,4 +1583,138 @@ extern "C" void step_loop11(
     yakl::fence();
 }
 #else
+
+extern "C" void step_loop12(
+    real *grad_f, real *ubar_f,
+    int &ubarx, int &ubary, int &ubarz,
+    real *Dgrad_f, real *DUon_f)
+{
+    int Jstr = Jstr_g;
+    int Jend = Jend_g;
+    int IstrUm1 = IstrUm1_g;
+    int Iendp1 = Iendp1_g;
+    int LBi = LBi_g;
+    int LBj = LBj_g;
+    int IminS = IminS_g;
+    int ImaxS = ImaxS_g;
+    int JminS = JminS_g;
+    int JmaxS = JmaxS_g;
+    int krhs = krhs_g;
+
+    realHost2d grad_h("grad_h", grad_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost3d ubar_h("ubar_h", ubar_f, {LBi, LBi + ubarx - 1}, {LBj, LBj + ubary - 1}, ubarz);
+    realHost2d Dgrad_h("Dgrad_h", Dgrad_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d DUon_h("DUon_h", DUon_f, {IminS, ImaxS}, {JminS, JmaxS});
+
+    real2d grad_d("grad_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real3d ubar_d("ubar_d", {LBi, LBi + ubarx - 1}, {LBj, LBj + ubary - 1}, ubarz);
+    real2d Dgrad_d("Dgrad_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d DUon_d("DUon_d", {IminS, ImaxS}, {JminS, JmaxS});
+
+    grad_h.deep_copy_to(grad_d);
+    ubar_h.deep_copy_to(ubar_d);
+    Dgrad_h.deep_copy_to(Dgrad_d);
+    DUon_h.deep_copy_to(DUon_d);
+
+    yakl::fortran::parallel_for(
+        "step_loop12_1",
+        yakl::fortran::Bounds<2>({Jstr, Jend}, {IstrUm1, Iendp1}),
+        YAKL_LAMBDA(int j, int i) {
+            grad_d(i, j) = ubar_d(i - 1, j, krhs) - 2.0 * ubar_d(i, j, krhs) +
+                           ubar_d(i + 1, j, krhs);
+            Dgrad_d(i, j) = DUon_d(i - 1, j) - 2.0 * DUon_d(i, j) + DUon_d(i + 1, j);
+        });
+
+    grad_d.deep_copy_to(grad_h);
+    Dgrad_d.deep_copy_to(Dgrad_h);
+
+    yakl::fence();
+}
+
+extern "C" void step_loop13(
+    real &cff, real *UFx_f, real *ubar_f,
+    int &ubarx, int &ubary, int &ubarz,
+    real *grad, real *DUon, real *Dgrad)
+{
+    int IminS = IminS_g;
+    int ImaxS = ImaxS_g;
+    int JminS = JminS_g;
+    int JmaxS = JmaxS_g;
+    int krhs = krhs_g;
+    int Jstr = Jstr_g;
+    int Jend = Jend_g;
+    int IstrU = IstrU_g;
+    int Iend = Iend_g;
+    int LBj = LBj_g;
+    int LBi = LBi_g;
+
+    realHost2d UFx_h("UFx_h", UFx_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost3d ubar_h("ubar_h", ubar_f, {LBi, LBi + ubarx - 1}, {LBj, LBj + ubary - 1}, ubarz);
+    realHost2d grad_h("grad_h", grad, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d DUon_h("DUon_h", DUon, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d Dgrad_h("Dgrad_h", Dgrad, {IminS, ImaxS}, {JminS, JmaxS});
+
+    real2d UFx_d("UFx_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real3d ubar_d("ubar_d", {LBi, LBi + ubarx - 1}, {LBj, LBj + ubary - 1}, ubarz);
+    real2d grad_d("grad_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d DUon_d("DUon_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d Dgrad_d("Dgrad_d", {IminS, ImaxS}, {JminS, JmaxS});
+
+    UFx_h.deep_copy_to(UFx_d);
+    ubar_h.deep_copy_to(ubar_d);
+    grad_h.deep_copy_to(grad_d);
+    DUon_h.deep_copy_to(DUon_d);
+    Dgrad_h.deep_copy_to(Dgrad_d);
+
+    yakl::fortran::parallel_for(
+        "step_loop13_1",
+        yakl::fortran::Bounds<2>({Jstr, Jend}, {IstrU - 1, Iend}),
+        YAKL_LAMBDA(int j, int i) {
+            UFx_d(i, j) = 0.25 * (ubar_d(i, j, krhs) + ubar_d(i + 1, j, krhs) - cff * (grad_d(i, j) + grad_d(i + 1, j))) *
+                          (DUon_d(i, j) + DUon_d(i + 1, j) -
+                           cff * (Dgrad_d(i, j) + Dgrad_d(i + 1, j)));
+        });
+
+    UFx_d.deep_copy_to(UFx_h);
+
+    yakl::fence();
+}
+
+extern "C" void step_loop14(
+    real *grad_f, real *ubar_f,
+    int &ubarx, int &ubary, int &ubarz)
+{
+    int IminS = IminS_g;
+    int ImaxS = ImaxS_g;
+    int JminS = JminS_g;
+    int JmaxS = JmaxS_g;
+    int LBi = LBi_g;
+    int LBj = LBj_g;
+    int Jstrm1 = Jstrm1_g;
+    int Jendp1 = Jendp1_g;
+    int IstrU = IstrU_g;
+    int Iend = Iend_g;
+    int krhs = krhs_g;
+
+    realHost2d grad_h("grad_h", grad_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost3d ubar_h("ubar_h", ubar_f, {LBi, LBi + ubarx - 1}, {LBj, LBj + ubary - 1}, ubarz);
+
+    real2d grad_d("grad_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real3d ubar_d("ubar_d", {LBi, LBi + ubarx - 1}, {LBj, LBj + ubary - 1}, ubarz);
+
+    grad_h.deep_copy_to(grad_d);
+    ubar_h.deep_copy_to(ubar_d);
+
+    yakl::fortran::parallel_for(
+        "step_loop14_1",
+        yakl::fortran::Bounds<2>({Jstrm1, Jendp1}, {IstrU, Iend}),
+        YAKL_LAMBDA(int j, int i) {
+            grad_d(i, j) = ubar_d(i, j - 1, krhs) - 2.0 * ubar_d(i, j, krhs) + ubar_d(i, j + 1, krhs);
+        });
+
+    grad_d.deep_copy_to(grad_h);
+
+    yakl::fence();
+}
+
 #endif
