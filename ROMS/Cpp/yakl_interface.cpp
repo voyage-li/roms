@@ -1634,7 +1634,7 @@ extern "C" void step_loop12(
 extern "C" void step_loop13(
     real &cff, real *UFx_f, real *ubar_f,
     int &ubarx, int &ubary, int &ubarz,
-    real *grad, real *DUon, real *Dgrad)
+    real *grad_f, real *DUon_f, real *Dgrad_f)
 {
     int IminS = IminS_g;
     int ImaxS = ImaxS_g;
@@ -1650,9 +1650,9 @@ extern "C" void step_loop13(
 
     realHost2d UFx_h("UFx_h", UFx_f, {IminS, ImaxS}, {JminS, JmaxS});
     realHost3d ubar_h("ubar_h", ubar_f, {LBi, LBi + ubarx - 1}, {LBj, LBj + ubary - 1}, ubarz);
-    realHost2d grad_h("grad_h", grad, {IminS, ImaxS}, {JminS, JmaxS});
-    realHost2d DUon_h("DUon_h", DUon, {IminS, ImaxS}, {JminS, JmaxS});
-    realHost2d Dgrad_h("Dgrad_h", Dgrad, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d grad_h("grad_h", grad_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d DUon_h("DUon_h", DUon_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d Dgrad_h("Dgrad_h", Dgrad_f, {IminS, ImaxS}, {JminS, JmaxS});
 
     real2d UFx_d("UFx_d", {IminS, ImaxS}, {JminS, JmaxS});
     real3d ubar_d("ubar_d", {LBi, LBi + ubarx - 1}, {LBj, LBj + ubary - 1}, ubarz);
@@ -1717,4 +1717,77 @@ extern "C" void step_loop14(
     yakl::fence();
 }
 
+extern "C" void step_loop15(
+    real *Dgrad_f, real *DVom_f,
+    real &cff,
+    real *UFe_f, real *ubar_f,
+    int &ubarx, int &ubary, int &ubarz,
+    real *grad_f, real *vbar_f,
+    int &vbarx, int &vbary, int &vbarz)
+{
+    int IminS = IminS_g;
+    int ImaxS = ImaxS_g;
+    int JminS = JminS_g;
+    int JmaxS = JmaxS_g;
+    int LBi = LBi_g;
+    int LBj = LBj_g;
+    int krhs = krhs_g;
+    int Jstr = Jstr_g;
+    int Jend = Jend_g;
+    int IstrU = IstrU_g;
+    int Iend = Iend_g;
+    int JstrV = JstrV_g;
+    int Istrm1 = Istrm1_g;
+    int Iendp1 = Iendp1_g;
+
+    realHost2d Dgrad_h("Dgrad_h", Dgrad_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d DVom_h("DVom_h", DVom_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d UFe_h("UFe_h", UFe_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost3d ubar_h("ubar_h", ubar_f, {LBi, LBi + ubarx - 1}, {LBj, LBj + ubary - 1}, ubarz);
+    realHost2d grad_h("grad_h", grad_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost3d vbar_h("vbar_h", vbar_f, {LBi, LBi + vbarx - 1}, {LBj, LBj + vbary - 1}, vbarz);
+
+    real2d Dgrad_d("Dgrad_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d DVom_d("DVom_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d UFe_d("UFe_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real3d ubar_d("ubar_d", {LBi, LBi + ubarx - 1}, {LBj, LBj + ubary - 1}, ubarz);
+    real2d grad_d("grad_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real3d vbar_d("vbar_d", {LBi, LBi + vbarx - 1}, {LBj, LBj + vbary - 1}, vbarz);
+
+    Dgrad_h.deep_copy_to(Dgrad_d);
+    DVom_h.deep_copy_to(DVom_d);
+    UFe_h.deep_copy_to(UFe_d);
+    ubar_h.deep_copy_to(ubar_d);
+    grad_h.deep_copy_to(grad_d);
+    vbar_h.deep_copy_to(vbar_d);
+
+    yakl::fortran::parallel_for(
+        "step_loop15_1",
+        yakl::fortran::Bounds<2>({Jstr, Jend + 1}, {IstrU - 1, Iend}),
+        YAKL_LAMBDA(int j, int i) {
+            Dgrad_d(i, j) = DVom_d(i - 1, j) - 2.0 * DVom_d(i, j) + DVom_d(i + 1, j);
+        });
+
+    yakl::fortran::parallel_for(
+        "step_loop15_2",
+        yakl::fortran::Bounds<2>({Jstr, Jend + 1}, {IstrU, Iend}),
+        YAKL_LAMBDA(int j, int i) {
+            UFe_d(i, j) = 0.25 * (ubar_d(i, j, krhs) + ubar_d(i, j - 1, krhs) - cff * (grad_d(i, j) + grad_d(i, j - 1))) *
+                          (DVom_d(i, j) + DVom_d(i - 1, j) -
+                           cff * (Dgrad_d(i, j) + Dgrad_d(i - 1, j)));
+        });
+
+    yakl::fortran::parallel_for(
+        "step_loop15_3",
+        yakl::fortran::Bounds<2>({JstrV, Jend}, {Istrm1, Iendp1}),
+        YAKL_LAMBDA(int j, int i) {
+            grad_d(i, j) = vbar_d(i - 1, j, krhs) - 2.0 * vbar_d(i, j, krhs) + vbar_d(i + 1, j, krhs);
+        });
+
+    Dgrad_d.deep_copy_to(Dgrad_h);
+    UFe_d.deep_copy_to(UFe_h);
+    grad_d.deep_copy_to(grad_h);
+
+    yakl::fence();
+}
 #endif

@@ -488,6 +488,22 @@
         real(8), dimension(*) :: grad_f, ubar_f
         integer :: ubarx, ubary, ubarz
         end subroutine step_loop14
+        subroutine step_loop15(                                                     &
+            Dgrad_f, DVom_f,                                                        &
+            cff,                                                                    &
+            UFe_f, ubar_f,                                                          &
+            ubarx, ubary, ubarz,                                                    &
+            grad_f, vbar_f,                                                         &
+            vbarx, vbary, vbarz                                                     &
+        ) bind(C,name="step_loop15")
+        use iso_c_binding
+        real(8), dimension(*) :: Dgrad_f, DVom_f
+        real(8) :: cff
+        real(8), dimension(*) :: UFe_f, ubar_f
+        integer :: ubarx, ubary, ubarz
+        real(8), dimension(*) :: grad_f, vbar_f
+        integer :: vbarx, vbary, vbarz
+        end subroutine step_loop15
 #endif      
       end interface  
 
@@ -2000,29 +2016,37 @@
           END DO
         END IF
       END IF
-      DO j=Jstr,Jend+1
-        DO i=IstrU-1,Iend
-          Dgrad(i,j)=DVom(i-1,j)-2.0_r8*DVom(i,j)+DVom(i+1,j)
-        END DO
-      END DO
-
-      cff=1.0_r8/6.0_r8
-      DO j=Jstr,Jend+1
-        DO i=IstrU,Iend
-          UFe(i,j)=0.25_r8*(ubar(i,j  ,krhs)+                           &
-     &                      ubar(i,j-1,krhs)-                           &
-     &                      cff*(grad (i,j)+grad (i,j-1)))*             &
-     &                     (DVom(i,j)+DVom(i-1,j)-                      &
-     &                      cff*(Dgrad(i,j)+Dgrad(i-1,j)))
-        END DO
-      END DO
-!
-      DO j=JstrV,Jend
-        DO i=Istrm1,Iendp1
-          grad(i,j)=vbar(i-1,j,krhs)-2.0_r8*vbar(i,j,krhs)+             &
-     &              vbar(i+1,j,krhs)
-        END DO
-      END DO
+      call step_loop15(                                                     &
+            Dgrad, DVom,                                                    &
+            cff,                                                            &
+            UFe, ubar,                                                      &
+            size(ubar,1),size(ubar,2),size(ubar,3),                         &
+            grad, vbar,                                                     &
+            size(vbar,1),size(vbar,2),size(vbar,3)                          &
+      )
+!       DO j=Jstr,Jend+1
+!         DO i=IstrU-1,Iend
+!           Dgrad(i,j)=DVom(i-1,j)-2.0_r8*DVom(i,j)+DVom(i+1,j)
+!         END DO
+!       END DO
+! 
+!       cff=1.0_r8/6.0_r8
+!       DO j=Jstr,Jend+1
+!         DO i=IstrU,Iend
+!           UFe(i,j)=0.25_r8*(ubar(i,j  ,krhs)+                           &
+!      &                      ubar(i,j-1,krhs)-                           &
+!      &                      cff*(grad (i,j)+grad (i,j-1)))*             &
+!      &                     (DVom(i,j)+DVom(i-1,j)-                      &
+!      &                      cff*(Dgrad(i,j)+Dgrad(i-1,j)))
+!         END DO
+!       END DO
+! !
+!       DO j=JstrV,Jend
+!         DO i=Istrm1,Iendp1
+!           grad(i,j)=vbar(i-1,j,krhs)-2.0_r8*vbar(i,j,krhs)+             &
+!      &              vbar(i+1,j,krhs)
+!         END DO
+!       END DO
       IF (.not.(CompositeGrid(iwest,ng).or.EWperiodic(ng))) THEN
         IF (DOMAIN(ng)%Western_Edge(tile)) THEN
           DO j=JstrV,Jend
