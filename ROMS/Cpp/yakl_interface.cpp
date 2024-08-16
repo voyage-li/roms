@@ -1044,7 +1044,7 @@ extern "C" void step_loop7(
 #if defined VAR_RHO_2D && defined SOLVE3D
     realHost2d gzeta_h("gzeta_h", gzeta_f, {IminS, ImaxS}, {JminS, JmaxS});
     realHost2d rhoS_h("rhoS_h", rhoS_f, {LBi, LBi + rhoSx - 1}, {LBj, LBj + rhoSy - 1});
-    realHost3d gzeta2_h("gzeta2_h", gzeta2_f, {IminS, ImaxS}, {JminS, JmaxS}, {1, 2});
+    realHost2d gzeta2_h("gzeta2_h", gzeta2_f, {IminS, ImaxS}, {JminS, JmaxS});
     realHost2d gzetaSA_h("gzetaSA_h", gzetaSA_f, {IminS, ImaxS}, {JminS, JmaxS});
     realHost2d rhoA_h("rhoA_h", rhoA_f, {LBi, LBi + rhoAx - 1}, {LBj, LBj + rhoAy - 1});
 #else
@@ -1068,7 +1068,7 @@ extern "C" void step_loop7(
 #if defined VAR_RHO_2D && defined SOLVE3D
     real2d gzeta_d("gzeta_d", {IminS, ImaxS}, {JminS, JmaxS});
     real2d rhoS_d("rhoS_d", {LBi, LBi + rhoSx - 1}, {LBj, LBj + rhoSy - 1});
-    real3d gzeta2_d("gzeta2_d", {IminS, ImaxS}, {JminS, JmaxS}, {1, 2});
+    real2d gzeta2_d("gzeta2_d", {IminS, ImaxS}, {JminS, JmaxS});
     real2d gzetaSA_d("gzetaSA_d", {IminS, ImaxS}, {JminS, JmaxS});
     real2d rhoA_d("rhoA_d", {LBi, LBi + rhoAx - 1}, {LBj, LBj + rhoAy - 1});
 #else
@@ -1115,7 +1115,7 @@ extern "C" void step_loop7(
             zwrk_d(i, j) = cff5 * zeta_new_d(i, j) + cff4 * zeta_d(i, j, krhs);
 #if defined VAR_RHO_2D && defined SOLVE3D
             gzeta_d(i, j) = (fac + rhoS_d(i, j)) * zwrk_d(i, j);
-            gzeta2_d(i, j, 1) = gzeta_d(i, j) * zwrk_d(i, j);
+            gzeta2_d(i, j) = gzeta_d(i, j) * zwrk_d(i, j);
             gzetaSA_d(i, j) = zwrk_d(i, j) * (rhoS_d(i, j) - rhoA_d(i, j));
 #else
             gzeta_d(i, j) = zwrk_d(i, j);
@@ -1499,3 +1499,88 @@ extern "C" void step_loop10(
 
     yakl::fence();
 }
+#ifdef UV_C2ADVECTION
+extern "C" void step_loop11(
+    real *UFx_f, real *DUon_f,
+    real *ubar_f, int &ubarx, int &ubary, int &ubarz,
+    real *UFe_f, real *DVom_f,
+    real *VFx_f, real *VFe_f,
+    real *vbar_f, int &vbarx, int &vbary, int &vbarz)
+{
+    int Jstr = Jstr_g;
+    int Jend = Jend_g;
+    int IstrU = IstrU_g;
+    int Iend = Iend_g;
+    int JstrV = JstrV_g;
+    int Istr = Istr_g;
+    int IminS = IminS_g;
+    int ImaxS = ImaxS_g;
+    int JminS = JminS_g;
+    int JmaxS = JmaxS_g;
+    int LBi = LBi_g;
+    int LBj = LBj_g;
+    int krhs = krhs_g;
+
+    realHost2d UFx_h("UFx_h", UFx_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d DUon_h("DUon_h", DUon_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost3d ubar_h("ubar_h", ubar_f, {LBi, LBi + ubarx - 1}, {LBj, LBj + ubary - 1}, ubarz);
+    realHost2d UFe_h("UFe_h", UFe_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d DVom_h("DVom_h", DVom_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost2d VFx_h("VFx_h", VFx_f, {LBi, LBi + vbarx - 1}, {LBj, LBj + vbary - 1});
+    realHost2d VFe_h("VFe_h", VFe_f, {IminS, ImaxS}, {JminS, JmaxS});
+    realHost3d vbar_h("vbar_h", vbar_f, {LBi, LBi + vbarx - 1}, {LBj, LBj + vbary - 1}, vbarz);
+
+    real2d UFx_d("UFx_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d DUon_d("DUon_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real3d ubar_d("ubar_d", {LBi, LBi + ubarx - 1}, {LBj, LBj + ubary - 1}, ubarz);
+    real2d UFe_d("UFe_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d DVom_d("DVom_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real2d VFx_d("VFx_d", {LBi, LBi + vbarx - 1}, {LBj, LBj + vbary - 1});
+    real2d VFe_d("VFe_d", {IminS, ImaxS}, {JminS, JmaxS});
+    real3d vbar_d("vbar_d", {LBi, LBi + vbarx - 1}, {LBj, LBj + vbary - 1}, vbarz);
+
+    yakl::fortran::parallel_for(
+        "step_loop11_1",
+        yakl::fortran::Bounds<2>({Jstr, Jend}, {IstrU - 1, Iend}),
+        YAKL_LAMBDA(int j, int i) {
+            UFx_d(i, j) = 0.25 * (DUon_d(i, j) + DUon_d(i + 1, j)) *
+                          (ubar_d(i, j, krhs) +
+                           ubar_d(i + 1, j, krhs));
+        });
+
+    yakl::fortran::parallel_for(
+        "step_loop11_2",
+        yakl::fortran::Bounds<2>({Jstr, Jend + 1}, {IstrU, Iend}),
+        YAKL_LAMBDA(int j, int i) {
+            UFe_d(i, j) = 0.25 * (DVom_d(i, j) + DVom_d(i - 1, j)) *
+                          (ubar_d(i, j, krhs) +
+                           ubar_d(i, j - 1, krhs));
+        });
+
+    yakl::fortran::parallel_for(
+        "step_loop11_3",
+        yakl::fortran::Bounds<2>({JstrV, Jend}, {Istr, Iend + 1}),
+        YAKL_LAMBDA(int j, int i) {
+            VFx_d(i, j) = 0.25 * (DUon_d(i, j) + DUon_d(i, j - 1)) *
+                          (vbar_d(i, j, krhs) +
+                           vbar_d(i - 1, j, krhs));
+        });
+
+    yakl::fortran::parallel_for(
+        "step_loop11_4",
+        yakl::fortran::Bounds<2>({JstrV - 1, Jend}, {Istr, Iend}),
+        YAKL_LAMBDA(int j, int i) {
+            VFe_d(i, j) = 0.25 * (DVom_d(i, j) + DVom_d(i, j + 1)) *
+                          (vbar_d(i, j, krhs) +
+                           vbar_d(i, j + 1, krhs));
+        });
+
+    UFx_d.deep_copy_to(UFx_h);
+    UFe_d.deep_copy_to(UFe_h);
+    VFx_d.deep_copy_to(VFx_h);
+    VFe_d.deep_copy_to(VFe_h);
+
+    yakl::fence();
+}
+#else
+#endif

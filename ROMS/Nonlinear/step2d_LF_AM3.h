@@ -441,7 +441,27 @@
         integer :: rvkvf2dx, rvkvf2dy
 #endif
         end subroutine step_loop10
-      end interface        
+#ifdef UV_C2ADVECTION
+        subroutine step_loop11(                                                     &
+            &   UFx_f, DUon_f,                                                      &
+            &   ubar_f, ubarx, ubary, ubarz,                                        &
+            &   UFe_f, DVom_f,                                                      &
+            &   VFx_f, VFe_f,                                                         &
+            &   vbar_f, vbarx, vbary, vbarz                                         &
+        ) bind(C,name="step_loop11")
+        use iso_c_binding
+        real(8), dimension(*) :: UFx_f, DUon_f
+        real(8), dimension(*) :: ubar_f
+        integer :: ubarx, ubary, ubarz
+        real(8), dimension(*) :: UFe_f, DVom_f
+        real(8), dimension(*) :: VFx_f, VFe_f
+        real(8), dimension(*) :: vbar_f
+        integer :: vbarx, vbary, vbarz
+        end subroutine step_loop11
+#else
+#endif      
+      end interface  
+
 !
       PRIVATE
       PUBLIC  :: step2d
@@ -1840,37 +1860,44 @@
 !
 !  Second-order, centered differences advection fluxes.
 !
-      DO j=Jstr,Jend
-        DO i=IstrU-1,Iend
-          UFx(i,j)=0.25_r8*(DUon(i,j)+DUon(i+1,j))*                     &
-     &                     (ubar(i  ,j,krhs)+                           &
-     &                      ubar(i+1,j,krhs))
-        END DO
-      END DO
-!
-      DO j=Jstr,Jend+1
-        DO i=IstrU,Iend
-          UFe(i,j)=0.25_r8*(DVom(i,j)+DVom(i-1,j))*                     &
-     &                     (ubar(i,j  ,krhs)+                           &
-     &                      ubar(i,j-1,krhs))
-        END DO
-      END DO
-!
-      DO j=JstrV,Jend
-        DO i=Istr,Iend+1
-          VFx(i,j)=0.25_r8*(DUon(i,j)+DUon(i,j-1))*                     &
-     &                     (vbar(i  ,j,krhs)+                           &
-     &                      vbar(i-1,j,krhs))
-        END DO
-      END DO
-!
-      DO j=JstrV-1,Jend
-        DO i=Istr,Iend
-          VFe(i,j)=0.25_r8*(DVom(i,j)+DVom(i,j+1))*                     &
-     &                     (vbar(i,j  ,krhs)+                           &
-     &                      vbar(i,j+1,krhs))
-        END DO
-      END DO
+      call step_loop11(                                                     &
+            UFx, DUon,                                                      &
+            ubar,size(ubar,1),size(ubar,2),size(ubar,3),                    &
+            UFe, DVom,                                                      &
+            VFx, VFe,                                                       &
+            vbar,size(vbar,1),size(vbar,2),size(vbar,3)                     &
+      )
+!       DO j=Jstr,Jend
+!         DO i=IstrU-1,Iend
+!           UFx(i,j)=0.25_r8*(DUon(i,j)+DUon(i+1,j))*                     &
+!      &                     (ubar(i  ,j,krhs)+                           &
+!      &                      ubar(i+1,j,krhs))
+!         END DO
+!       END DO
+! !
+!       DO j=Jstr,Jend+1
+!         DO i=IstrU,Iend
+!           UFe(i,j)=0.25_r8*(DVom(i,j)+DVom(i-1,j))*                     &
+!      &                     (ubar(i,j  ,krhs)+                           &
+!      &                      ubar(i,j-1,krhs))
+!         END DO
+!       END DO
+! !
+!       DO j=JstrV,Jend
+!         DO i=Istr,Iend+1
+!           VFx(i,j)=0.25_r8*(DUon(i,j)+DUon(i,j-1))*                     &
+!      &                     (vbar(i  ,j,krhs)+                           &
+!      &                      vbar(i-1,j,krhs))
+!         END DO
+!       END DO
+! !
+!       DO j=JstrV-1,Jend
+!         DO i=Istr,Iend
+!           VFe(i,j)=0.25_r8*(DVom(i,j)+DVom(i,j+1))*                     &
+!      &                     (vbar(i,j  ,krhs)+                           &
+!      &                      vbar(i,j+1,krhs))
+!         END DO
+!       END DO
 # else
 !
 !  Fourth-order, centered differences advection fluxes.
