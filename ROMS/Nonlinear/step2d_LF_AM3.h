@@ -379,11 +379,11 @@
       real(r8), TARGET, intent(in   ) :: rhoA(LBi:,LBj:)
       real(r8), TARGET, intent(in   ) :: rhoS(LBi:,LBj:)
 #  endif
-      real(r8), intent(inout) :: DU_avg1(LBi:,LBj:)
-      real(r8), intent(inout) :: DU_avg2(LBi:,LBj:)
-      real(r8), intent(inout) :: DV_avg1(LBi:,LBj:)
-      real(r8), intent(inout) :: DV_avg2(LBi:,LBj:)
-      real(r8), intent(inout) :: Zt_avg1(LBi:,LBj:)
+      real(r8), TARGET, intent(inout) :: DU_avg1(LBi:,LBj:)
+      real(r8), TARGET, intent(inout) :: DU_avg2(LBi:,LBj:)
+      real(r8), TARGET, intent(inout) :: DV_avg1(LBi:,LBj:)
+      real(r8), TARGET, intent(inout) :: DV_avg2(LBi:,LBj:)
+      real(r8), TARGET, intent(inout) :: Zt_avg1(LBi:,LBj:)
       real(r8), TARGET, intent(inout) :: rufrc(LBi:,LBj:)
       real(r8), TARGET, intent(inout) :: rvfrc(LBi:,LBj:)
       real(r8), TARGET, intent(inout) :: ru(LBi:,LBj:,0:,:)
@@ -513,11 +513,11 @@
       real(r8), TARGET, intent(in   ) :: rhoA(LBi:UBi,LBj:UBj)
       real(r8), TARGET, intent(in   ) :: rhoS(LBi:UBi,LBj:UBj)
 #  endif
-      real(r8), intent(inout) :: DU_avg1(LBi:UBi,LBj:UBj)
-      real(r8), intent(inout) :: DU_avg2(LBi:UBi,LBj:UBj)
-      real(r8), intent(inout) :: DV_avg1(LBi:UBi,LBj:UBj)
-      real(r8), intent(inout) :: DV_avg2(LBi:UBi,LBj:UBj)
-      real(r8), intent(inout) :: Zt_avg1(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(inout) :: DU_avg1(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(inout) :: DU_avg2(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(inout) :: DV_avg1(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(inout) :: DV_avg2(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(inout) :: Zt_avg1(LBi:UBi,LBj:UBj)
       real(r8), TARGET, intent(inout) :: rufrc(LBi:UBi,LBj:UBj)
       real(r8), TARGET, intent(inout) :: rvfrc(LBi:UBi,LBj:UBj)
       real(r8), TARGET, intent(inout) :: ru(LBi:UBi,LBj:UBj,0:UBk,2)
@@ -822,6 +822,45 @@
 !  Compute time averaged fields over all short time-steps.
 !-----------------------------------------------------------------------
 !
+#if defined ROMS_KOKKOS && defined KK_STAGE_TAVG
+!
+!  Kokkos path: the averaging loops live in ROMS/Cpp/kokkos_step2d.cpp.
+!
+!  The two coefficients are computed here rather than inside the kernel:
+!  "weight" is a module array without the TARGET attribute, so it cannot
+!  be handed across with C_LOC, and there is nothing to gain by copying
+!  it -- the kernel only ever needs these two numbers.
+!
+      IF (PREDICTOR_2D_STEP(ng)) THEN
+        IF (FIRST_2D_STEP) THEN
+          cff1=0.0_r8
+          cff2=(-1.0_r8/12.0_r8)*weight(2,iif(ng)+1,ng)
+        ELSE
+          cff1=weight(1,iif(ng)-1,ng)
+          cff2=(8.0_r8/12.0_r8)*weight(2,iif(ng)  ,ng)-                 &
+     &         (1.0_r8/12.0_r8)*weight(2,iif(ng)+1,ng)
+        END IF
+      ELSE
+        IF (FIRST_2D_STEP) THEN
+          cff1=0.0_r8
+          cff2=weight(2,iif(ng),ng)
+        ELSE
+          cff1=0.0_r8
+          cff2=(5.0_r8/12.0_r8)*weight(2,iif(ng),ng)
+        END IF
+      END IF
+      CALL k_step2d_time_average (ng, tile, krhs,                       &
+     &                            MERGE(1,0,PREDICTOR_2D_STEP(ng)),     &
+     &                            MERGE(1,0,FIRST_2D_STEP),             &
+     &                            LBi, UBi, LBj, UBj,                   &
+     &                            IminS, ImaxS, JminS, JmaxS,           &
+     &                            C_LOC(zeta), C_LOC(DUon),             &
+     &                            C_LOC(DVom),                          &
+     &                            C_LOC(Zt_avg1), C_LOC(DU_avg1),       &
+     &                            C_LOC(DU_avg2), C_LOC(DV_avg1),       &
+     &                            C_LOC(DV_avg2),                       &
+     &                            cff1, cff2, KK_TILE)
+#else
       IF (PREDICTOR_2D_STEP(ng)) THEN
         IF (FIRST_2D_STEP) THEN
 !
@@ -891,6 +930,7 @@
           END DO
         END DO
       END IF
+#endif /* ROMS_KOKKOS && KK_STAGE_TAVG */
 !
 !  After all fast time steps are completed, apply boundary conditions
 !  to time averaged fields.

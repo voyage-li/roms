@@ -58,15 +58,14 @@ void k_step2d_depth_flux(int ng, int tile, int krhs, int nfast,
 
 /* Stage 2: time averaged fields over all short time steps (SOLVE3D). */
 
-void k_step2d_time_average(int ng, int tile, int krhs, int istp, int inew,
-                           int iif, int nfast, int predictor, int first_step,
+void k_step2d_time_average(int ng, int tile, int krhs,
+                           int predictor, int first_step,
                            int LBi, int UBi, int LBj, int UBj,
                            int IminS, int ImaxS, int JminS, int JmaxS,
-                           void* zeta_p, void* ubar_p, void* vbar_p,
-                           void* DUon_p, void* DVom_p,
+                           void* zeta_p, void* DUon_p, void* DVom_p,
                            void* Zt_avg1_p, void* DU_avg1_p, void* DU_avg2_p,
                            void* DV_avg1_p, void* DV_avg2_p,
-                           const double* weight,
+                           double cff1, double cff2,
                            const roms::TileBounds* t);
 
 /* Stage 4: free surface advance (FE / LF / AM3). */

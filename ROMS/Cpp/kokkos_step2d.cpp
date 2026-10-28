@@ -222,23 +222,17 @@ void k_step2d_depth_flux(int ng, int tile, int krhs, int nfast,
 ** level in {1,2} and lev 0-based sits at w[lev*2 + level-1].
 **====================================================================*/
 
-void k_step2d_time_average(int ng, int tile, int krhs, int istp, int inew,
-                           int iif, int nfast, int predictor, int first_step,
+void k_step2d_time_average(int ng, int tile, int krhs,
+                           int predictor, int first_step,
                            int LBi, int UBi, int LBj, int UBj,
                            int IminS, int ImaxS, int JminS, int JmaxS,
-                           void* zeta_p, void* ubar_p, void* vbar_p,
-                           void* DUon_p, void* DVom_p,
+                           void* zeta_p, void* DUon_p, void* DVom_p,
                            void* Zt_avg1_p, void* DU_avg1_p, void* DU_avg2_p,
                            void* DV_avg1_p, void* DV_avg2_p,
-                           const double* weight,
+                           double cff1, double cff2,
                            const TileBounds* t) {
   (void)ng;
   (void)tile;
-  (void)istp;
-  (void)inew;
-  (void)nfast;
-  (void)ubar_p;
-  (void)vbar_p;
 
   const Shape s{LBi, UBi, LBj, UBj, IminS, ImaxS, JminS, JmaxS};
 
@@ -258,14 +252,8 @@ void k_step2d_time_average(int ng, int tile, int krhs, int istp, int inew,
   const int Jstr  = t->Jstr;
   const int JstrR = t->JstrR, JendR = t->JendR;
 
-  auto w = [weight](int level, int lev) {
-    return weight[static_cast<size_t>(lev) * 2 + (level - 1)];
-  };
-
   if (predictor) {
     if (first_step) {
-      const double cff2 = (-1.0 / 12.0) * w(2, iif + 1);
-
       Kokkos::parallel_for(
           range_policy(JstrR, JendR + 1), KOKKOS_LAMBDA(int j) {
             for (int i = IstrR; i <= IendR; ++i) Zt_avg1(i, j) = 0.0;
@@ -283,10 +271,6 @@ void k_step2d_time_average(int ng, int tile, int krhs, int istp, int inew,
             }
           });
     } else {
-      const double cff1 = w(1, iif - 1);
-      const double cff2 =
-          (8.0 / 12.0) * w(2, iif) - (1.0 / 12.0) * w(2, iif + 1);
-
       Kokkos::parallel_for(
           range_policy(JstrR, JendR + 1), KOKKOS_LAMBDA(int j) {
             for (int i = IstrR; i <= IendR; ++i) {
@@ -307,8 +291,6 @@ void k_step2d_time_average(int ng, int tile, int krhs, int istp, int inew,
           });
     }
   } else {
-    const double cff2 = first_step ? w(2, iif) : (5.0 / 12.0) * w(2, iif);
-
     Kokkos::parallel_for(
         range_policy(JstrR, JendR + 1), KOKKOS_LAMBDA(int j) {
           for (int i = Istr; i <= IendR; ++i) {

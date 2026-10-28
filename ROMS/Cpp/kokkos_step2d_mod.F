@@ -92,27 +92,25 @@
           type(kokkos_tile_bounds), INTENT(IN) :: tl
         END SUBROUTINE k_step2d_depth_flux
 !
-        SUBROUTINE k_step2d_time_average (kng, ktile, kkrhs, istp, inew, &
-     &                                    iif, nfast, predictor,         &
-     &                                    first_step,                    &
+        SUBROUTINE k_step2d_time_average (kng, ktile, kkrhs,              &
+     &                                    predictor, first_step,         &
      &                                    LBi, UBi, LBj, UBj,            &
      &                                    IminS, ImaxS, JminS, JmaxS,    &
-     &                                    zeta_p, ubar_p, vbar_p,        &
-     &                                    DUon_p, DVom_p,                &
+     &                                    zeta_p, DUon_p, DVom_p,        &
      &                                    Zt_avg1_p, DU_avg1_p,          &
      &                                    DU_avg2_p, DV_avg1_p,          &
-     &                                    DV_avg2_p, weight_p, tl)       &
+     &                                    DV_avg2_p, cff1, cff2, tl)     &
      &          BIND(C, NAME='k_step2d_time_average')
-          IMPORT :: C_PTR, C_INT, kokkos_tile_bounds
-          integer(C_INT), VALUE :: kng, ktile, kkrhs, istp, inew
-          integer(C_INT), VALUE :: iif, nfast, predictor, first_step
+          IMPORT :: C_PTR, C_INT, C_DOUBLE, kokkos_tile_bounds
+          integer(C_INT), VALUE :: kng, ktile, kkrhs
+          integer(C_INT), VALUE :: predictor, first_step
           integer(C_INT), VALUE :: LBi, UBi, LBj, UBj
           integer(C_INT), VALUE :: IminS, ImaxS, JminS, JmaxS
-          type(C_PTR),    VALUE :: zeta_p, ubar_p, vbar_p
+          type(C_PTR),    VALUE :: zeta_p
           type(C_PTR),    VALUE :: DUon_p, DVom_p
           type(C_PTR),    VALUE :: Zt_avg1_p, DU_avg1_p, DU_avg2_p
           type(C_PTR),    VALUE :: DV_avg1_p, DV_avg2_p
-          type(C_PTR),    VALUE :: weight_p
+          real(C_DOUBLE), VALUE :: cff1, cff2
           type(kokkos_tile_bounds), INTENT(IN) :: tl
         END SUBROUTINE k_step2d_time_average
 !
