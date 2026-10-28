@@ -50,7 +50,62 @@ if( DEFINED ENV{ECBUILD_MODULE_PATH} )
   set( IN_ECBUILD TRUE )
 endif()
 
-project(roms VERSION 4.1 LANGUAGES Fortran)
+project(roms VERSION 4.1 LANGUAGES CXX Fortran)
+
+#::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# Kokkos (optional)
+#
+# When ROMS_KOKKOS is ON the ROMS/Cpp kernels are built and linked, and
+# the ROMS_KOKKOS define reaches both Fortran and C++ so the two sides
+# agree on which path is active.  The Serial backend is used on purpose:
+# ROMS already threads over tiles (see ROMS/Drivers/nl_roms.h), so a
+# threaded Kokkos backend would either nest inside that region or
+# oversubscribe.
+#::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+option( ROMS_KOKKOS "Build ROMS with Kokkos compute kernels" OFF )
+set( ROMS_KOKKOS_BACKEND "serial" CACHE STRING
+     "Kokkos execution space for the ROMS kernels: serial | openmp | sw64" )
+set_property( CACHE ROMS_KOKKOS_BACKEND PROPERTY STRINGS serial openmp sw64 )
+
+if( ROMS_KOKKOS )
+  # Backend.  "serial" keeps ROMS as the only source of parallelism (it
+  # threads over tiles) and the kernels are plain loops; "openmp" lets
+  # Kokkos thread inside each kernel, which requires running ROMS itself
+  # with OMP_NUM_THREADS=1 so the two do not nest; "sw64" targets the
+  # Sunway manycore backend of the Kokkos fork.
+  string( TOLOWER "${ROMS_KOKKOS_BACKEND}" _kk_backend )
+  if( _kk_backend STREQUAL "openmp" )
+    set( Kokkos_ENABLE_SERIAL ON  CACHE BOOL "" FORCE )
+    set( Kokkos_ENABLE_OPENMP ON  CACHE BOOL "" FORCE )
+    set( Kokkos_ENABLE_SW64   OFF CACHE BOOL "" FORCE )
+    add_compile_definitions( ROMS_KOKKOS_OPENMP )
+  elseif( _kk_backend STREQUAL "sw64" )
+    set( Kokkos_ENABLE_SERIAL ON  CACHE BOOL "" FORCE )
+    set( Kokkos_ENABLE_OPENMP OFF CACHE BOOL "" FORCE )
+    set( Kokkos_ENABLE_SW64   ON  CACHE BOOL "" FORCE )
+    # Kokkos' SW64 backend needs C++17 (core/src/CMakeLists.txt enforces
+    # nothing; cmake/kokkos_enable_devices.cmake does).
+    set( CMAKE_CXX_STANDARD 17 CACHE STRING "" FORCE )
+    set( CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL "" FORCE )
+    add_compile_definitions( ROMS_KOKKOS_SW64 )
+  elseif( _kk_backend STREQUAL "serial" )
+    set( Kokkos_ENABLE_SERIAL ON  CACHE BOOL "" FORCE )
+    set( Kokkos_ENABLE_OPENMP OFF CACHE BOOL "" FORCE )
+    set( Kokkos_ENABLE_SW64   OFF CACHE BOOL "" FORCE )
+    add_compile_definitions( ROMS_KOKKOS_SERIAL )
+  else()
+    message( FATAL_ERROR
+             "ROMS_KOKKOS_BACKEND='${ROMS_KOKKOS_BACKEND}' is not one of "
+             "serial, openmp, sw64" )
+  endif()
+  set( Kokkos_ENABLE_TESTS    OFF CACHE BOOL "" FORCE )
+  set( Kokkos_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE )
+  add_subdirectory( Kokkos )
+  add_compile_definitions( ROMS_KOKKOS )
+  message( STATUS "ROMS will be built with Kokkos kernels (ROMS/Cpp), "
+                  "backend = ${_kk_backend}" )
+endif()
 
 if( IN_ECBUILD )
   set( ECBUILD_DEFAULT_BUILD_TYPE Release )
@@ -161,6 +216,9 @@ add_subdirectory( "ROMS/Nonlinear/BBL" )
 add_subdirectory( "ROMS/Nonlinear/Biology" )
 add_subdirectory( "ROMS/Nonlinear/Sediment" )
 add_subdirectory( "ROMS/Utility" )
+if( ROMS_KOKKOS )
+  add_subdirectory( "ROMS/Cpp" )
+endif()
 
 include_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
@@ -196,6 +254,10 @@ list(APPEND srcs
      ${ROMS_Utility_files}
 )
 
+if( ROMS_KOKKOS )
+  list( APPEND srcs ${ROMS_Cpp_files} )
+  include_directories( "ROMS/Cpp" )
+endif()
 if( ADJOINT )
   add_subdirectory( "ROMS/Adjoint" )
   add_subdirectory( "ROMS/Adjoint/Biology" )
@@ -312,6 +374,16 @@ set( All_f90s "${f90srcs}" )
 # The libXXX.(a|so) libraries will be created below.
 
 add_library( Objects OBJECT ${All_f90s} )
+
+# Objects is an OBJECT library, so Kokkos' usage requirements (include
+# directories in particular) do not reach the ROMS/Cpp translation units
+# through the executable's link line.  Attach them explicitly.  Linking
+# an OBJECT library to a normal one only propagates usage requirements;
+# it does not add anything to Objects' own link step.
+
+if( ROMS_KOKKOS )
+  target_link_libraries( Objects Kokkos::kokkos )
+endif()
 
 if( IN_ECBUILD )
   ecbuild_add_library( TARGET   ${PROJECT_NAME}
@@ -440,6 +512,16 @@ else()
       target_link_libraries( "${BIN}" ROMS ${netcdf_libs} )
     else()
       Message( FATAL_ERROR "Unknown configuration!" )
+    endif()
+
+    # Kokkos kernels live in ROMS/Cpp and are linked into the executable.
+    # The linker language is forced back to Fortran: adding CXX to the
+    # project() languages would otherwise let CMake pick the C++ driver,
+    # which does not know about the Fortran runtime ROMS needs.
+
+    if( ROMS_KOKKOS )
+      target_link_libraries( "${BIN}" Kokkos::kokkos )
+      set_target_properties( "${BIN}" PROPERTIES LINKER_LANGUAGE Fortran )
     endif()
 
     # If ARPACK is needed, add to linking library list.

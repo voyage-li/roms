@@ -165,7 +165,7 @@
      &                        IminS, ImaxS, JminS, JmaxS,               &
      &                        krhs, kstp, knew,                         &
 #ifdef SOLVE3D
-     &                        nstp, nnew,                               &
+     &                        istp, inew,                               &
 #endif
 #ifdef MASKING
      &                        pmask, rmask, umask, vmask,               &
@@ -266,6 +266,22 @@
 #ifdef WET_DRY
       USE wetdry_mod,      ONLY : wetdry_tile
 #endif
+#ifdef ROMS_KOKKOS
+      USE kokkos_step2d_mod, ONLY : kokkos_tile_bounds,                  &
+     &                              kokkos_edge_flags,                   &
+     &                              k_step2d_depth_flux,                 &
+     &                              k_step2d_time_average,               &
+     &                              k_step2d_zeta_step,                  &
+     &                              k_step2d_pressure_grad,              &
+     &                              k_step2d_hadv_centered4,             &
+     &                              k_step2d_coriolis,                   &
+     &                              k_step2d_psi_depth,                  &
+     &                              k_step2d_hvisc2,                     &
+     &                              k_step2d_coupling,                   &
+     &                              k_step2d_momentum_step,              &
+     &                              k_step2d_store_rhs
+      USE iso_c_binding,     ONLY : C_LOC
+#endif
 !
 !  Imported variable declarations.
 !
@@ -274,7 +290,7 @@
       integer, intent(in    ) :: IminS, ImaxS, JminS, JmaxS
       integer, intent(in    ) :: krhs, kstp, knew
 #ifdef SOLVE3D
-      integer, intent(in    ) :: nstp, nnew
+      integer, intent(in    ) :: istp, inew
 #endif
 !
 #ifdef ASSUMED_SHAPE
@@ -284,35 +300,35 @@
       real(r8), intent(in   ) :: umask(LBi:,LBj:)
       real(r8), intent(in   ) :: vmask(LBi:,LBj:)
 # endif
-      real(r8), intent(in   ) :: fomn(LBi:,LBj:)
+      real(r8), TARGET, intent(in   ) :: fomn(LBi:,LBj:)
 # if defined SEDIMENT && defined SED_MORPH
       real(r8), intent(inout) :: h(LBi:,LBj:)
 # else
-      real(r8), intent(in   ) :: h(LBi:,LBj:)
+      real(r8), TARGET, intent(in   ) :: h(LBi:,LBj:)
 # endif
       real(r8), intent(in   ) :: om_u(LBi:,LBj:)
-      real(r8), intent(in   ) :: om_v(LBi:,LBj:)
-      real(r8), intent(in   ) :: on_u(LBi:,LBj:)
+      real(r8), TARGET, intent(in   ) :: om_v(LBi:,LBj:)
+      real(r8), TARGET, intent(in   ) :: on_u(LBi:,LBj:)
       real(r8), intent(in   ) :: on_v(LBi:,LBj:)
       real(r8), intent(in   ) :: omn(LBi:,LBj:)
-      real(r8), intent(in   ) :: pm(LBi:,LBj:)
-      real(r8), intent(in   ) :: pn(LBi:,LBj:)
+      real(r8), TARGET, intent(in   ) :: pm(LBi:,LBj:)
+      real(r8), TARGET, intent(in   ) :: pn(LBi:,LBj:)
 # if defined CURVGRID && defined UV_ADV
       real(r8), intent(in   ) :: dndx(LBi:,LBj:)
       real(r8), intent(in   ) :: dmde(LBi:,LBj:)
 # endif
 # if defined UV_VIS2 || defined UV_VIS4
-      real(r8), intent(in   ) :: pmon_r(LBi:,LBj:)
-      real(r8), intent(in   ) :: pnom_r(LBi:,LBj:)
-      real(r8), intent(in   ) :: pmon_p(LBi:,LBj:)
-      real(r8), intent(in   ) :: pnom_p(LBi:,LBj:)
-      real(r8), intent(in   ) :: om_r(LBi:,LBj:)
-      real(r8), intent(in   ) :: on_r(LBi:,LBj:)
-      real(r8), intent(in   ) :: om_p(LBi:,LBj:)
-      real(r8), intent(in   ) :: on_p(LBi:,LBj:)
+      real(r8), TARGET, intent(in   ) :: pmon_r(LBi:,LBj:)
+      real(r8), TARGET, intent(in   ) :: pnom_r(LBi:,LBj:)
+      real(r8), TARGET, intent(in   ) :: pmon_p(LBi:,LBj:)
+      real(r8), TARGET, intent(in   ) :: pnom_p(LBi:,LBj:)
+      real(r8), TARGET, intent(in   ) :: om_r(LBi:,LBj:)
+      real(r8), TARGET, intent(in   ) :: on_r(LBi:,LBj:)
+      real(r8), TARGET, intent(in   ) :: om_p(LBi:,LBj:)
+      real(r8), TARGET, intent(in   ) :: on_p(LBi:,LBj:)
 #  ifdef UV_VIS2
-      real(r8), intent(in   ) :: visc2_p(LBi:,LBj:)
-      real(r8), intent(in   ) :: visc2_r(LBi:,LBj:)
+      real(r8), TARGET, intent(in   ) :: visc2_p(LBi:,LBj:)
+      real(r8), TARGET, intent(in   ) :: visc2_r(LBi:,LBj:)
 #  endif
 #  ifdef UV_VIS4
       real(r8), intent(in   ) :: visc4_p(LBi:,LBj:)
@@ -360,18 +376,18 @@
 #  endif
 # else
 #  ifdef VAR_RHO_2D
-      real(r8), intent(in   ) :: rhoA(LBi:,LBj:)
-      real(r8), intent(in   ) :: rhoS(LBi:,LBj:)
+      real(r8), TARGET, intent(in   ) :: rhoA(LBi:,LBj:)
+      real(r8), TARGET, intent(in   ) :: rhoS(LBi:,LBj:)
 #  endif
       real(r8), intent(inout) :: DU_avg1(LBi:,LBj:)
       real(r8), intent(inout) :: DU_avg2(LBi:,LBj:)
       real(r8), intent(inout) :: DV_avg1(LBi:,LBj:)
       real(r8), intent(inout) :: DV_avg2(LBi:,LBj:)
       real(r8), intent(inout) :: Zt_avg1(LBi:,LBj:)
-      real(r8), intent(inout) :: rufrc(LBi:,LBj:)
-      real(r8), intent(inout) :: rvfrc(LBi:,LBj:)
-      real(r8), intent(inout) :: ru(LBi:,LBj:,0:,:)
-      real(r8), intent(inout) :: rv(LBi:,LBj:,0:,:)
+      real(r8), TARGET, intent(inout) :: rufrc(LBi:,LBj:)
+      real(r8), TARGET, intent(inout) :: rvfrc(LBi:,LBj:)
+      real(r8), TARGET, intent(inout) :: ru(LBi:,LBj:,0:,:)
+      real(r8), TARGET, intent(inout) :: rv(LBi:,LBj:,0:,:)
 # endif
 # ifdef WET_DRY
       real(r8), intent(inout) :: pmask_full(LBi:,LBj:)
@@ -388,23 +404,23 @@
 #  endif
 # endif
 # ifdef DIAGNOSTICS_UV
-      real(r8), intent(inout) :: DiaU2wrk(LBi:,LBj:,:)
-      real(r8), intent(inout) :: DiaV2wrk(LBi:,LBj:,:)
-      real(r8), intent(inout) :: DiaRUbar(LBi:,LBj:,:,:)
-      real(r8), intent(inout) :: DiaRVbar(LBi:,LBj:,:,:)
+      real(r8), TARGET, intent(inout) :: DiaU2wrk(LBi:,LBj:,:)
+      real(r8), TARGET, intent(inout) :: DiaV2wrk(LBi:,LBj:,:)
+      real(r8), TARGET, intent(inout) :: DiaRUbar(LBi:,LBj:,:,:)
+      real(r8), TARGET, intent(inout) :: DiaRVbar(LBi:,LBj:,:,:)
 #  ifdef SOLVE3D
-      real(r8), intent(inout) :: DiaU2int(LBi:,LBj:,:)
-      real(r8), intent(inout) :: DiaV2int(LBi:,LBj:,:)
-      real(r8), intent(inout) :: DiaRUfrc(LBi:,LBj:,:,:)
-      real(r8), intent(inout) :: DiaRVfrc(LBi:,LBj:,:,:)
+      real(r8), TARGET, intent(inout) :: DiaU2int(LBi:,LBj:,:)
+      real(r8), TARGET, intent(inout) :: DiaV2int(LBi:,LBj:,:)
+      real(r8), TARGET, intent(inout) :: DiaRUfrc(LBi:,LBj:,:,:)
+      real(r8), TARGET, intent(inout) :: DiaRVfrc(LBi:,LBj:,:,:)
 #  endif
 # endif
-      real(r8), intent(inout) :: rubar(LBi:,LBj:,:)
-      real(r8), intent(inout) :: rvbar(LBi:,LBj:,:)
-      real(r8), intent(inout) :: rzeta(LBi:,LBj:,:)
-      real(r8), intent(inout) :: ubar(LBi:,LBj:,:)
-      real(r8), intent(inout) :: vbar(LBi:,LBj:,:)
-      real(r8), intent(inout) :: zeta(LBi:,LBj:,:)
+      real(r8), TARGET, intent(inout) :: rubar(LBi:,LBj:,:)
+      real(r8), TARGET, intent(inout) :: rvbar(LBi:,LBj:,:)
+      real(r8), TARGET, intent(inout) :: rzeta(LBi:,LBj:,:)
+      real(r8), TARGET, intent(inout) :: ubar(LBi:,LBj:,:)
+      real(r8), TARGET, intent(inout) :: vbar(LBi:,LBj:,:)
+      real(r8), TARGET, intent(inout) :: zeta(LBi:,LBj:,:)
 # if defined NESTING && !defined SOLVE3D
       real(r8), intent(out  ) :: DU_flux(LBi:,LBj:)
       real(r8), intent(out  ) :: DV_flux(LBi:,LBj:)
@@ -418,35 +434,35 @@
       real(r8), intent(in   ) :: umask(LBi:UBi,LBj:UBj)
       real(r8), intent(in   ) :: vmask(LBi:UBi,LBj:UBj)
 # endif
-      real(r8), intent(in   ) :: fomn(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in   ) :: fomn(LBi:UBi,LBj:UBj)
 # if defined SEDIMENT && defined SED_MORPH
       real(r8), intent(inout) :: h(LBi:UBi,LBj:UBj)
 # else
       real(r8), intent(in   ) :: h(LBi:UBi,LBj:UBj)
 # endif
       real(r8), intent(in   ) :: om_u(LBi:UBi,LBj:UBj)
-      real(r8), intent(in   ) :: om_v(LBi:UBi,LBj:UBj)
-      real(r8), intent(in   ) :: on_u(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in   ) :: om_v(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in   ) :: on_u(LBi:UBi,LBj:UBj)
       real(r8), intent(in   ) :: on_v(LBi:UBi,LBj:UBj)
       real(r8), intent(in   ) :: omn(LBi:UBi,LBj:UBj)
-      real(r8), intent(in   ) :: pm(LBi:UBi,LBj:UBj)
-      real(r8), intent(in   ) :: pn(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in   ) :: pm(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in   ) :: pn(LBi:UBi,LBj:UBj)
 # if defined CURVGRID && defined UV_ADV
       real(r8), intent(in   ) :: dndx(LBi:UBi,LBj:UBj)
       real(r8), intent(in   ) :: dmde(LBi:UBi,LBj:UBj)
 # endif
 # if defined UV_VIS2 || defined UV_VIS4
-      real(r8), intent(in   ) :: pmon_r(LBi:UBi,LBj:UBj)
-      real(r8), intent(in   ) :: pnom_r(LBi:UBi,LBj:UBj)
-      real(r8), intent(in   ) :: pmon_p(LBi:UBi,LBj:UBj)
-      real(r8), intent(in   ) :: pnom_p(LBi:UBi,LBj:UBj)
-      real(r8), intent(in   ) :: om_r(LBi:UBi,LBj:UBj)
-      real(r8), intent(in   ) :: on_r(LBi:UBi,LBj:UBj)
-      real(r8), intent(in   ) :: om_p(LBi:UBi,LBj:UBj)
-      real(r8), intent(in   ) :: on_p(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in   ) :: pmon_r(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in   ) :: pnom_r(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in   ) :: pmon_p(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in   ) :: pnom_p(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in   ) :: om_r(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in   ) :: on_r(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in   ) :: om_p(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in   ) :: on_p(LBi:UBi,LBj:UBj)
 #  ifdef UV_VIS2
-      real(r8), intent(in   ) :: visc2_p(LBi:UBi,LBj:UBj)
-      real(r8), intent(in   ) :: visc2_r(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in   ) :: visc2_p(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in   ) :: visc2_r(LBi:UBi,LBj:UBj)
 #  endif
 #  ifdef UV_VIS4
       real(r8), intent(in   ) :: visc4_p(LBi:UBi,LBj:UBj)
@@ -494,18 +510,18 @@
 #  endif
 # else
 #  ifdef VAR_RHO_2D
-      real(r8), intent(in   ) :: rhoA(LBi:UBi,LBj:UBj)
-      real(r8), intent(in   ) :: rhoS(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in   ) :: rhoA(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in   ) :: rhoS(LBi:UBi,LBj:UBj)
 #  endif
       real(r8), intent(inout) :: DU_avg1(LBi:UBi,LBj:UBj)
       real(r8), intent(inout) :: DU_avg2(LBi:UBi,LBj:UBj)
       real(r8), intent(inout) :: DV_avg1(LBi:UBi,LBj:UBj)
       real(r8), intent(inout) :: DV_avg2(LBi:UBi,LBj:UBj)
       real(r8), intent(inout) :: Zt_avg1(LBi:UBi,LBj:UBj)
-      real(r8), intent(inout) :: rufrc(LBi:UBi,LBj:UBj)
-      real(r8), intent(inout) :: rvfrc(LBi:UBi,LBj:UBj)
-      real(r8), intent(inout) :: ru(LBi:UBi,LBj:UBj,0:UBk,2)
-      real(r8), intent(inout) :: rv(LBi:UBi,LBj:UBj,0:UBk,2)
+      real(r8), TARGET, intent(inout) :: rufrc(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(inout) :: rvfrc(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(inout) :: ru(LBi:UBi,LBj:UBj,0:UBk,2)
+      real(r8), TARGET, intent(inout) :: rv(LBi:UBi,LBj:UBj,0:UBk,2)
 # endif
 # ifdef WET_DRY
       real(r8), intent(inout) :: pmask_full(LBi:UBi,LBj:UBj)
@@ -522,23 +538,23 @@
 #  endif
 # endif
 # ifdef DIAGNOSTICS_UV
-      real(r8), intent(inout) :: DiaU2wrk(LBi:UBi,LBj:UBj,NDM2d)
-      real(r8), intent(inout) :: DiaV2wrk(LBi:UBi,LBj:UBj,NDM2d)
-      real(r8), intent(inout) :: DiaRUbar(LBi:UBi,LBj:UBj,2,NDM2d-1)
-      real(r8), intent(inout) :: DiaRVbar(LBi:UBi,LBj:UBj,2,NDM2d-1)
+      real(r8), TARGET, intent(inout) :: DiaU2wrk(LBi:UBi,LBj:UBj,NDM2d)
+      real(r8), TARGET, intent(inout) :: DiaV2wrk(LBi:UBi,LBj:UBj,NDM2d)
+      real(r8), TARGET, intent(inout) :: DiaRUbar(LBi:UBi,LBj:UBj,2,NDM2d-1)
+      real(r8), TARGET, intent(inout) :: DiaRVbar(LBi:UBi,LBj:UBj,2,NDM2d-1)
 #  ifdef SOLVE3D
-      real(r8), intent(inout) :: DiaU2int(LBi:UBi,LBj:UBj,NDM2d)
-      real(r8), intent(inout) :: DiaV2int(LBi:UBi,LBj:UBj,NDM2d)
-      real(r8), intent(inout) :: DiaRUfrc(LBi:UBi,LBj:UBj,3,NDM2d-1)
-      real(r8), intent(inout) :: DiaRVfrc(LBi:UBi,LBj:UBj,3,NDM2d-1)
+      real(r8), TARGET, intent(inout) :: DiaU2int(LBi:UBi,LBj:UBj,NDM2d)
+      real(r8), TARGET, intent(inout) :: DiaV2int(LBi:UBi,LBj:UBj,NDM2d)
+      real(r8), TARGET, intent(inout) :: DiaRUfrc(LBi:UBi,LBj:UBj,3,NDM2d-1)
+      real(r8), TARGET, intent(inout) :: DiaRVfrc(LBi:UBi,LBj:UBj,3,NDM2d-1)
 #  endif
 # endif
-      real(r8), intent(inout) :: rubar(LBi:UBi,LBj:UBj,2)
-      real(r8), intent(inout) :: rvbar(LBi:UBi,LBj:UBj,2)
-      real(r8), intent(inout) :: rzeta(LBi:UBi,LBj:UBj,2)
-      real(r8), intent(inout) :: ubar(LBi:UBi,LBj:UBj,:)
-      real(r8), intent(inout) :: vbar(LBi:UBi,LBj:UBj,:)
-      real(r8), intent(inout) :: zeta(LBi:UBi,LBj:UBj,:)
+      real(r8), TARGET, intent(inout) :: rubar(LBi:UBi,LBj:UBj,2)
+      real(r8), TARGET, intent(inout) :: rvbar(LBi:UBi,LBj:UBj,2)
+      real(r8), TARGET, intent(inout) :: rzeta(LBi:UBi,LBj:UBj,2)
+      real(r8), TARGET, intent(inout) :: ubar(LBi:UBi,LBj:UBj,:)
+      real(r8), TARGET, intent(inout) :: vbar(LBi:UBi,LBj:UBj,:)
+      real(r8), TARGET, intent(inout) :: zeta(LBi:UBi,LBj:UBj,:)
 # if defined NESTING && !defined SOLVE3D
       real(r8), intent(out  ) :: DU_flux(LBi:UBi,LBj:UBj)
       real(r8), intent(out  ) :: DV_flux(LBi:UBi,LBj:UBj)
@@ -548,6 +564,15 @@
 !  Local variable declarations.
 !
       logical :: CORRECTOR_2D_STEP
+#ifdef ROMS_KOKKOS
+!
+!  Tile index metadata handed to the Kokkos kernels.  Filled in once per
+!  call, right after "set_bounds.h" defines the individual indices.
+!
+      TYPE(kokkos_tile_bounds) :: KK_TILE
+      TYPE(kokkos_edge_flags)  :: KK_EDGE
+      integer :: kk_krhs, kk_kstp, kk_knew, kk_istp, kk_inew
+#endif
 !
       integer :: i, is, j, ptsk
 #ifdef DIAGNOSTICS_UV
@@ -557,13 +582,13 @@
       real(r8) :: cff, cff1, cff2, cff3, cff4, cff5, cff6, cff7
       real(r8) :: fac, fac1, fac2, fac3
 !
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: Dgrad
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: Dnew
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: Drhs
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: Drhs_p
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: Dstp
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: DUon
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: DVom
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: Dgrad
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: Dnew
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: Drhs
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: Drhs_p
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: Dstp
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: DUon
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: DVom
 #ifdef WEC
       real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: DUSon
       real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: DVSom
@@ -576,29 +601,29 @@
       real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: LapU
       real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: LapV
 #endif
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: UFe
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: UFx
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: VFe
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: VFx
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: grad
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: gzeta
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: gzeta2
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: UFe
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: UFx
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: VFe
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: VFx
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: grad
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: gzeta
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: gzeta2
 #if defined VAR_RHO_2D && defined SOLVE3D
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: gzetaSA
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: gzetaSA
 #endif
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: rhs_ubar
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: rhs_vbar
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: rhs_zeta
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: zeta_new
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: zwrk
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: rhs_ubar
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: rhs_vbar
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: rhs_zeta
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: zeta_new
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS) :: zwrk
 #ifdef WET_DRY
       real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: wetdry
 #endif
 #ifdef DIAGNOSTICS_UV
       real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: Uwrk
       real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: Vwrk
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS,NDM2d-1) :: DiaU2rhs
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS,NDM2d-1) :: DiaV2rhs
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS,NDM2d-1) :: DiaU2rhs
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS,NDM2d-1) :: DiaV2rhs
 #endif
 
 #include "set_bounds.h"
@@ -606,10 +631,67 @@
       ptsk=3-kstp
       CORRECTOR_2D_STEP=.not.PREDICTOR_2D_STEP(ng)
 !
+#ifdef ROMS_KOKKOS
+!
+!  Populate the tile index metadata handed to the Kokkos kernels.
+!
+      KK_TILE%Istr   =Istr
+      KK_TILE%Iend   =Iend
+      KK_TILE%Jstr   =Jstr
+      KK_TILE%Jend   =Jend
+      KK_TILE%IstrU  =IstrU
+      KK_TILE%JstrV  =JstrV
+      KK_TILE%IstrR  =IstrR
+      KK_TILE%JstrR  =JstrR
+      KK_TILE%IendR  =IendR
+      KK_TILE%JendR  =JendR
+      KK_TILE%Istrm1 =Istrm1
+      KK_TILE%Jstrm1 =Jstrm1
+      KK_TILE%Iendp1 =Iendp1
+      KK_TILE%Jendp1 =Jendp1
+      KK_TILE%Iendp2 =Iendp2
+      KK_TILE%Jendp2 =Jendp2
+      KK_TILE%IstrUm1=IstrUm1
+      KK_TILE%JstrVm1=JstrVm1
+      KK_TILE%IstrUm2=IstrUm2
+      KK_TILE%JstrVm2=JstrVm2
+      KK_TILE%UBk    =UBk
+!
+!  Domain edge flags for the advection halo fills.  The Fortran
+!  conditions are:
+!     .not.(CompositeGrid(iedge,ng).or.<dir>periodic(ng)) .and.
+!     DOMAIN(ng)%<edge>_Edge(tile)
+!
+      KK_EDGE%west        =MERGE(1,0,DOMAIN(ng)%Western_Edge (tile))
+      KK_EDGE%east        =MERGE(1,0,DOMAIN(ng)%Eastern_Edge (tile))
+      KK_EDGE%south       =MERGE(1,0,DOMAIN(ng)%Southern_Edge(tile))
+      KK_EDGE%north       =MERGE(1,0,DOMAIN(ng)%Northern_Edge(tile))
+      KK_EDGE%composite_w =MERGE(1,0,CompositeGrid(iwest ,ng))
+      KK_EDGE%composite_e =MERGE(1,0,CompositeGrid(ieast ,ng))
+      KK_EDGE%composite_s =MERGE(1,0,CompositeGrid(isouth,ng))
+      KK_EDGE%composite_n =MERGE(1,0,CompositeGrid(inorth,ng))
+      KK_EDGE%periodic_ew =MERGE(1,0,EWperiodic(ng))
+      KK_EDGE%periodic_ns =MERGE(1,0,NSperiodic(ng))
+#endif
+!
 !-----------------------------------------------------------------------
 !  Compute total depth (m) and vertically integrated mass fluxes.
 !-----------------------------------------------------------------------
 !
+#ifdef ROMS_KOKKOS
+!
+!  Kokkos path: the loops of this stage live in
+!  ROMS/Cpp/kokkos_step2d.cpp.  The halo exchange below stays here.
+!
+      CALL k_step2d_depth_flux (ng, tile, krhs, nfast(ng),              &
+     &                          LBi, UBi, LBj, UBj,                     &
+     &                          IminS, ImaxS, JminS, JmaxS,             &
+     &                          C_LOC(zeta), C_LOC(h),                  &
+     &                          C_LOC(on_u), C_LOC(om_v),               &
+     &                          C_LOC(ubar), C_LOC(vbar),               &
+     &                          C_LOC(Drhs), C_LOC(DUon),               &
+     &                          C_LOC(DVom), UBk, KK_TILE)
+#else
 #if defined DISTRIBUTE && !defined NESTING
 
 !  In distributed-memory, the I- and J-ranges are different and a
@@ -701,6 +783,7 @@
         END DO
       END DO
 #endif
+#endif /* ROMS_KOKKOS */
 #ifdef DISTRIBUTE
 !
       IF (EWperiodic(ng).or.NSperiodic(ng)) THEN
@@ -896,6 +979,30 @@
       fac=1000.0_r8/rho0                                ! nondimensional
 #endif
 !
+#ifdef ROMS_KOKKOS
+!
+!  Kokkos path: all three time-stepping branches (Forward Euler,
+!  Leap-frog predictor, Adams-Moulton corrector) and the reload of
+!  zeta(:,:,knew) live in ROMS/Cpp/kokkos_step2d.cpp.
+!
+      CALL k_step2d_zeta_step (ng, tile, krhs, kstp, knew,              &
+     &                         iif(ng), nfast(ng), ntfirst(ng),         &
+     &                         iic(ng),                                 &
+     &                         MERGE(1,0,PREDICTOR_2D_STEP(ng)),         &
+     &                         MERGE(1,0,FIRST_2D_STEP),                 &
+     &                         LBi, UBi, LBj, UBj, UBk,                 &
+     &                         IminS, ImaxS, JminS, JmaxS,              &
+     &                         C_LOC(zeta), C_LOC(h),                   &
+     &                         C_LOC(pm), C_LOC(pn),                    &
+     &                         C_LOC(DUon), C_LOC(DVom),                &
+     &                         C_LOC(gzeta), C_LOC(gzeta2),             &
+     &                         C_LOC(gzetaSA), C_LOC(rhoA),             &
+     &                         C_LOC(rhoS),                             &
+     &                         C_LOC(rhs_zeta), C_LOC(zeta_new),        &
+     &                         C_LOC(Dnew), C_LOC(zwrk),                &
+     &                         C_LOC(rzeta), dtfast(ng), rho0,   &
+     &                         KK_TILE)
+#else
       IF (FIRST_2D_STEP) THEN
         cff1=dtfast(ng)
         DO j=JstrV-1,Jend
@@ -978,6 +1085,7 @@
           END DO
         END DO
       END IF
+#endif /* ROMS_KOKKOS */
 !
 !  Load new free-surface values into shared array at both predictor
 !  and corrector steps.
@@ -986,6 +1094,7 @@
 !  cells.
 #endif
 !
+#ifndef ROMS_KOKKOS
       DO j=Jstr,Jend
         DO i=Istr,Iend
           zeta(i,j,knew)=zeta_new(i,j)
@@ -995,6 +1104,7 @@
 #endif
         END DO
       END DO
+#endif /* !ROMS_KOKKOS */
 !
 !  If predictor step, load right-side-term into shared array.
 !
@@ -1046,7 +1156,7 @@
       fac=0.5_r8*dtfast(ng)*ndtfast(ng)/(nfast(ng)*dt(ng))
       DO j=Jstr,Jend
         DO i=Istr,Iend
-          cff=fac*(bed_thick(i,j,nstp)-bed_thick(i,j,nnew))
+          cff=fac*(bed_thick(i,j,istp)-bed_thick(i,j,inew))
           h(i,j)=h(i,j)-cff
         END DO
       END DO
@@ -1080,6 +1190,23 @@
 !  Compute pressure gradient terms.
 !-----------------------------------------------------------------------
 !
+#if defined ROMS_KOKKOS && defined KK_STAGE_PGRD
+!
+!  Kokkos path: the pressure-gradient loops live in
+!  ROMS/Cpp/kokkos_step2d.cpp.
+!!
+      CALL k_step2d_pressure_grad (ng, tile,                            &
+     &                             LBi, UBi, LBj, UBj,                  &
+     &                             IminS, ImaxS, JminS, JmaxS,          &
+     &                             C_LOC(h), C_LOC(on_u), C_LOC(om_v),  &
+     &                             C_LOC(gzeta), C_LOC(gzeta2),         &
+     &                             C_LOC(gzetaSA), C_LOC(rhoA),         &
+     &                             C_LOC(zwrk),                         &
+     &                             C_LOC(rhs_ubar), C_LOC(rhs_vbar),    &
+     &                             C_LOC(DiaU2rhs), C_LOC(DiaV2rhs),    &
+     &                             NDM2d, M2pgrd, g, KK_TILE)
+#else
+
       cff1=0.5_r8*g
       cff2=1.0_r8/3.0_r8
 #if !defined SOLVE3D && defined ATM_PRESS
@@ -1203,6 +1330,27 @@
           END DO
         END IF
       END DO
+#endif /* ROMS_KOKKOS */
+#if defined ROMS_KOKKOS && defined KK_STAGE_HADV
+!
+!  Kokkos path: the fourth-order advection loops live in
+!  ROMS/Cpp/kokkos_step2d.cpp.  Only UV_ADV without UV_C2ADVECTION is
+!  covered; the compile-time guard in the C++ file rejects anything else.
+!
+      CALL k_step2d_hadv_centered4 (ng, tile, krhs,                     &
+     &                              LBi, UBi, LBj, UBj,                 &
+     &                              IminS, ImaxS, JminS, JmaxS,         &
+     &                              C_LOC(ubar), C_LOC(vbar),           &
+     &                              C_LOC(DUon), C_LOC(DVom),           &
+     &                              C_LOC(grad), C_LOC(Dgrad),          &
+     &                              C_LOC(UFx), C_LOC(UFe),             &
+     &                              C_LOC(VFx), C_LOC(VFe),             &
+     &                              C_LOC(rhs_ubar), C_LOC(rhs_vbar),   &
+     &                              C_LOC(DiaU2rhs), C_LOC(DiaV2rhs),   &
+     &                              NDM2d, M2xadv, M2yadv, M2hadv,      &
+     &                              KK_EDGE, KK_TILE)
+#else
+
 #ifdef UV_ADV
 !
 !-----------------------------------------------------------------------
@@ -1423,6 +1571,22 @@
       END DO
 #endif
 
+#endif /* ROMS_KOKKOS */
+#if defined ROMS_KOKKOS && defined KK_STAGE_CORI
+!
+!  Kokkos path: the Coriolis loops live in ROMS/Cpp/kokkos_step2d.cpp.
+!
+      CALL k_step2d_coriolis (ng, tile, krhs,                           &
+     &                        LBi, UBi, LBj, UBj,                       &
+     &                        IminS, ImaxS, JminS, JmaxS,               &
+     &                        C_LOC(Drhs), C_LOC(fomn),                 &
+     &                        C_LOC(ubar), C_LOC(vbar),                 &
+     &                        C_LOC(UFx), C_LOC(VFe),                   &
+     &                        C_LOC(rhs_ubar), C_LOC(rhs_vbar),         &
+     &                        C_LOC(DiaU2rhs), C_LOC(DiaV2rhs),         &
+     &                        NDM2d, M2fcor, KK_TILE)
+#else
+
 #ifdef UV_COR
 !
 !-----------------------------------------------------------------------
@@ -1561,7 +1725,17 @@
         END DO
       END DO
 #endif
+#endif /* ROMS_KOKKOS */
 #if defined UV_VIS2 || defined UV_VIS4
+#if defined ROMS_KOKKOS && defined KK_STAGE_PSID
+!
+!  Kokkos path: total depth at PSI points (step2d_LF_AM3.h).
+!
+      CALL k_step2d_psi_depth (ng, tile,                                &
+     &                         LBi, UBi, LBj, UBj,                      &
+     &                         IminS, ImaxS, JminS, JmaxS,              &
+     &                         C_LOC(Drhs), C_LOC(Drhs_p), KK_TILE)
+#else
 !
 !-----------------------------------------------------------------------
 !  If horizontal mixing, compute total depth at PSI-points.
@@ -1579,7 +1753,29 @@
         END DO
       END DO
 #endif
+#endif /* ROMS_KOKKOS */
 #ifdef UV_VIS2
+#if defined ROMS_KOKKOS && defined KK_STAGE_HVIS
+!
+!  Kokkos path: harmonic horizontal viscosity.
+!
+      CALL k_step2d_hvisc2 (ng, tile, krhs,                             &
+     &                     LBi, UBi, LBj, UBj,                          &
+     &                     IminS, ImaxS, JminS, JmaxS,                  &
+     &                     C_LOC(Drhs), C_LOC(Drhs_p),                  &
+     &                     C_LOC(ubar), C_LOC(vbar),                    &
+     &                     C_LOC(pm), C_LOC(pn),                        &
+     &                     C_LOC(pmon_r), C_LOC(pnom_r),                &
+     &                     C_LOC(pmon_p), C_LOC(pnom_p),                &
+     &                     C_LOC(om_r), C_LOC(on_r),                    &
+     &                     C_LOC(om_p), C_LOC(on_p),                    &
+     &                     C_LOC(visc2_r), C_LOC(visc2_p),              &
+     &                     C_LOC(UFx), C_LOC(UFe),                      &
+     &                     C_LOC(VFx), C_LOC(VFe),                      &
+     &                     C_LOC(rhs_ubar), C_LOC(rhs_vbar),            &
+     &                     C_LOC(DiaU2rhs), C_LOC(DiaV2rhs),            &
+     &                     NDM2d, M2hvis, M2xvis, M2yvis, KK_TILE)
+#else
 !
 !-----------------------------------------------------------------------
 !  Add in horizontal harmonic viscosity.
@@ -1650,6 +1846,7 @@
         END DO
       END DO
 #endif
+#endif /* ROMS_KOKKOS */
 #ifdef UV_VIS4
 !
 !-----------------------------------------------------------------------
@@ -2238,25 +2435,46 @@
 !  constant during the fast time stepping and will added to
 !  "rhs_ubar" and "rhs_vbar" during all subsequent time steps.
 !
+#if defined ROMS_KOKKOS && defined KK_STAGE_COUP
+!
+!  Kokkos path: the 2-D / 3-D coupling forcing lives in
+!  ROMS/Cpp/kokkos_step2d.cpp.
+!
+      kk_istp=istp
+      kk_inew=inew
+      CALL k_step2d_coupling (ng, tile, kk_istp, kk_inew,              &
+     &                        iic(ng), ntfirst(ng),                     &
+     &                        MERGE(1,0,FIRST_2D_STEP),                 &
+     &                        MERGE(1,0,PREDICTOR_2D_STEP(ng)),         &
+     &                        LBi, UBi, LBj, UBj,                       &
+     &                        IminS, ImaxS, JminS, JmaxS,               &
+     &                        C_LOC(rufrc), C_LOC(rvfrc),               &
+     &                        C_LOC(ru), C_LOC(rv),                     &
+     &                        C_LOC(rhs_ubar), C_LOC(rhs_vbar),         &
+     &                        C_LOC(DiaU2rhs), C_LOC(DiaV2rhs),         &
+     &                        C_LOC(DiaRUfrc), C_LOC(DiaRVfrc),         &
+     &                        NDM2d, M2pgrd, M2sstr, M2bstr, KK_TILE)
+#else
+
       IF (FIRST_2D_STEP.and.PREDICTOR_2D_STEP(ng)) THEN
         IF (iic(ng).eq.ntfirst(ng)) THEN
           DO j=Jstr,Jend
             DO i=IstrU,Iend
               rufrc(i,j)=rufrc(i,j)-rhs_ubar(i,j)
               rhs_ubar(i,j)=rhs_ubar(i,j)+rufrc(i,j)
-              ru(i,j,0,nstp)=rufrc(i,j)
+              ru(i,j,0,istp)=rufrc(i,j)
 # ifdef DIAGNOSTICS_UV
               DO idiag=1,M2pgrd
                 DiaRUfrc(i,j,3,idiag)=DiaRUfrc(i,j,3,idiag)-            &
      &                                DiaU2rhs(i,j,idiag)
                 DiaU2rhs(i,j,idiag)=DiaU2rhs(i,j,idiag)+                &
      &                              DiaRUfrc(i,j,3,idiag)
-                DiaRUfrc(i,j,nstp,idiag)=DiaRUfrc(i,j,3,idiag)
+                DiaRUfrc(i,j,istp,idiag)=DiaRUfrc(i,j,3,idiag)
               END DO
               DiaU2rhs(i,j,M2sstr)=DiaRUfrc(i,j,3,M2sstr)
-              DiaRUfrc(i,j,nstp,M2sstr)=DiaRUfrc(i,j,3,M2sstr)
+              DiaRUfrc(i,j,istp,M2sstr)=DiaRUfrc(i,j,3,M2sstr)
               DiaU2rhs(i,j,M2bstr)=DiaRUfrc(i,j,3,M2bstr)
-              DiaRUfrc(i,j,nstp,M2bstr)=DiaRUfrc(i,j,3,M2bstr)
+              DiaRUfrc(i,j,istp,M2bstr)=DiaRUfrc(i,j,3,M2bstr)
 #  ifdef WEC_VF
               DiaU2rhs(i,j,M2zeta)=DiaU2rhs(i,j,M2zeta)+                &
      &                             DiaRUfrc(i,j,3,M2pgrd)
@@ -2268,19 +2486,19 @@
             DO i=Istr,Iend
               rvfrc(i,j)=rvfrc(i,j)-rhs_vbar(i,j)
               rhs_vbar(i,j)=rhs_vbar(i,j)+rvfrc(i,j)
-              rv(i,j,0,nstp)=rvfrc(i,j)
+              rv(i,j,0,istp)=rvfrc(i,j)
 # ifdef DIAGNOSTICS_UV
               DO idiag=1,M2pgrd
                 DiaRVfrc(i,j,3,idiag)=DiaRVfrc(i,j,3,idiag)-            &
      &                                DiaV2rhs(i,j,idiag)
                 DiaV2rhs(i,j,idiag)=DiaV2rhs(i,j,idiag)+                &
      &                              DiaRVfrc(i,j,3,idiag)
-                DiaRVfrc(i,j,nstp,idiag)=DiaRVfrc(i,j,3,idiag)
+                DiaRVfrc(i,j,istp,idiag)=DiaRVfrc(i,j,3,idiag)
               END DO
               DiaV2rhs(i,j,M2sstr)=DiaRVfrc(i,j,3,M2sstr)
-              DiaRVfrc(i,j,nstp,M2sstr)=DiaRVfrc(i,j,3,M2sstr)
+              DiaRVfrc(i,j,istp,M2sstr)=DiaRVfrc(i,j,3,M2sstr)
               DiaV2rhs(i,j,M2bstr)=DiaRVfrc(i,j,3,M2bstr)
-              DiaRVfrc(i,j,nstp,M2bstr)=DiaRVfrc(i,j,3,M2bstr)
+              DiaRVfrc(i,j,istp,M2bstr)=DiaRVfrc(i,j,3,M2bstr)
 #  ifdef WEC_VF
               DiaV2rhs(i,j,M2zeta)=DiaV2rhs(i,j,M2zeta)+                &
      &                             DiaRVfrc(i,j,3,M2pgrd)
@@ -2293,27 +2511,27 @@
             DO i=IstrU,Iend
               rufrc(i,j)=rufrc(i,j)-rhs_ubar(i,j)
               rhs_ubar(i,j)=rhs_ubar(i,j)+                              &
-     &                      1.5_r8*rufrc(i,j)-0.5_r8*ru(i,j,0,nnew)
-              ru(i,j,0,nstp)=rufrc(i,j)
+     &                      1.5_r8*rufrc(i,j)-0.5_r8*ru(i,j,0,inew)
+              ru(i,j,0,istp)=rufrc(i,j)
 # ifdef DIAGNOSTICS_UV
               DO idiag=1,M2pgrd
                 DiaRUfrc(i,j,3,idiag)=DiaRUfrc(i,j,3,idiag)-            &
      &                                DiaU2rhs(i,j,idiag)
                 DiaU2rhs(i,j,idiag)=DiaU2rhs(i,j,idiag)+                &
      &                              1.5_r8*DiaRUfrc(i,j,3,idiag)-       &
-     &                              0.5_r8*DiaRUfrc(i,j,nnew,idiag)
-                DiaRUfrc(i,j,nstp,idiag)=DiaRUfrc(i,j,3,idiag)
+     &                              0.5_r8*DiaRUfrc(i,j,inew,idiag)
+                DiaRUfrc(i,j,istp,idiag)=DiaRUfrc(i,j,3,idiag)
               END DO
               DiaU2rhs(i,j,M2sstr)=1.5_r8*DiaRUfrc(i,j,3,M2sstr)-       &
-     &                             0.5_r8*DiaRUfrc(i,j,nnew,M2sstr)
-              DiaRUfrc(i,j,nstp,M2sstr)=DiaRUfrc(i,j,3,M2sstr)
+     &                             0.5_r8*DiaRUfrc(i,j,inew,M2sstr)
+              DiaRUfrc(i,j,istp,M2sstr)=DiaRUfrc(i,j,3,M2sstr)
               DiaU2rhs(i,j,M2bstr)=1.5_r8*DiaRUfrc(i,j,3,M2bstr)-       &
-     &                             0.5_r8*DiaRUfrc(i,j,nnew,M2bstr)
-              DiaRUfrc(i,j,nstp,M2bstr)=DiaRUfrc(i,j,3,M2bstr)
+     &                             0.5_r8*DiaRUfrc(i,j,inew,M2bstr)
+              DiaRUfrc(i,j,istp,M2bstr)=DiaRUfrc(i,j,3,M2bstr)
 #   ifdef WEC_VF
               DiaU2rhs(i,j,M2zeta)=DiaU2rhs(i,j,M2zeta)+                &
      &                             1.5_r8*DiaRUfrc(i,j,3,M2pgrd)-       &
-     &                             0.5_r8*DiaRUfrc(i,j,nnew,M2pgrd)
+     &                             0.5_r8*DiaRUfrc(i,j,inew,M2pgrd)
 #   endif
 #  endif
             END DO
@@ -2322,27 +2540,27 @@
             DO i=Istr,Iend
               rvfrc(i,j)=rvfrc(i,j)-rhs_vbar(i,j)
               rhs_vbar(i,j)=rhs_vbar(i,j)+                              &
-     &                      1.5_r8*rvfrc(i,j)-0.5_r8*rv(i,j,0,nnew)
-              rv(i,j,0,nstp)=rvfrc(i,j)
+     &                      1.5_r8*rvfrc(i,j)-0.5_r8*rv(i,j,0,inew)
+              rv(i,j,0,istp)=rvfrc(i,j)
 # ifdef DIAGNOSTICS_UV
               DO idiag=1,M2pgrd
                 DiaRVfrc(i,j,3,idiag)=DiaRVfrc(i,j,3,idiag)-            &
      &                                DiaV2rhs(i,j,idiag)
                 DiaV2rhs(i,j,idiag)=DiaV2rhs(i,j,idiag)+                &
      &                              1.5_r8*DiaRVfrc(i,j,3,idiag)-       &
-     &                              0.5_r8*DiaRVfrc(i,j,nnew,idiag)
-                DiaRVfrc(i,j,nstp,idiag)=DiaRVfrc(i,j,3,idiag)
+     &                              0.5_r8*DiaRVfrc(i,j,inew,idiag)
+                DiaRVfrc(i,j,istp,idiag)=DiaRVfrc(i,j,3,idiag)
               END DO
               DiaV2rhs(i,j,M2sstr)=1.5_r8*DiaRVfrc(i,j,3,M2sstr)-       &
-     &                             0.5_r8*DiaRVfrc(i,j,nnew,M2sstr)
-              DiaRVfrc(i,j,nstp,M2sstr)=DiaRVfrc(i,j,3,M2sstr)
+     &                             0.5_r8*DiaRVfrc(i,j,inew,M2sstr)
+              DiaRVfrc(i,j,istp,M2sstr)=DiaRVfrc(i,j,3,M2sstr)
               DiaV2rhs(i,j,M2bstr)=1.5_r8*DiaRVfrc(i,j,3,M2bstr)-       &
-     &                             0.5_r8*DiaRVfrc(i,j,nnew,M2bstr)
-              DiaRVfrc(i,j,nstp,M2bstr)=DiaRVfrc(i,j,3,M2bstr)
+     &                             0.5_r8*DiaRVfrc(i,j,inew,M2bstr)
+              DiaRVfrc(i,j,istp,M2bstr)=DiaRVfrc(i,j,3,M2bstr)
 #  ifdef WEC_VF
               DiaV2rhs(i,j,M2zeta)=DiaV2rhs(i,j,M2zeta)+                &
      &                             1.5_r8*DiaRVfrc(i,j,3,M2pgrd)-       &
-     &                             0.5_r8*DiaRVfrc(i,j,nnew,M2pgrd)
+     &                             0.5_r8*DiaRVfrc(i,j,inew,M2pgrd)
 #  endif
 # endif
             END DO
@@ -2356,32 +2574,32 @@
               rufrc(i,j)=rufrc(i,j)-rhs_ubar(i,j)
               rhs_ubar(i,j)=rhs_ubar(i,j)+                              &
      &                      cff1*rufrc(i,j)-                            &
-     &                      cff2*ru(i,j,0,nnew)+                        &
-     &                      cff3*ru(i,j,0,nstp)
-              ru(i,j,0,nstp)=rufrc(i,j)
+     &                      cff2*ru(i,j,0,inew)+                        &
+     &                      cff3*ru(i,j,0,istp)
+              ru(i,j,0,istp)=rufrc(i,j)
 # ifdef DIAGNOSTICS_UV
               DO idiag=1,M2pgrd
                 DiaRUfrc(i,j,3,idiag)=DiaRUfrc(i,j,3,idiag)-            &
      &                                DiaU2rhs(i,j,idiag)
                 DiaU2rhs(i,j,idiag)=DiaU2rhs(i,j,idiag)+                &
      &                              cff1*DiaRUfrc(i,j,3,idiag)-         &
-     &                              cff2*DiaRUfrc(i,j,nnew,idiag)+      &
-     &                              cff3*DiaRUfrc(i,j,nstp,idiag)
-                DiaRUfrc(i,j,nstp,idiag)=DiaRUfrc(i,j,3,idiag)
+     &                              cff2*DiaRUfrc(i,j,inew,idiag)+      &
+     &                              cff3*DiaRUfrc(i,j,istp,idiag)
+                DiaRUfrc(i,j,istp,idiag)=DiaRUfrc(i,j,3,idiag)
               END DO
               DiaU2rhs(i,j,M2sstr)=cff1*DiaRUfrc(i,j,3,M2sstr)-         &
-     &                             cff2*DiaRUfrc(i,j,nnew,M2sstr)+      &
-     &                             cff3*DiaRUfrc(i,j,nstp,M2sstr)
-              DiaRUfrc(i,j,nstp,M2sstr)=DiaRUfrc(i,j,3,M2sstr)
+     &                             cff2*DiaRUfrc(i,j,inew,M2sstr)+      &
+     &                             cff3*DiaRUfrc(i,j,istp,M2sstr)
+              DiaRUfrc(i,j,istp,M2sstr)=DiaRUfrc(i,j,3,M2sstr)
               DiaU2rhs(i,j,M2bstr)=cff1*DiaRUfrc(i,j,3,M2bstr)-         &
-     &                             cff2*DiaRUfrc(i,j,nnew,M2bstr)+      &
-     &                             cff3*DiaRUfrc(i,j,nstp,M2bstr)
-              DiaRUfrc(i,j,nstp,M2bstr)=DiaRUfrc(i,j,3,M2bstr)
+     &                             cff2*DiaRUfrc(i,j,inew,M2bstr)+      &
+     &                             cff3*DiaRUfrc(i,j,istp,M2bstr)
+              DiaRUfrc(i,j,istp,M2bstr)=DiaRUfrc(i,j,3,M2bstr)
 #  ifdef WEC_VF
               DiaU2rhs(i,j,M2zeta)=DiaU2rhs(i,j,M2zeta)+                &
      &                             cff1*DiaRUfrc(i,j,3,M2pgrd)-         &
-     &                             cff2*DiaRUfrc(i,j,nnew,M2pgrd)+      &
-     &                             cff3*DiaRUfrc(i,j,nstp,M2pgrd)
+     &                             cff2*DiaRUfrc(i,j,inew,M2pgrd)+      &
+     &                             cff3*DiaRUfrc(i,j,istp,M2pgrd)
 #  endif
 # endif
             END DO
@@ -2391,32 +2609,32 @@
               rvfrc(i,j)=rvfrc(i,j)-rhs_vbar(i,j)
               rhs_vbar(i,j)=rhs_vbar(i,j)+                              &
      &                      cff1*rvfrc(i,j)-                            &
-     &                      cff2*rv(i,j,0,nnew)+                        &
-     &                      cff3*rv(i,j,0,nstp)
-              rv(i,j,0,nstp)=rvfrc(i,j)
+     &                      cff2*rv(i,j,0,inew)+                        &
+     &                      cff3*rv(i,j,0,istp)
+              rv(i,j,0,istp)=rvfrc(i,j)
 # ifdef DIAGNOSTICS_UV
               DO idiag=1,M2pgrd
                 DiaRVfrc(i,j,3,idiag)=DiaRVfrc(i,j,3,idiag)-            &
      &                                DiaV2rhs(i,j,idiag)
                 DiaV2rhs(i,j,idiag)=DiaV2rhs(i,j,idiag)+                &
      &                              cff1*DiaRVfrc(i,j,3,idiag)-         &
-     &                              cff2*DiaRVfrc(i,j,nnew,idiag)+      &
-     &                              cff3*DiaRVfrc(i,j,nstp,idiag)
-                DiaRVfrc(i,j,nstp,idiag)=DiaRVfrc(i,j,3,idiag)
+     &                              cff2*DiaRVfrc(i,j,inew,idiag)+      &
+     &                              cff3*DiaRVfrc(i,j,istp,idiag)
+                DiaRVfrc(i,j,istp,idiag)=DiaRVfrc(i,j,3,idiag)
               END DO
               DiaV2rhs(i,j,M2sstr)=cff1*DiaRVfrc(i,j,3,M2sstr)-         &
-     &                             cff2*DiaRVfrc(i,j,nnew,M2sstr)+      &
-     &                             cff3*DiaRVfrc(i,j,nstp,M2sstr)
-              DiaRVfrc(i,j,nstp,M2sstr)=DiaRVfrc(i,j,3,M2sstr)
+     &                             cff2*DiaRVfrc(i,j,inew,M2sstr)+      &
+     &                             cff3*DiaRVfrc(i,j,istp,M2sstr)
+              DiaRVfrc(i,j,istp,M2sstr)=DiaRVfrc(i,j,3,M2sstr)
               DiaV2rhs(i,j,M2bstr)=cff1*DiaRVfrc(i,j,3,M2bstr)-         &
-     &                             cff2*DiaRVfrc(i,j,nnew,M2bstr)+      &
-     &                             cff3*DiaRVfrc(i,j,nstp,M2bstr)
-              DiaRVfrc(i,j,nstp,M2bstr)=DiaRVfrc(i,j,3,M2bstr)
+     &                             cff2*DiaRVfrc(i,j,inew,M2bstr)+      &
+     &                             cff3*DiaRVfrc(i,j,istp,M2bstr)
+              DiaRVfrc(i,j,istp,M2bstr)=DiaRVfrc(i,j,3,M2bstr)
 #  ifdef WEC_VF
               DiaV2rhs(i,j,M2zeta)=DiaV2rhs(i,j,M2zeta)+                &
      &                             cff1*DiaRVfrc(i,j,3,M2pgrd)-         &
-     &                             cff2*DiaRVfrc(i,j,nnew,M2pgrd)+      &
-     &                             cff3*DiaRVfrc(i,j,nstp,M2pgrd)
+     &                             cff2*DiaRVfrc(i,j,inew,M2pgrd)+      &
+     &                             cff3*DiaRVfrc(i,j,istp,M2pgrd)
 #  endif
 # endif
             END DO
@@ -2458,6 +2676,7 @@
           END DO
         END DO
       END IF
+#endif /* ROMS_KOKKOS */
 #else
 !
 !-----------------------------------------------------------------------
@@ -2490,6 +2709,27 @@
 !
 !  Compute total water column depth.
 !
+#if defined ROMS_KOKKOS && defined KK_STAGE_MOMT
+!
+!  Kokkos path: total depth and the 2-D momentum time step live in
+!  ROMS/Cpp/kokkos_step2d.cpp.
+!
+      kk_kstp=kstp
+      kk_knew=knew
+      CALL k_step2d_momentum_step (ng, tile, kk_kstp, kk_knew,          &
+     &                             LBi, UBi, LBj, UBj,                  &
+     &                             IminS, ImaxS, JminS, JmaxS,          &
+     &                             C_LOC(zeta), C_LOC(h),               &
+     &                             C_LOC(ubar), C_LOC(vbar),            &
+     &                             C_LOC(rubar), C_LOC(rvbar),          &
+     &                             C_LOC(pm), C_LOC(pn),                &
+     &                             C_LOC(rhs_ubar), C_LOC(rhs_vbar),    &
+     &                             C_LOC(Dstp), C_LOC(Dnew),            &
+     &                             MERGE(1,0,PREDICTOR_2D_STEP(ng)),    &
+     &                             MERGE(1,0,FIRST_2D_STEP),            &
+     &                             dtfast(ng), KK_TILE)
+#else
+
       DO j=JstrV-1,Jend
         DO i=IstrU-1,Iend
           Dstp(i,j)=zeta(i,j,kstp)+h(i,j)
@@ -2524,7 +2764,7 @@
 # ifdef SOLVE3D
             IF (PREDICTOR_2D_STEP(ng)) THEN
               rufrc(i,j)=rufrc(i,j)*cff7
-              ru(i,j,0,nstp)=rufrc(i,j)
+              ru(i,j,0,istp)=rufrc(i,j)
             END IF
 # endif
 #endif
@@ -2553,7 +2793,7 @@
 # ifdef SOLVE3D
             IF (PREDICTOR_2D_STEP(ng)) THEN
               rvfrc(i,j)=rvfrc(i,j)*cff7
-              rv(i,j,0,nstp)=rvfrc(i,j)
+              rv(i,j,0,istp)=rvfrc(i,j)
             END IF
 # endif
 #endif
@@ -2672,6 +2912,7 @@
           END DO
         END DO
       END IF
+#endif /* ROMS_KOKKOS */
 
 #ifdef DIAGNOSTICS_UV
 !
@@ -2837,6 +3078,19 @@
 !  If predictor step, load right-side-term into shared arrays for
 !  future use during the subsequent corrector step.
 !
+#if defined ROMS_KOKKOS && defined KK_STAGE_STOR
+      IF (PREDICTOR_2D_STEP(ng)) THEN
+        kk_krhs=krhs
+        CALL k_step2d_store_rhs (ng, tile, kk_krhs,                   &
+     &                           LBi, UBi, LBj, UBj,                    &
+     &                           IminS, ImaxS, JminS, JmaxS,            &
+     &                           C_LOC(rubar), C_LOC(rvbar),            &
+     &                           C_LOC(rhs_ubar), C_LOC(rhs_vbar),      &
+     &                           C_LOC(DiaRUbar), C_LOC(DiaRVbar),      &
+     &                           C_LOC(DiaU2rhs), C_LOC(DiaV2rhs),      &
+     &                           NDM2d, M2pgrd, KK_TILE)
+      END IF
+#else
       IF (PREDICTOR_2D_STEP(ng)) THEN
         DO j=Jstr,Jend
           DO i=IstrU,Iend
@@ -2863,6 +3117,7 @@
         END DO
 #endif
       END IF
+#endif /* ROMS_KOKKOS */
 !
 !-----------------------------------------------------------------------
 !  Apply lateral boundary conditions.
