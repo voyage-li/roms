@@ -200,6 +200,10 @@ void k_step2d_depth_flux(int ng, int tile, int krhs, int nfast,
                          void* ubar_p, void* vbar_p, void* Drhs_p,
                          void* DUon_p, void* DVom_p, int UBk,
                          const TileBounds* t) {
+  /* Kokkos must be initialized before an execution-space
+  ** instance exists; the Fortran kokkos_init hook is not
+  ** wired into the driver, so the first entry does it. */
+  roms::initialize();
   (void)ng;
   (void)tile;
   (void)nfast;
@@ -273,6 +277,10 @@ void k_step2d_time_average(int ng, int tile, int krhs,
                            void* DV_avg1_p, void* DV_avg2_p,
                            double cff1, double cff2,
                            const TileBounds* t) {
+  /* Kokkos must be initialized before an execution-space
+  ** instance exists; the Fortran kokkos_init hook is not
+  ** wired into the driver, so the first entry does it. */
+  roms::initialize();
   (void)ng;
   (void)tile;
 
@@ -373,6 +381,10 @@ void k_step2d_zeta_step(int ng, int tile, int krhs, int kstp, int knew,
                         void* Dnew_p, void* zwrk_p,
                         void* rzeta_p, double dtfast, double rho0,
                         const TileBounds* t) {
+  /* Kokkos must be initialized before an execution-space
+  ** instance exists; the Fortran kokkos_init hook is not
+  ** wired into the driver, so the first entry does it. */
+  roms::initialize();
   (void)ng;
   (void)tile;
   (void)nfast;
@@ -518,6 +530,10 @@ void k_step2d_pressure_grad(int ng, int tile,
                             int NDM2d, int M2pgrd,
                             double g,
                             const TileBounds* t) {
+  /* Kokkos must be initialized before an execution-space
+  ** instance exists; the Fortran kokkos_init hook is not
+  ** wired into the driver, so the first entry does it. */
+  roms::initialize();
   (void)ng;
   (void)tile;
 
@@ -618,6 +634,10 @@ void k_step2d_hadv_centered4(int ng, int tile, int krhs,
                              int M2xadv, int M2yadv, int M2hadv,
                              const EdgeFlags* e,
                              const TileBounds* t) {
+  /* Kokkos must be initialized before an execution-space
+  ** instance exists; the Fortran kokkos_init hook is not
+  ** wired into the driver, so the first entry does it. */
+  roms::initialize();
   (void)ng;
   (void)tile;
   (void)NDM2d;
@@ -890,6 +910,10 @@ void k_step2d_coriolis(int ng, int tile, int krhs,
                        void* DiaU2rhs_p, void* DiaV2rhs_p,
                        int NDM2d, int M2fcor,
                        const TileBounds* t) {
+  /* Kokkos must be initialized before an execution-space
+  ** instance exists; the Fortran kokkos_init hook is not
+  ** wired into the driver, so the first entry does it. */
+  roms::initialize();
   (void)ng;
   (void)tile;
   (void)NDM2d;
@@ -965,6 +989,10 @@ void k_step2d_psi_depth(int ng, int tile,
                         int IminS, int ImaxS, int JminS, int JmaxS,
                         void* Drhs_p, void* Drhs_psi_p,
                         const TileBounds* t) {
+  /* Kokkos must be initialized before an execution-space
+  ** instance exists; the Fortran kokkos_init hook is not
+  ** wired into the driver, so the first entry does it. */
+  roms::initialize();
   (void)ng;
   (void)tile;
 
@@ -1012,6 +1040,10 @@ void k_step2d_hvisc2(int ng, int tile, int krhs,
                      void* DiaU2rhs_p, void* DiaV2rhs_p,
                      int NDM2d, int M2hvis, int M2xvis, int M2yvis,
                      const TileBounds* t) {
+  /* Kokkos must be initialized before an execution-space
+  ** instance exists; the Fortran kokkos_init hook is not
+  ** wired into the driver, so the first entry does it. */
+  roms::initialize();
   (void)ng;
   (void)tile;
   (void)NDM2d;
@@ -1162,6 +1194,10 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
                        void* DiaRUfrc_p, void* DiaRVfrc_p,
                        int NDM2d, int M2pgrd, int M2sstr, int M2bstr,
                        const TileBounds* t) {
+  /* Kokkos must be initialized before an execution-space
+  ** instance exists; the Fortran kokkos_init hook is not
+  ** wired into the driver, so the first entry does it. */
+  roms::initialize();
   (void)ng;
   (void)tile;
   (void)NDM2d;
@@ -1433,6 +1469,10 @@ void k_step2d_momentum_step(int ng, int tile, int kstp, int knew,
                             void* Dstp_p, void* Dnew_p,
                             int predictor, int first_2d_step, double dtfast,
                             const TileBounds* t) {
+  /* Kokkos must be initialized before an execution-space
+  ** instance exists; the Fortran kokkos_init hook is not
+  ** wired into the driver, so the first entry does it. */
+  roms::initialize();
   (void)ng;
   (void)tile;
   (void)predictor;
@@ -1587,6 +1627,10 @@ void k_step2d_store_rhs(int ng, int tile, int krhs,
                         void* DiaU2rhs_p, void* DiaV2rhs_p,
                         int NDM2d, int M2pgrd,
                         const TileBounds* t) {
+  /* Kokkos must be initialized before an execution-space
+  ** instance exists; the Fortran kokkos_init hook is not
+  ** wired into the driver, so the first entry does it. */
+  roms::initialize();
   (void)ng;
   (void)tile;
   (void)NDM2d;
@@ -1715,6 +1759,10 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
                         double g,
                         const EdgeFlags* e,
                         const TileBounds* t) {
+  /* Kokkos must be initialized before an execution-space
+  ** instance exists; the Fortran kokkos_init hook is not
+  ** wired into the driver, so the first entry does it. */
+  roms::initialize();
   (void)ng;
   (void)tile;
   (void)NDM2d;
