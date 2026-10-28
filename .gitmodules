@@ -1,0 +1,3 @@
+[submodule "Kokkos"]
+	path = Kokkos
+	url = git@github.com:WaldonChen/kokkos.git
