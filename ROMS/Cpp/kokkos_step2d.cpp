@@ -138,6 +138,48 @@ inline double dsign(double a, double b) { return std::copysign(a, b); }
 constexpr int TLEV0 = 1, TLEV1 = 3;
 constexpr int RLEV0 = 1, RLEV1 = 2;
 
+
+/*
+** Second difference along xi or eta with the closed-edge fold.
+**
+** fold_lo / fold_hi: whether the low / high end of this direction is a
+** closed edge (composite and periodic edges are excluded upstream, as
+** in the Fortran).  lo_idx / hi_idx: the exact index that was filled.
+*/
+
+KOKKOS_INLINE_FUNCTION
+double ddx(const roms::Array3d<double>& a, int k, int i, int j,
+           int fold_lo, int fold_hi, int lo_idx, int hi_idx) {
+  if (fold_lo && i == lo_idx) return ddx(a, k, i + 1, j, 0, 0, lo_idx, hi_idx);
+  if (fold_hi && i == hi_idx) return ddx(a, k, i - 1, j, 0, 0, lo_idx, hi_idx);
+  return a(i - 1, j, k) - 2.0 * a(i, j, k) + a(i + 1, j, k);
+}
+
+KOKKOS_INLINE_FUNCTION
+double ddy(const roms::Array3d<double>& a, int k, int i, int j,
+           int fold_lo, int fold_hi, int lo_idx, int hi_idx) {
+  if (fold_lo && j == lo_idx) return ddy(a, k, i, j + 1, 0, 0, lo_idx, hi_idx);
+  if (fold_hi && j == hi_idx) return ddy(a, k, i, j - 1, 0, 0, lo_idx, hi_idx);
+  return a(i, j - 1, k) - 2.0 * a(i, j, k) + a(i, j + 1, k);
+}
+
+KOKKOS_INLINE_FUNCTION
+double ddx2(const roms::Array2d<double>& a, int i, int j,
+            int fold_lo, int fold_hi, int lo_idx, int hi_idx) {
+  if (fold_lo && i == lo_idx) return ddx2(a, i + 1, j, 0, 0, lo_idx, hi_idx);
+  if (fold_hi && i == hi_idx) return ddx2(a, i - 1, j, 0, 0, lo_idx, hi_idx);
+  return a(i - 1, j) - 2.0 * a(i, j) + a(i + 1, j);
+}
+
+KOKKOS_INLINE_FUNCTION
+double ddy2(const roms::Array2d<double>& a, int i, int j,
+            int fold_lo, int fold_hi, int lo_idx, int hi_idx) {
+  if (fold_lo && j == lo_idx) return ddy2(a, i, j + 1, 0, 0, lo_idx, hi_idx);
+  if (fold_hi && j == hi_idx) return ddy2(a, i, j - 1, 0, 0, lo_idx, hi_idx);
+  return a(i, j - 1) - 2.0 * a(i, j) + a(i, j + 1);
+}
+
+
 }  // namespace
 
 extern "C" {
@@ -1602,6 +1644,440 @@ void k_step2d_store_rhs(int ng, int tile, int krhs,
             }
 #endif
           }
+        }
+      });
+}
+
+/*
+** Fused right-hand-side kernel for the 2-D barotropic step.
+**
+** Included by kokkos_step2d.cpp.  Split out so it can be syntax-checked
+** against the real Kokkos configuration before it is wired up.
+**
+** What it replaces
+** ----------------
+** Five stages of step2d_LF_AM3.h run back to back with nothing between
+** them: no halo exchange, no open-boundary call, no zetabc.  Each only
+** accumulates into rhs_ubar/rhs_vbar.  Launched separately they cost
+** one Kokkos dispatch apiece -- about forty per fast step, over 8640
+** fast steps -- and at this problem's size the dispatch, not the
+** arithmetic, dominates.  Measured on a 128-core Xeon with the Fortran
+** side single-threaded: the unfused OpenMP build ran 17x slower at 8
+** threads than at 1.
+**
+** Here they are one launch.
+**
+** Equivalence with the staged code
+** --------------------------------
+** The staged version routes intermediates through scratch arrays:
+**
+**   grad / Dgrad          four-pass, refilled for the xi and eta
+**                         directions of ubar and vbar in turn
+**   UFx, UFe, VFx, VFe    advection fluxes, later reused by viscosity
+**   Drhs_psi              total depth averaged to psi points
+**
+** Every one is a pure function of read-only inputs at the moment it is
+** finally consumed, so it is recomputed here instead of stored.  That
+** is what collapses the loops.  Nothing crosses points, so the result
+** is bit-identical to the staged version.
+**
+** Closed edges: the staged code filled a halo cell from its inward
+** neighbour at one index per direction -- grad(Istr), grad(Iend+1),
+** grad(Jstr-1), grad(Jend+1) in the xi/eta ubar passes; grad(Istr-1),
+** grad(Iend+1), grad(Jstr), grad(Jend+1) in the vbar passes.  The fold
+** helper below reproduces that, and only at those exact indices: the
+** fill loops themselves start at IstrUm1/Jstrm1, which are outside the
+** fold point and use the raw stencil.
+*/
+
+
+
+void k_step2d_rhs_fused(int ng, int tile, int krhs,
+                        int LBi, int UBi, int LBj, int UBj,
+                        int IminS, int ImaxS, int JminS, int JmaxS,
+                        void* h_p, void* on_u_p, void* om_v_p,
+                        void* gzeta_p, void* gzeta2_p, void* gzetaSA_p,
+                        void* rhoA_p, void* zwrk_p,
+                        void* Drhs_p, void* fomn_p,
+                        void* ubar_p, void* vbar_p,
+                        void* DUon_p, void* DVom_p,
+                        void* pm_p, void* pn_p,
+                        void* pmon_r_p, void* pnom_r_p,
+                        void* pmon_p_p, void* pnom_p_p,
+                        void* om_r_p, void* on_r_p,
+                        void* om_p_p, void* on_p_p,
+                        void* visc2_r_p, void* visc2_p2_p,
+                        void* rhs_ubar_p, void* rhs_vbar_p,
+                        void* DiaU2rhs_p, void* DiaV2rhs_p,
+                        int NDM2d,
+                        int M2pgrd, int M2xadv, int M2yadv, int M2hadv,
+                        int M2fcor, int M2hvis, int M2xvis, int M2yvis,
+                        double g,
+                        const EdgeFlags* e,
+                        const TileBounds* t) {
+  (void)ng;
+  (void)tile;
+  (void)NDM2d;
+
+  const Shape s{LBi, UBi, LBj, UBj, IminS, ImaxS, JminS, JmaxS};
+
+  Array2d<double> h       = grid2d(h_p, s);
+  Array2d<double> on_u    = grid2d(on_u_p, s);
+  Array2d<double> om_v    = grid2d(om_v_p, s);
+  Array2d<double> gzeta   = priv2d(gzeta_p, s);
+  Array2d<double> gzeta2  = priv2d(gzeta2_p, s);
+  Array2d<double> gzetaSA = priv2d(gzetaSA_p, s);
+  Array2d<double> rhoA    = grid2d(rhoA_p, s);
+  Array2d<double> zwrk    = priv2d(zwrk_p, s);
+
+  Array2d<double> Drhs = priv2d(Drhs_p, s);
+  Array2d<double> fomn = grid2d(fomn_p, s);
+
+  Array3d<double> ubar = grid3d(ubar_p, s, TLEV0, TLEV1);
+  Array3d<double> vbar = grid3d(vbar_p, s, TLEV0, TLEV1);
+
+  Array2d<double> DUon = priv2d(DUon_p, s);
+  Array2d<double> DVom = priv2d(DVom_p, s);
+
+  Array2d<double> pm = grid2d(pm_p, s);
+  Array2d<double> pn = grid2d(pn_p, s);
+
+  Array2d<double> pmon_r = grid2d(pmon_r_p, s);
+  Array2d<double> pnom_r = grid2d(pnom_r_p, s);
+  Array2d<double> pmon_p = grid2d(pmon_p_p, s);
+  Array2d<double> pnom_p = grid2d(pnom_p_p, s);
+  Array2d<double> om_r   = grid2d(om_r_p, s);
+  Array2d<double> on_r   = grid2d(on_r_p, s);
+  Array2d<double> om_p   = grid2d(om_p_p, s);
+  Array2d<double> on_p   = grid2d(on_p_p, s);
+  Array2d<double> visc2_r  = grid2d(visc2_r_p, s);
+  Array2d<double> visc2_pp = grid2d(visc2_p2_p, s);
+
+  Array2d<double> rhs_ubar = priv2d(rhs_ubar_p, s);
+  Array2d<double> rhs_vbar = priv2d(rhs_vbar_p, s);
+
+#if defined DIAGNOSTICS_UV
+  Array3d<double> DiaU2rhs = priv3d(DiaU2rhs_p, s, 1, NDM2d - 1);
+  Array3d<double> DiaV2rhs = priv3d(DiaV2rhs_p, s, 1, NDM2d - 1);
+#else
+  (void)DiaU2rhs_p;
+  (void)DiaV2rhs_p;
+  (void)M2pgrd;
+  (void)M2xadv;
+  (void)M2yadv;
+  (void)M2hadv;
+  (void)M2fcor;
+  (void)M2hvis;
+  (void)M2xvis;
+  (void)M2yvis;
+#endif
+
+  const int Istr = t->Istr, Iend = t->Iend;
+  const int Jstr = t->Jstr, Jend = t->Jend;
+  const int IstrU = t->IstrU, JstrV = t->JstrV;
+
+  /* Closed-edge folds.  Each matches one of the halo fills in the
+  ** Fortran, which are guarded by
+  **     .not.(CompositeGrid(iedge,ng).or.<dir>periodic(ng))
+  **     .and.DOMAIN(ng)%<Edge>_Edge(tile)
+  ** exactly as reproduced here. */
+
+  const int fw = (!e->composite_w && !e->periodic_ew && e->west);
+  const int fe = (!e->composite_e && !e->periodic_ew && e->east);
+  const int fs = (!e->composite_s && !e->periodic_ns && e->south);
+  const int fn = (!e->composite_n && !e->periodic_ns && e->north);
+
+  const double cpg  = 0.5 * g;
+  const double cpg2 = 1.0 / 3.0;
+  const double c6   = 1.0 / 6.0;
+
+  /*--------------------------------------------------------------------
+  ** U rows.  i runs over [IstrU, Iend], which is exactly the staged
+  ** rhs_ubar loop.  Every term the staged code computes at a
+  ** neighbouring point is recomputed here; the arithmetic order inside
+  ** each term matches, so the accumulations into rhs_ubar are the same
+  ** sequence of operations.
+  **------------------------------------------------------------------*/
+
+  Kokkos::parallel_for(
+      range_policy(Jstr, Jend + 1), KOKKOS_LAMBDA(int j) {
+        for (int i = IstrU; i <= Iend; ++i) {
+          /* --- pressure gradient --- */
+          const double pg =
+              cpg * on_u(i, j) *
+              ((h(i - 1, j) + h(i, j)) * (gzeta(i - 1, j) - gzeta(i, j)) +
+               (h(i - 1, j) - h(i, j)) *
+                   (gzetaSA(i - 1, j) + gzetaSA(i, j) +
+                    cpg2 * (rhoA(i - 1, j) - rhoA(i, j)) *
+                        (zwrk(i - 1, j) - zwrk(i, j))) +
+               (gzeta2(i - 1, j) - gzeta2(i, j)));
+          double acc = pg;
+#if defined DIAGNOSTICS_UV
+          DiaU2rhs(i, j, M2pgrd) = pg;
+#endif
+
+          /* --- advection ---
+          ** Fluxes at the two xi faces and two eta faces around (i,j).
+          ** In the staged code these live in UFx/UFe with grad holding
+          ** the xi and then the eta second differences of ubar, and
+          ** Dgrad the matching differences of DUon/DVom. */
+          const double gx0 = ddx(ubar, krhs, i, j, fw, fe, Istr, Iend + 1);
+          const double gx1 = ddx(ubar, krhs, i + 1, j, fw, fe, Istr, Iend + 1);
+          const double dx0 = ddx2(DUon, i, j, fw, fe, Istr, Iend + 1);
+          const double dx1 = ddx2(DUon, i + 1, j, fw, fe, Istr, Iend + 1);
+          const double ufx =
+              0.25 * (ubar(i, j, krhs) + ubar(i + 1, j, krhs) -
+                      c6 * (gx0 + gx1)) *
+              (DUon(i, j) + DUon(i + 1, j) - c6 * (dx0 + dx1));
+
+          const double gxm = ddx(ubar, krhs, i - 1, j, fw, fe, Istr, Iend + 1);
+          const double dxm = ddx2(DUon, i - 1, j, fw, fe, Istr, Iend + 1);
+          const double ufxm =
+              0.25 * (ubar(i - 1, j, krhs) + ubar(i, j, krhs) -
+                      c6 * (gxm + gx0)) *
+              (DUon(i - 1, j) + DUon(i, j) - c6 * (dxm + dx0));
+
+          /* eta-direction second differences of ubar at U points: the
+          ** staged code refills grad over j in [Jstrm1, Jendp1] and
+          ** folds at Jstr-1 / Jend+1. */
+          /*
+          ** Folds here are Jstr-1 / Jend+1, not Jstr / Jend+1: the
+          ** Fortran refills grad over j in [Jstrm1, Jendp1] and then
+          ** sets grad(i,Jstr-1)=grad(i,Jstr).  Dgrad gets no fold in
+          ** this block at all -- it is computed over [Jstr, Jend+1]
+          ** and only ever read in the xi direction.
+          */
+          const double gy0 = ddy(ubar, krhs, i, j, fs, fn, Jstr - 1, Jend + 1);
+          const double dgy0 = ddy2(DVom, i, j, 0, 0, 0, 0);
+          const double gy_1 = ddy(ubar, krhs, i, j - 1, fs, fn, Jstr - 1, Jend + 1);
+          const double dgy_1 = ddy2(DVom, i, j - 1, 0, 0, 0, 0);
+          const double ufe =
+              0.25 * (ubar(i, j, krhs) + ubar(i, j - 1, krhs) -
+                      c6 * (gy0 + gy_1)) *
+              (DVom(i, j) + DVom(i - 1, j) - c6 * (dgy0 + dgy_1));
+
+          const double gy1 = ddy(ubar, krhs, i, j + 1, fs, fn, Jstr - 1, Jend + 1);
+          const double dgy1 = ddy2(DVom, i, j + 1, 0, 0, 0, 0);
+          const double ufe1 =
+              0.25 * (ubar(i, j + 1, krhs) + ubar(i, j, krhs) -
+                      c6 * (gy1 + gy0)) *
+              (DVom(i, j + 1) + DVom(i - 1, j + 1) - c6 * (dgy1 + dgy0));
+
+          const double axadv = ufx - ufxm;
+          const double ayadv = ufe1 - ufe;
+          const double aadv  = axadv + ayadv;
+          acc -= aadv;
+#if defined DIAGNOSTICS_UV
+          DiaU2rhs(i, j, M2xadv) = -axadv;
+          DiaU2rhs(i, j, M2yadv) = -ayadv;
+          DiaU2rhs(i, j, M2hadv) = -aadv;
+#endif
+
+          /* --- coriolis --- */
+          const double fcor =
+              0.5 * (0.5 * Drhs(i, j) * fomn(i, j) *
+                         (vbar(i, j, krhs) + vbar(i, j + 1, krhs)) +
+                     0.5 * Drhs(i - 1, j) * fomn(i - 1, j) *
+                         (vbar(i - 1, j, krhs) + vbar(i - 1, j + 1, krhs)));
+          acc += fcor;
+#if defined DIAGNOSTICS_UV
+          DiaU2rhs(i, j, M2fcor) = fcor;
+#endif
+
+          /* --- harmonic viscosity ---
+          ** Two flux families: at rho points from visc2_r, and at psi
+          ** points from visc2_p with the depth averaged to psi points
+          ** (Drhs_psi in the staged PSID block, inlined here). */
+          const double dp00 = 0.25 * (Drhs(i, j) + Drhs(i - 1, j) +
+                                      Drhs(i, j - 1) + Drhs(i - 1, j - 1));
+          const double dp0p = 0.25 * (Drhs(i, j + 1) + Drhs(i - 1, j + 1) +
+                                      Drhs(i, j) + Drhs(i - 1, j));
+          const double uR =
+              on_r(i, j) * on_r(i, j) * visc2_r(i, j) * Drhs(i, j) * 0.5 *
+              (pmon_r(i, j) *
+                   ((pn(i, j) + pn(i + 1, j)) * ubar(i + 1, j, krhs) -
+                    (pn(i - 1, j) + pn(i, j)) * ubar(i, j, krhs)) -
+               pnom_r(i, j) *
+                   ((pm(i, j) + pm(i, j + 1)) * vbar(i, j + 1, krhs) -
+                    (pm(i, j - 1) + pm(i, j)) * vbar(i, j, krhs)));
+          const double uRm =
+              on_r(i - 1, j) * on_r(i - 1, j) *
+              visc2_r(i - 1, j) * Drhs(i - 1, j) * 0.5 *
+              (pmon_r(i - 1, j) *
+                   ((pn(i - 1, j) + pn(i, j)) * ubar(i, j, krhs) -
+                    (pn(i - 2, j) + pn(i - 1, j)) * ubar(i - 1, j, krhs)) -
+               pnom_r(i - 1, j) *
+                   ((pm(i - 1, j) + pm(i - 1, j + 1)) * vbar(i - 1, j + 1, krhs) -
+                    (pm(i - 1, j - 1) + pm(i - 1, j)) * vbar(i - 1, j, krhs)));
+
+          const double uP =
+              om_p(i, j) * om_p(i, j) * visc2_pp(i, j) * dp00 * 0.5 *
+              (pnom_p(i, j) *
+                   ((pn(i, j - 1) + pn(i, j)) * vbar(i, j, krhs) -
+                    (pn(i - 1, j - 1) + pn(i - 1, j)) * vbar(i - 1, j, krhs)) +
+               pmon_p(i, j) *
+                   ((pm(i - 1, j) + pm(i, j)) * ubar(i, j, krhs) -
+                    (pm(i - 1, j - 1) + pm(i, j - 1)) * ubar(i, j - 1, krhs)));
+          const double uPp =
+              om_p(i, j + 1) * om_p(i, j + 1) *
+              visc2_pp(i, j + 1) * dp0p * 0.5 *
+              (pnom_p(i, j + 1) *
+                   ((pn(i, j) + pn(i, j + 1)) * vbar(i, j + 1, krhs) -
+                    (pn(i - 1, j) + pn(i - 1, j + 1)) * vbar(i - 1, j + 1, krhs)) +
+               pmon_p(i, j + 1) *
+                   ((pm(i - 1, j + 1) + pm(i, j + 1)) * ubar(i, j + 1, krhs) -
+                    (pm(i - 1, j) + pm(i, j)) * ubar(i, j, krhs)));
+
+          const double vx1 = 0.5 * (pn(i - 1, j) + pn(i, j)) * (uR - uRm);
+          const double vy1 = 0.5 * (pm(i - 1, j) + pm(i, j)) * (uPp - uP);
+          const double hv  = vx1 + vy1;
+          acc += hv;
+#if defined DIAGNOSTICS_UV
+          DiaU2rhs(i, j, M2hvis) = hv;
+          DiaU2rhs(i, j, M2xvis) = vx1;
+          DiaU2rhs(i, j, M2yvis) = vy1;
+#endif
+
+          rhs_ubar(i, j) = acc;
+        }
+      });
+
+  /*--------------------------------------------------------------------
+  ** V rows.  i over [Istr, Iend], j over [JstrV, Jend] -- the staged
+  ** rhs_vbar loop.
+  **------------------------------------------------------------------*/
+
+  Kokkos::parallel_for(
+      range_policy(JstrV, Jend + 1), KOKKOS_LAMBDA(int j) {
+        for (int i = Istr; i <= Iend; ++i) {
+          /* --- pressure gradient --- */
+          const double pg =
+              cpg * om_v(i, j) *
+              ((h(i, j - 1) + h(i, j)) * (gzeta(i, j - 1) - gzeta(i, j)) +
+               (h(i, j - 1) - h(i, j)) *
+                   (gzetaSA(i, j - 1) + gzetaSA(i, j) +
+                    cpg2 * (rhoA(i, j - 1) - rhoA(i, j)) *
+                        (zwrk(i, j - 1) - zwrk(i, j))) +
+               (gzeta2(i, j - 1) - gzeta2(i, j)));
+          double acc = pg;
+#if defined DIAGNOSTICS_UV
+          DiaV2rhs(i, j, M2pgrd) = pg;
+#endif
+
+          /* --- advection ---
+          ** VFx block: grad over xi at V points folds at Istr-1 /
+          ** Iend+1; Dgrad holds DVom second differences along xi over
+          ** [JstrV-1, Jend] with no fold. */
+          const double gx0 = ddx(vbar, krhs, i, j, fw, fe, Istr - 1, Iend + 1);
+          const double gxm = ddx(vbar, krhs, i - 1, j, fw, fe, Istr - 1, Iend + 1);
+          const double dx0 = ddx2(DUon, i, j, 0, 0, 0, 0);
+          const double dxm = ddx2(DUon, i, j - 1, 0, 0, 0, 0);
+          const double vfx =
+              0.25 * (vbar(i, j, krhs) + vbar(i - 1, j, krhs) -
+                      c6 * (gx0 + gxm)) *
+              (DUon(i, j) + DUon(i, j - 1) - c6 * (dx0 + dxm));
+
+          const double gx1 = ddx(vbar, krhs, i + 1, j, fw, fe, Istr - 1, Iend + 1);
+          const double dx1 = ddx2(DUon, i + 1, j, 0, 0, 0, 0);
+          const double vfx1 =
+              0.25 * (vbar(i + 1, j, krhs) + vbar(i, j, krhs) -
+                      c6 * (gx1 + gx0)) *
+              (DUon(i + 1, j) + DUon(i + 1, j - 1) - c6 * (dx1 + dx0));
+
+          /* VFe block: grad over eta at V points folds at Jstr /
+          ** Jend+1, and here Dgrad folds the same way. */
+          const double gy0 = ddy(vbar, krhs, i, j, fs, fn, Jstr, Jend + 1);
+          const double dgy0 = ddy2(DVom, i, j, fs, fn, Jstr, Jend + 1);
+          const double gy1 = ddy(vbar, krhs, i, j + 1, fs, fn, Jstr, Jend + 1);
+          const double dgy1 = ddy2(DVom, i, j + 1, fs, fn, Jstr, Jend + 1);
+          const double vfe =
+              0.25 * (vbar(i, j, krhs) + vbar(i, j + 1, krhs) -
+                      c6 * (gy0 + gy1)) *
+              (DVom(i, j) + DVom(i, j + 1) - c6 * (dgy0 + dgy1));
+
+          const double gym = ddy(vbar, krhs, i, j - 1, fs, fn, Jstr, Jend + 1);
+          const double dgym = ddy2(DVom, i, j - 1, fs, fn, Jstr, Jend + 1);
+          const double vfem =
+              0.25 * (vbar(i, j - 1, krhs) + vbar(i, j, krhs) -
+                      c6 * (gym + gy0)) *
+              (DVom(i, j - 1) + DVom(i, j) - c6 * (dgym + dgy0));
+
+          const double axadv = vfx1 - vfx;
+          const double ayadv = vfe - vfem;
+          const double aadv  = axadv + ayadv;
+          acc -= aadv;
+#if defined DIAGNOSTICS_UV
+          DiaV2rhs(i, j, M2xadv) = -axadv;
+          DiaV2rhs(i, j, M2yadv) = -ayadv;
+          DiaV2rhs(i, j, M2hadv) = -aadv;
+#endif
+
+          /* --- coriolis --- */
+          const double fcor =
+              0.5 * (0.5 * Drhs(i, j) * fomn(i, j) *
+                         (ubar(i, j, krhs) + ubar(i + 1, j, krhs)) +
+                     0.5 * Drhs(i, j - 1) * fomn(i, j - 1) *
+                         (ubar(i, j - 1, krhs) + ubar(i + 1, j - 1, krhs)));
+          acc -= fcor;
+#if defined DIAGNOSTICS_UV
+          DiaV2rhs(i, j, M2fcor) = -fcor;
+#endif
+
+          /* --- harmonic viscosity --- */
+          const double dp00 = 0.25 * (Drhs(i, j) + Drhs(i - 1, j) +
+                                      Drhs(i, j - 1) + Drhs(i - 1, j - 1));
+          const double dp10 = 0.25 * (Drhs(i + 1, j) + Drhs(i, j) +
+                                      Drhs(i + 1, j - 1) + Drhs(i, j - 1));
+
+          const double vP =
+              on_p(i, j) * on_p(i, j) * visc2_pp(i, j) * dp00 * 0.5 *
+              (pnom_p(i, j) *
+                   ((pn(i, j - 1) + pn(i, j)) * vbar(i, j, krhs) -
+                    (pn(i - 1, j - 1) + pn(i - 1, j)) * vbar(i - 1, j, krhs)) +
+               pmon_p(i, j) *
+                   ((pm(i - 1, j) + pm(i, j)) * ubar(i, j, krhs) -
+                    (pm(i - 1, j - 1) + pm(i, j - 1)) * ubar(i, j - 1, krhs)));
+          const double vPp =
+              on_p(i + 1, j) * on_p(i + 1, j) *
+              visc2_pp(i + 1, j) * dp10 * 0.5 *
+              (pnom_p(i + 1, j) *
+                   ((pn(i + 1, j - 1) + pn(i + 1, j)) * vbar(i + 1, j, krhs) -
+                    (pn(i, j - 1) + pn(i, j)) * vbar(i, j, krhs)) +
+               pmon_p(i + 1, j) *
+                   ((pm(i, j) + pm(i + 1, j)) * ubar(i + 1, j, krhs) -
+                    (pm(i, j - 1) + pm(i + 1, j - 1)) * ubar(i + 1, j - 1, krhs)));
+
+          /* VFe at rho points from visc2_r: the staged code writes UFe
+          ** there, and this kernel keeps the same slot. */
+          const double vR =
+              om_r(i, j) * om_r(i, j) * visc2_r(i, j) * Drhs(i, j) * 0.5 *
+              (pmon_r(i, j) *
+                   ((pn(i, j) + pn(i + 1, j)) * ubar(i + 1, j, krhs) -
+                    (pn(i - 1, j) + pn(i, j)) * ubar(i, j, krhs)) -
+               pnom_r(i, j) *
+                   ((pm(i, j) + pm(i, j + 1)) * vbar(i, j + 1, krhs) -
+                    (pm(i, j - 1) + pm(i, j)) * vbar(i, j, krhs)));
+          const double vRm =
+              om_r(i, j - 1) * om_r(i, j - 1) *
+              visc2_r(i, j - 1) * Drhs(i, j - 1) * 0.5 *
+              (pmon_r(i, j - 1) *
+                   ((pn(i, j - 1) + pn(i + 1, j - 1)) * ubar(i + 1, j - 1, krhs) -
+                    (pn(i - 1, j - 1) + pn(i, j - 1)) * ubar(i, j - 1, krhs)) -
+               pnom_r(i, j - 1) *
+                   ((pm(i, j - 1) + pm(i, j)) * vbar(i, j, krhs) -
+                    (pm(i, j - 2) + pm(i, j - 1)) * vbar(i, j - 1, krhs)));
+
+          const double vx1 = 0.5 * (pn(i, j - 1) + pn(i, j)) * (vPp - vP);
+          const double vy1 = 0.5 * (pm(i, j - 1) + pm(i, j)) * (vR - vRm);
+          const double hv  = vx1 - vy1;
+          acc += hv;
+#if defined DIAGNOSTICS_UV
+          DiaV2rhs(i, j, M2hvis) = hv;
+          DiaV2rhs(i, j, M2xvis) = vx1;
+          DiaV2rhs(i, j, M2yvis) = -vy1;
+#endif
+
+          rhs_vbar(i, j) = acc;
         }
       });
 }

@@ -274,6 +274,7 @@
      &                              k_step2d_zeta_step,                  &
      &                              k_step2d_pressure_grad,              &
      &                              k_step2d_hadv_centered4,             &
+     &                              k_step2d_rhs_fused,                  &
      &                              k_step2d_coriolis,                   &
      &                              k_step2d_psi_depth,                  &
      &                              k_step2d_hvisc2,                     &
@@ -1230,7 +1231,41 @@
 !  Compute pressure gradient terms.
 !-----------------------------------------------------------------------
 !
-#if defined ROMS_KOKKOS && defined KK_STAGE_PGRD
+#if defined ROMS_KOKKOS && defined KK_STAGE_FUSED
+!
+!  Kokkos path, fused: pressure gradient, fourth-order advection,
+!  Coriolis, PSI-point depth and harmonic viscosity in one kernel.
+!
+!  These five stages have nothing between them -- no halo exchange, no
+!  open-boundary call, no zetabc -- and each only accumulates into
+!  rhs_ubar/rhs_vbar, so they collapse into a single dispatch.  That
+!  matters because at this problem's size a Kokkos launch costs more
+!  than the arithmetic it covers: unfused, the OpenMP backend ran 17x
+!  slower at 8 threads than at 1.
+!
+      CALL k_step2d_rhs_fused (ng, tile, krhs,                          &
+     &                         LBi, UBi, LBj, UBj,                      &
+     &                         IminS, ImaxS, JminS, JmaxS,              &
+     &                         C_LOC(h), C_LOC(on_u), C_LOC(om_v),      &
+     &                         C_LOC(gzeta), C_LOC(gzeta2),             &
+     &                         C_LOC(gzetaSA), C_LOC(rhoA),             &
+     &                         C_LOC(zwrk),                             &
+     &                         C_LOC(Drhs), C_LOC(fomn),                &
+     &                         C_LOC(ubar), C_LOC(vbar),                &
+     &                         C_LOC(DUon), C_LOC(DVom),                &
+     &                         C_LOC(pm), C_LOC(pn),                    &
+     &                         C_LOC(pmon_r), C_LOC(pnom_r),            &
+     &                         C_LOC(pmon_p), C_LOC(pnom_p),            &
+     &                         C_LOC(om_r), C_LOC(on_r),                &
+     &                         C_LOC(om_p), C_LOC(on_p),                &
+     &                         C_LOC(visc2_r), C_LOC(visc2_p),          &
+     &                         C_LOC(rhs_ubar), C_LOC(rhs_vbar),        &
+     &                         C_LOC(DiaU2rhs), C_LOC(DiaV2rhs),        &
+     &                         NDM2d, M2pgrd, M2xadv, M2yadv,           &
+     &                         M2hadv, M2fcor, M2hvis, M2xvis,          &
+     &                         M2yvis, g, KK_EDGE, KK_TILE)
+#endif
+#if defined ROMS_KOKKOS && defined KK_STAGE_PGRD && !defined KK_STAGE_FUSED
 !
 !  Kokkos path: the pressure-gradient loops live in
 !  ROMS/Cpp/kokkos_step2d.cpp.
@@ -1371,7 +1406,7 @@
         END IF
       END DO
 #endif /* ROMS_KOKKOS */
-#if defined ROMS_KOKKOS && defined KK_STAGE_HADV
+#if defined ROMS_KOKKOS && defined KK_STAGE_HADV && !defined KK_STAGE_FUSED
 !
 !  Kokkos path: the fourth-order advection loops live in
 !  ROMS/Cpp/kokkos_step2d.cpp.  Only UV_ADV without UV_C2ADVECTION is
@@ -1612,7 +1647,7 @@
 #endif
 
 #endif /* ROMS_KOKKOS */
-#if defined ROMS_KOKKOS && defined KK_STAGE_CORI
+#if defined ROMS_KOKKOS && defined KK_STAGE_CORI && !defined KK_STAGE_FUSED
 !
 !  Kokkos path: the Coriolis loops live in ROMS/Cpp/kokkos_step2d.cpp.
 !
@@ -1767,7 +1802,7 @@
 #endif
 #endif /* ROMS_KOKKOS */
 #if defined UV_VIS2 || defined UV_VIS4
-#if defined ROMS_KOKKOS && defined KK_STAGE_PSID
+#if defined ROMS_KOKKOS && defined KK_STAGE_PSID && !defined KK_STAGE_FUSED
 !
 !  Kokkos path: total depth at PSI points (step2d_LF_AM3.h).
 !
@@ -1795,7 +1830,7 @@
 #endif
 #endif /* ROMS_KOKKOS */
 #ifdef UV_VIS2
-#if defined ROMS_KOKKOS && defined KK_STAGE_HVIS
+#if defined ROMS_KOKKOS && defined KK_STAGE_HVIS && !defined KK_STAGE_FUSED
 !
 !  Kokkos path: harmonic horizontal viscosity.
 !

@@ -39,6 +39,7 @@
       PUBLIC :: k_step2d_zeta_step
       PUBLIC :: k_step2d_pressure_grad
       PUBLIC :: k_step2d_hadv_centered4
+      PUBLIC :: k_step2d_rhs_fused
       PUBLIC :: k_step2d_coriolis
       PUBLIC :: k_step2d_psi_depth
       PUBLIC :: k_step2d_hvisc2
@@ -195,6 +196,53 @@
           type(kokkos_edge_flags),  INTENT(IN) :: de
           type(kokkos_tile_bounds), INTENT(IN) :: tl
         END SUBROUTINE k_step2d_hadv_centered4
+!
+        SUBROUTINE k_step2d_rhs_fused (kng, ktile, krhs,                   &
+     &                                 LBi, UBi, LBj, UBj,               &
+     &                                 IminS, ImaxS, JminS, JmaxS,       &
+     &                                 h_p, on_u_p, om_v_p,              &
+     &                                 gzeta_p, gzeta2_p, gzetaSA_p,     &
+     &                                 rhoA_p, zwrk_p,                   &
+     &                                 Drhs_p, fomn_p,                   &
+     &                                 ubar_p, vbar_p,                   &
+     &                                 DUon_p, DVom_p,                   &
+     &                                 pm_p, pn_p,                       &
+     &                                 pmon_r_p, pnom_r_p,               &
+     &                                 pmon_p_p, pnom_p_p,               &
+     &                                 om_r_p, on_r_p,                   &
+     &                                 om_p_p, on_p_p,                   &
+     &                                 visc2_r_p, visc2_p2_p,            &
+     &                                 rhs_ubar_p, rhs_vbar_p,           &
+     &                                 DiaU2rhs_p, DiaV2rhs_p,           &
+     &                                 NDM2d, M2pgrd, M2xadv, M2yadv,    &
+     &                                 M2hadv, M2fcor, M2hvis, M2xvis,   &
+     &                                 M2yvis, g, de, tl)                &
+     &          BIND(C, NAME='k_step2d_rhs_fused')
+          IMPORT :: C_PTR, C_INT, C_DOUBLE, kokkos_tile_bounds, kokkos_edge_flags
+          integer(C_INT), VALUE :: kng, ktile, krhs
+          integer(C_INT), VALUE :: LBi, UBi, LBj, UBj
+          integer(C_INT), VALUE :: IminS, ImaxS, JminS, JmaxS
+          type(C_PTR),    VALUE :: h_p, on_u_p, om_v_p
+          type(C_PTR),    VALUE :: gzeta_p, gzeta2_p, gzetaSA_p
+          type(C_PTR),    VALUE :: rhoA_p, zwrk_p
+          type(C_PTR),    VALUE :: Drhs_p, fomn_p
+          type(C_PTR),    VALUE :: ubar_p, vbar_p
+          type(C_PTR),    VALUE :: DUon_p, DVom_p
+          type(C_PTR),    VALUE :: pm_p, pn_p
+          type(C_PTR),    VALUE :: pmon_r_p, pnom_r_p
+          type(C_PTR),    VALUE :: pmon_p_p, pnom_p_p
+          type(C_PTR),    VALUE :: om_r_p, on_r_p
+          type(C_PTR),    VALUE :: om_p_p, on_p_p
+          type(C_PTR),    VALUE :: visc2_r_p, visc2_p2_p
+          type(C_PTR),    VALUE :: rhs_ubar_p, rhs_vbar_p
+          type(C_PTR),    VALUE :: DiaU2rhs_p, DiaV2rhs_p
+          integer(C_INT), VALUE :: NDM2d, M2pgrd, M2xadv, M2yadv
+          integer(C_INT), VALUE :: M2hadv, M2fcor, M2hvis, M2xvis
+          integer(C_INT), VALUE :: M2yvis
+          real(C_DOUBLE), VALUE :: g
+          type(kokkos_edge_flags),  INTENT(IN) :: de
+          type(kokkos_tile_bounds), INTENT(IN) :: tl
+        END SUBROUTINE k_step2d_rhs_fused
 !
         SUBROUTINE k_step2d_coriolis (kng, ktile, krhs,                    &
      &                                LBi, UBi, LBj, UBj,                &
