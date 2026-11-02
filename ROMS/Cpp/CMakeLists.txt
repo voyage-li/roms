@@ -14,6 +14,8 @@ list( APPEND _files
       ROMS/Cpp/kokkos_step2d_mod.F
       ROMS/Cpp/kokkos_config.cpp
       ROMS/Cpp/kokkos_step2d.cpp
+      ROMS/Cpp/kokkos_step3d_t_mod.F
+      ROMS/Cpp/kokkos_step3d_t.cpp
     )
 
 set ( ROMS_Cpp_files

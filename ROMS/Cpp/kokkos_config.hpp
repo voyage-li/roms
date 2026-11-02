@@ -195,6 +195,22 @@ struct Array4d {
   }
 };
 
+/* Tracers and their diagnostics each have five Fortran dimensions. */
+template <class T>
+struct Array5d {
+  T* p = nullptr;
+  int lb_i=0, lb_j=0, lb_k=0, lb_l=0, lb_m=0;
+  int ni=0, nj=0, nk=0, nl=0, nm=0;
+
+  KOKKOS_INLINE_FUNCTION
+  T& operator()(int i, int j, int k, int l, int m) const {
+    return p[std::ptrdiff_t(i-lb_i) + std::ptrdiff_t(j-lb_j)*ni +
+             std::ptrdiff_t(k-lb_k)*ni*nj +
+             std::ptrdiff_t(l-lb_l)*ni*nj*nk +
+             std::ptrdiff_t(m-lb_m)*ni*nj*nk*nl];
+  }
+};
+
 /*
 ** Tile index metadata.  These are the subset of the 42 variables set by
 ** ROMS/Include/set_bounds.h that step2d_LF_AM3.h actually reads.  They
@@ -280,6 +296,13 @@ inline Array4d<T> as_4d(void* ptr, int lb_i, int ub_i, int lb_j, int ub_j,
   a.nk   = ub_k - lb_k + 1;
   a.nl   = ub_l - lb_l + 1;
   return a;
+}
+
+template <class T>
+inline Array5d<T> as_5d(void* ptr, int li, int ui, int lj, int uj,
+                       int lk, int uk, int ll, int ul, int lm, int um) {
+  return {static_cast<T*>(ptr), li, lj, lk, ll, lm,
+          ui-li+1, uj-lj+1, uk-lk+1, ul-ll+1, um-lm+1};
 }
 
 /*

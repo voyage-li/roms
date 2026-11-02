@@ -58,7 +58,10 @@
 !
 !  Local variable declarations.
 !
-      character (len=*), parameter :: MyFile =                          &
+# ifdef KK_PROFILE_STEP3D_T
+      integer(kind=SELECTED_INT_KIND(18)) :: kk_start, kk_end, kk_rate
+# endif
+      character (len=*), parameter :: MyFile = &
      &  __FILE__
 !
 # include "tile.h"
@@ -66,49 +69,60 @@
 # ifdef PROFILE
       CALL wclock_on (ng, iNLM, 35, __LINE__, MyFile)
 # endif
-      CALL step3d_t_tile (ng, tile,                                     &
-     &                    LBi, UBi, LBj, UBj,                           &
-     &                    IminS, ImaxS, JminS, JmaxS,                   &
-     &                    nrhs(ng), nstp(ng), nnew(ng),                 &
+# ifdef KK_PROFILE_STEP3D_T
+      CALL SYSTEM_CLOCK (kk_start, kk_rate)
+# endif
+      CALL step3d_t_tile (ng, tile, &
+     &                    LBi, UBi, LBj, UBj, &
+     &                    IminS, ImaxS, JminS, JmaxS, &
+     &                    nrhs(ng), nstp(ng), nnew(ng), &
 # ifdef MASKING
-     &                    GRID(ng) % rmask,                             &
-     &                    GRID(ng) % umask,                             &
-     &                    GRID(ng) % vmask,                             &
+     &                    GRID(ng) % rmask, &
+     &                    GRID(ng) % umask, &
+     &                    GRID(ng) % vmask, &
 # endif
 # ifdef WET_DRY
-     &                    GRID(ng) % rmask_wet,                         &
-     &                    GRID(ng) % umask_wet,                         &
-     &                    GRID(ng) % vmask_wet,                         &
+     &                    GRID(ng) % rmask_wet, &
+     &                    GRID(ng) % umask_wet, &
+     &                    GRID(ng) % vmask_wet, &
 # endif
-     &                    GRID(ng) % omn,                               &
-     &                    GRID(ng) % om_u,                              &
-     &                    GRID(ng) % om_v,                              &
-     &                    GRID(ng) % on_u,                              &
-     &                    GRID(ng) % on_v,                              &
-     &                    GRID(ng) % pm,                                &
-     &                    GRID(ng) % pn,                                &
-     &                    GRID(ng) % Hz,                                &
-     &                    GRID(ng) % Huon,                              &
-     &                    GRID(ng) % Hvom,                              &
-     &                    GRID(ng) % z_r,                               &
-     &                    MIXING(ng) % Akt,                             &
-     &                    OCEAN(ng) % W,                                &
+     &                    GRID(ng) % omn, &
+     &                    GRID(ng) % om_u, &
+     &                    GRID(ng) % om_v, &
+     &                    GRID(ng) % on_u, &
+     &                    GRID(ng) % on_v, &
+     &                    GRID(ng) % pm, &
+     &                    GRID(ng) % pn, &
+     &                    GRID(ng) % Hz, &
+     &                    GRID(ng) % Huon, &
+     &                    GRID(ng) % Hvom, &
+     &                    GRID(ng) % z_r, &
+     &                    MIXING(ng) % Akt, &
+     &                    OCEAN(ng) % W, &
 # ifdef OMEGA_IMPLICIT
-     &                    OCEAN(ng) % Wi,                               &
+     &                    OCEAN(ng) % Wi, &
 # endif
 # ifdef WEC_VF
-     &                    OCEAN(ng) % W_stokes,                         &
+     &                    OCEAN(ng) % W_stokes, &
 # endif
 # if defined SEDIMENT && defined SED_MORPH
-     &                    SEDBED(ng) % bed_thick,                       &
+     &                    SEDBED(ng) % bed_thick, &
 # endif
 # if defined FLOATS && defined FLOAT_VWALK
-     &                    MIXING(ng) % dAktdz,                          &
+     &                    MIXING(ng) % dAktdz, &
 # endif
 # ifdef DIAGNOSTICS_TS
-     &                    DIAGS(ng) % DiaTwrk,                          &
+     &                    DIAGS(ng) % DiaTwrk, &
 # endif
      &                    OCEAN(ng) % t)
+# ifdef KK_PROFILE_STEP3D_T
+      CALL SYSTEM_CLOCK (kk_end)
+      IF (kk_rate.gt.0) THEN
+        WRITE (*,'(a,i0,a,i0,a,f14.8)')                               &
+     &    'step3d_t module wall ng=', ng, ' tile=', tile, ': ', &
+     &    REAL(kk_end-kk_start,r8)/REAL(kk_rate,r8)
+      END IF
+# endif
 # ifdef PROFILE
       CALL wclock_off (ng, iNLM, 35, __LINE__, MyFile)
 # endif
@@ -117,36 +131,36 @@
       END SUBROUTINE step3d_t
 !
 !***********************************************************************
-      SUBROUTINE step3d_t_tile (ng, tile,                               &
-     &                          LBi, UBi, LBj, UBj,                     &
-     &                          IminS, ImaxS, JminS, JmaxS,             &
-     &                          nrhs, nstp, nnew,                       &
+      SUBROUTINE step3d_t_tile (ng, tile, &
+     &                          LBi, UBi, LBj, UBj, &
+     &                          IminS, ImaxS, JminS, JmaxS, &
+     &                          nrhs, nstp, nnew, &
 # ifdef MASKING
-     &                          rmask, umask, vmask,                    &
+     &                          rmask, umask, vmask, &
 # endif
 # ifdef WET_DRY
-     &                          rmask_wet, umask_wet, vmask_wet,        &
+     &                          rmask_wet, umask_wet, vmask_wet, &
 # endif
-     &                          omn, om_u, om_v, on_u, on_v,            &
-     &                          pm, pn,                                 &
-     &                          Hz, Huon, Hvom,                         &
-     &                          z_r,                                    &
-     &                          Akt,                                    &
-     &                          W,                                      &
+     &                          omn, om_u, om_v, on_u, on_v, &
+     &                          pm, pn, &
+     &                          Hz, Huon, Hvom, &
+     &                          z_r, &
+     &                          Akt, &
+     &                          W, &
 # ifdef OMEGA_IMPLICIT
-     &                          Wi,                                     &
+     &                          Wi, &
 # endif
 # ifdef WEC_VF
-     &                          W_stokes,                               &
+     &                          W_stokes, &
 # endif
 # if defined SEDIMENT && defined SED_MORPH
-     &                          bed_thick,                              &
+     &                          bed_thick, &
 # endif
 # if defined FLOATS && defined FLOAT_VWALK
-     &                          dAktdz,                                 &
+     &                          dAktdz, &
 # endif
 # ifdef DIAGNOSTICS_TS
-     &                          DiaTwrk,                                &
+     &                          DiaTwrk, &
 # endif
      &                          t)
 !***********************************************************************
@@ -159,6 +173,11 @@
 # endif
       USE mod_scalars
       USE mod_sources
+# if defined ROMS_KOKKOS && defined KK_STAGE_STEP3D_T && \
+     defined SPLINES_VDIFF && defined DIAGNOSTICS_TS
+      USE kokkos_step3d_t_mod
+      USE, INTRINSIC :: iso_c_binding, ONLY : C_LOC, C_INT
+# endif
 !
       USE exchange_3d_mod, ONLY : exchange_r3d_tile
 # ifdef DISTRIBUTE
@@ -194,18 +213,18 @@
       real(r8), intent(in) :: om_v(LBi:,LBj:)
       real(r8), intent(in) :: on_u(LBi:,LBj:)
       real(r8), intent(in) :: on_v(LBi:,LBj:)
-      real(r8), intent(in) :: pm(LBi:,LBj:)
-      real(r8), intent(in) :: pn(LBi:,LBj:)
-      real(r8), intent(in) :: Hz(LBi:,LBj:,:)
-      real(r8), intent(in) :: Huon(LBi:,LBj:,:)
-      real(r8), intent(in) :: Hvom(LBi:,LBj:,:)
-      real(r8), intent(in) :: z_r(LBi:,LBj:,:)
+      real(r8), TARGET, intent(in) :: pm(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: pn(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: Hz(LBi:,LBj:,:)
+      real(r8), TARGET, intent(in) :: Huon(LBi:,LBj:,:)
+      real(r8), TARGET, intent(in) :: Hvom(LBi:,LBj:,:)
+      real(r8), TARGET, intent(in) :: z_r(LBi:,LBj:,:)
 #  ifdef SUN
-      real(r8), intent(in) :: Akt(LBi:UBi,LBj:UBj,0:N(ng),NAT)
+      real(r8), TARGET, intent(in) :: Akt(LBi:UBi,LBj:UBj,0:N(ng),NAT)
 #  else
-      real(r8), intent(in) :: Akt(LBi:,LBj:,0:,:)
+      real(r8), TARGET, intent(in) :: Akt(LBi:,LBj:,0:,:)
 #  endif
-      real(r8), intent(in) :: W(LBi:,LBj:,0:)
+      real(r8), TARGET, intent(in) :: W(LBi:,LBj:,0:)
 #  ifdef OMEGA_IMPLICIT
       real(r8), intent(in) :: Wi(LBi:,LBj:,0:)
 #  endif
@@ -216,12 +235,13 @@
       real(r8), intent(in) :: bed_thick(LBi:,LBj:,:)
 #  endif
 #  ifdef DIAGNOSTICS_TS
-      real(r8), intent(inout) :: DiaTwrk(LBi:,LBj:,:,:,:)
+      real(r8), TARGET, intent(inout) :: DiaTwrk(LBi:,LBj:,:,:,:)
 #  endif
 #  ifdef SUN
-      real(r8), intent(inout) :: t(LBi:UBi,LBj:UBj,N(ng),3,NT(ng))
+      real(r8), TARGET, intent(inout) :: t(LBi:UBi,LBj:UBj,N(ng),3, &
+     &  NT(ng))
 #  else
-      real(r8), intent(inout) :: t(LBi:,LBj:,:,:,:)
+      real(r8), TARGET, intent(inout) :: t(LBi:,LBj:,:,:,:)
 #  endif
 #  if defined FLOATS && defined FLOAT_VWALK
       real(r8), intent(out) :: dAktdz(LBi:,LBj:,:)
@@ -244,14 +264,14 @@
       real(r8), intent(in) :: om_v(LBi:UBi,LBj:UBj)
       real(r8), intent(in) :: on_u(LBi:UBi,LBj:UBj)
       real(r8), intent(in) :: on_v(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: pm(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: pn(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: Hz(LBi:UBi,LBj:UBj,N(ng))
-      real(r8), intent(in) :: Huon(LBi:UBi,LBj:UBj,N(ng))
-      real(r8), intent(in) :: Hvom(LBi:UBi,LBj:UBj,N(ng))
-      real(r8), intent(in) :: z_r(LBi:UBi,LBj:UBj,N(ng))
-      real(r8), intent(in) :: Akt(LBi:UBi,LBj:UBj,0:N(ng),NAT)
-      real(r8), intent(in) :: W(LBi:UBi,LBj:UBj,0:N(ng))
+      real(r8), TARGET, intent(in) :: pm(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: pn(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: Hz(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), TARGET, intent(in) :: Huon(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), TARGET, intent(in) :: Hvom(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), TARGET, intent(in) :: z_r(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), TARGET, intent(in) :: Akt(LBi:UBi,LBj:UBj,0:N(ng),NAT)
+      real(r8), TARGET, intent(in) :: W(LBi:UBi,LBj:UBj,0:N(ng))
 #  ifdef OMEGA_IMPLICIT
       real(r8), intent(in) :: Wi(LBi:UBi,LBj:UBj,0:N(ng))
 #  endif
@@ -262,10 +282,12 @@
       real(r8), intent(in) :: bed_thick(LBi:UBi,LBj:UBj,3)
 #  endif
 #  ifdef DIAGNOSTICS_TS
-      real(r8), intent(inout) :: DiaTwrk(LBi:UBi,LBj:UBj,N(ng),NT(ng),  &
+      real(r8), TARGET, intent(inout) :: DiaTwrk(LBi:UBi,LBj:UBj, &
+     &  N(ng),NT(ng), &
      &                                   NDT)
 #  endif
-      real(r8), intent(inout) :: t(LBi:UBi,LBj:UBj,N(ng),3,NT(ng))
+      real(r8), TARGET, intent(inout) :: t(LBi:UBi,LBj:UBj,N(ng),3, &
+     &  NT(ng))
 
 #  if defined FLOATS && defined FLOAT_VWALK
       real(r8), intent(out) :: dAktdz(LBi:UBi,LBj:UBj,N(ng))
@@ -275,6 +297,13 @@
 !  Local variable declarations.
 !
       logical :: LapplySrc, Lhsimt, Lmpdata
+# if defined ROMS_KOKKOS && defined KK_STAGE_STEP3D_T && \
+     defined SPLINES_VDIFF && defined DIAGNOSTICS_TS
+      TYPE(kokkos_tracer_config) :: kk_config
+      integer(C_INT) :: kk_schemes(NT(ng))
+      logical :: kk_eligible
+      integer, save :: kk_fast_calls=0, kk_fallback_calls=0
+# endif
 !
 # ifdef NESTING
       integer :: ILB, IUB, JLB, JUB
@@ -343,9 +372,9 @@
 !  Time-step horizontal advection term.
 !-----------------------------------------------------------------------
 !
-      Lhsimt =ANY(Hadvection(:,ng)%HSIMT).and.                          &
+      Lhsimt =ANY(Hadvection(:,ng)%HSIMT).and. &
      &        ANY(Vadvection(:,ng)%HSIMT)
-      Lmpdata=ANY(Hadvection(:,ng)%MPDATA).and.                         &
+      Lmpdata=ANY(Hadvection(:,ng)%MPDATA).and. &
      &        ANY(Vadvection(:,ng)%MPDATA)
 !
 !  Allocate local arrays for MPDATA.
@@ -381,6 +410,112 @@
 !
 !  Compute reciprocal thickness, 1/Hz.
 !
+# if defined ROMS_KOKKOS && defined KK_STAGE_STEP3D_T && \
+     defined SPLINES_VDIFF && defined DIAGNOSTICS_TS
+      kk_eligible=.FALSE.
+#  if defined SPLINES_VDIFF && defined DIAGNOSTICS_TS && \
+     !defined OMEGA_IMPLICIT && !defined WEC_VF && !defined NESTING && \
+     !defined MASKING && !defined WET_DRY && \
+     !(defined SEDIMENT && defined SED_MORPH)
+      kk_eligible=(nnew.ge.1).and.(nnew.le.2).and.(N(ng).ge.3).and. &
+     &            (.not.LuvSrc(ng)).and.(.not.LwSrc(ng))
+      kk_eligible=kk_eligible.and.kk_is_contiguous(t).and. &
+     &            kk_is_contiguous(DiaTwrk).and. &
+     &  kk_is_contiguous(Hz).and. &
+     &            kk_is_contiguous(Huon).and. &
+     &  kk_is_contiguous(Hvom).and. &
+     &            kk_is_contiguous(Akt).and.kk_is_contiguous(W).and. &
+     &            kk_is_contiguous(z_r).and.kk_is_contiguous(pm).and. &
+     &            kk_is_contiguous(pn)
+!  Physical closed-edge folds need one cell; interior/periodic faces
+!  need the full two-cell stencil.
+      kk_eligible=kk_eligible.and.(LBi.le.Istr-2+MERGE(1,0,           &
+     &  DOMAIN(ng)%Western_Edge(tile).and..not.EWperiodic(ng).and.     &
+     &  .not.CompositeGrid(iwest,ng))).and.                          &
+     &  (UBi.ge.Iend+2-MERGE(1,0,                                   &
+     &  DOMAIN(ng)%Eastern_Edge(tile).and..not.EWperiodic(ng).and.     &
+     &  .not.CompositeGrid(ieast,ng))).and.                          &
+     &  (LBj.le.Jstr-2+MERGE(1,0,                                    &
+     &  DOMAIN(ng)%Southern_Edge(tile).and..not.NSperiodic(ng).and.    &
+     &  .not.CompositeGrid(isouth,ng))).and.                         &
+     &  (UBj.ge.Jend+2-MERGE(1,0,                                    &
+     &  DOMAIN(ng)%Northern_Edge(tile).and..not.NSperiodic(ng).and.    &
+     &  .not.CompositeGrid(inorth,ng)))
+      DO itrc=1,NT(ng)
+        kk_schemes(itrc)=-1
+        IF (Hadvection(itrc,ng)%UPSTREAM3.and.                         &
+     &      Vadvection(itrc,ng)%CENTERED4) kk_schemes(itrc)=0
+        IF (Hadvection(itrc,ng)%HSIMT.and.                             &
+     &      Vadvection(itrc,ng)%HSIMT) kk_schemes(itrc)=1
+        IF (kk_schemes(itrc).lt.0) kk_eligible=.FALSE.
+      END DO
+#  endif
+      IF (kk_eligible) THEN
+        kk_config%LBi=LBi
+        kk_config%UBi=UBi
+        kk_config%LBj=LBj
+        kk_config%UBj=UBj
+        kk_config%Istr=Istr
+        kk_config%Iend=Iend
+        kk_config%Jstr=Jstr
+        kk_config%Jend=Jend
+        kk_config%N=N(ng)
+        kk_config%NT=NT(ng)
+        kk_config%NAT=NAT
+        kk_config%NDT=NDT
+        kk_config%nnew=nnew
+        kk_config%xadv=iTxadv
+        kk_config%yadv=iTyadv
+        kk_config%hadv=iThadv
+        kk_config%vadv=iTvadv
+        kk_config%vdif=iTvdif
+        kk_config%west=MERGE(1,0,DOMAIN(ng)%Western_Edge(tile))
+        kk_config%east=MERGE(1,0,DOMAIN(ng)%Eastern_Edge(tile))
+        kk_config%south=MERGE(1,0,DOMAIN(ng)%Southern_Edge(tile))
+        kk_config%north=MERGE(1,0,DOMAIN(ng)%Northern_Edge(tile))
+        kk_config%periodic_ew=MERGE(1,0,EWperiodic(ng))
+        kk_config%periodic_ns=MERGE(1,0,NSperiodic(ng))
+        kk_config%composite_w=MERGE(1,0,CompositeGrid(iwest,ng))
+        kk_config%composite_e=MERGE(1,0,CompositeGrid(ieast,ng))
+        kk_config%composite_s=MERGE(1,0,CompositeGrid(isouth,ng))
+        kk_config%composite_n=MERGE(1,0,CompositeGrid(inorth,ng))
+        kk_config%dt=dt(ng)
+        kk_config%cc1=cc1
+        kk_config%cc2=cc2
+        kk_config%cc3=cc3
+!
+!  Preserve the HSIMT prologue exchanges before any accelerated writes.
+!
+        DO itrc=1,NT(ng)
+          IF (kk_schemes(itrc).eq.1) THEN
+            IF (EWperiodic(ng).or.NSperiodic(ng)) THEN
+              CALL exchange_r3d_tile (ng, tile,                       &
+     &                                LBi, UBi, LBj, UBj, 1, N(ng),   &
+     &                                t(:,:,:,nnew,itrc))
+            END IF
+#  ifdef DISTRIBUTE
+            CALL mp_exchange3d (ng, tile, iNLM, 1,                    &
+     &                          LBi, UBi, LBj, UBj, 1, N(ng),          &
+     &                          NghostPoints,                         &
+     &                          EWperiodic(ng), NSperiodic(ng),        &
+     &                          t(:,:,:,nnew,itrc))
+#  endif
+          END IF
+        END DO
+        CALL k_step3d_t (kk_config, kk_schemes, C_LOC(pm), C_LOC(pn),  &
+     &                   C_LOC(Hz), C_LOC(Huon), C_LOC(Hvom),          &
+     &                   C_LOC(W), C_LOC(z_r), C_LOC(Akt),            &
+     &                   C_LOC(t), C_LOC(DiaTwrk))
+        kk_fast_calls=kk_fast_calls+1
+        WRITE (*,'(a,i0,a,i0)') 'step3d_t accelerated calls=', &
+     &                         kk_fast_calls, ' tile=', tile
+      ELSE
+        kk_fallback_calls=kk_fallback_calls+1
+        IF (kk_fallback_calls.eq.1) THEN
+          WRITE (*,'(a)') 'step3d_t: whole-tile Fortran fallback '// &
+     &      '(scheme, physics, layout, halo or time-level guard)'
+        END IF
+# endif
       IF (Lmpdata.or.Lhsimt) THEN
         DO k=1,N(ng)
           DO j=Jstrm2,Jendp2
@@ -408,19 +543,19 @@
 !  exchange boundary data on t(:,:,:,nnew,:) so other processes computed
 !  earlier (horizontal diffusion, biology, or sediment) are accounted.
 !
-        IF ((Hadvection(itrc,ng)%MPDATA).or.                            &
+        IF ((Hadvection(itrc,ng)%MPDATA).or. &
      &      (Hadvection(itrc,ng)%HSIMT)) THEN
           IF (EWperiodic(ng).or.NSperiodic(ng)) THEN
-            CALL exchange_r3d_tile (ng, tile,                           &
-     &                              LBi, UBi, LBj, UBj, 1, N(ng),       &
+            CALL exchange_r3d_tile (ng, tile, &
+     &                              LBi, UBi, LBj, UBj, 1, N(ng), &
      &                              t(:,:,:,nnew,itrc))
           END IF
 
 # ifdef DISTRIBUTE
-          CALL mp_exchange3d (ng, tile, iNLM, 1,                        &
-     &                        LBi, UBi, LBj, UBj, 1, N(ng),             &
-     &                        NghostPoints,                             &
-     &                        EWperiodic(ng), NSperiodic(ng),           &
+          CALL mp_exchange3d (ng, tile, iNLM, 1, &
+     &                        LBi, UBi, LBj, UBj, 1, N(ng), &
+     &                        NghostPoints, &
+     &                        EWperiodic(ng), NSperiodic(ng), &
      &                        t(:,:,:,nnew,itrc))
 # endif
         END IF
@@ -435,15 +570,15 @@
 !
             DO j=Jstr,Jend
               DO i=Istr,Iend+1
-                FX(i,j)=Huon(i,j,k)*                                    &
-     &                  0.5_r8*(t(i-1,j,k,3,itrc)+                      &
+                FX(i,j)=Huon(i,j,k)* &
+     &                  0.5_r8*(t(i-1,j,k,3,itrc)+ &
      &                          t(i  ,j,k,3,itrc))
               END DO
             END DO
             DO j=Jstr,Jend+1
               DO i=Istr,Iend
-                FE(i,j)=Hvom(i,j,k)*                                    &
-     &                  0.5_r8*(t(i,j-1,k,3,itrc)+                      &
+                FE(i,j)=Hvom(i,j,k)* &
+     &                  0.5_r8*(t(i,j-1,k,3,itrc)+ &
      &                          t(i,j  ,k,3,itrc))
               END DO
             END DO
@@ -456,7 +591,7 @@
               DO i=IstrUm2,Iendp3
                 cff1=MAX(Huon(i,j,k),0.0_r8)
                 cff2=MIN(Huon(i,j,k),0.0_r8)
-                FX(i,j)=cff1*t(i-1,j,k,3,itrc)+                         &
+                FX(i,j)=cff1*t(i-1,j,k,3,itrc)+ &
      &                  cff2*t(i  ,j,k,3,itrc)
               END DO
             END DO
@@ -464,7 +599,7 @@
               DO i=IstrUm2,Iendp2i
                 cff1=MAX(Hvom(i,j,k),0.0_r8)
                 cff2=MIN(Hvom(i,j,k),0.0_r8)
-                FE(i,j)=cff1*t(i,j-1,k,3,itrc)+                         &
+                FE(i,j)=cff1*t(i,j-1,k,3,itrc)+ &
      &                  cff2*t(i,j  ,k,3,itrc)
               END DO
             END DO
@@ -482,7 +617,7 @@
 !
             DO j=Jstr,Jend
               DO i=IstrU-1,Iendp2
-                cff=0.125_r8*(pm(i-1,j)+pm(i,j))*(pn(i-1,j)+pn(i,j))*   &
+                cff=0.125_r8*(pm(i-1,j)+pm(i,j))*(pn(i-1,j)+pn(i,j))* &
      &              dt(ng)
                 cff1=cff*(oHz(i-1,j,k)+oHz(i,j,k))
                 gradX(i)=t(i,j,k,3,itrc)-t(i-1,j,k,3,itrc)
@@ -523,8 +658,8 @@
                   a1= cc1*KaX(i)+cc2-cc3*oKaX(i)
                   b1=-cc1*KaX(i)+cc2+cc3*oKaX(i)
                   betaL=a1+b1*rL
-                  cff=0.5_r8*MAX(0.0_r8,                                &
-     &                           MIN(2.0_r8, 2.0_r8*rL*rkaL, betaL))*   &
+                  cff=0.5_r8*MAX(0.0_r8, &
+     &                           MIN(2.0_r8, 2.0_r8*rL*rkaL, betaL))* &
      &                gradX(i)*KaX(i)
 # ifdef MASKING
                   ii=MAX(i-2,0)
@@ -542,8 +677,8 @@
                   a1= cc1*KaX(i)+cc2-cc3*oKaX(i)
                   b1=-cc1*KaX(i)+cc2+cc3*oKaX(i)
                   betaR=a1+b1*rR
-                  cff=0.5_r8*MAX(0.0_r8,                                &
-     &                           MIN(2.0_r8, 2.0_r8*rR*rkaR, betaR))*   &
+                  cff=0.5_r8*MAX(0.0_r8, &
+     &                           MIN(2.0_r8, 2.0_r8*rR*rkaR, betaR))* &
      &                gradX(i)*KaX(i)
 # ifdef MASKING
                   ii=MIN(i+1,Lm(ng)+1)
@@ -557,7 +692,7 @@
 !
             DO i=Istr,Iend
               DO j=JstrV-1,Jendp2
-                cff=0.125_r8*(pn(i,j)+pn(i,j-1))*(pm(i,j)+pm(i,j-1))*   &
+                cff=0.125_r8*(pn(i,j)+pn(i,j-1))*(pm(i,j)+pm(i,j-1))* &
      &              dt(ng)
                 cff1=cff*(oHz(i,j,k)+oHz(i,j-1,k))
                 gradE(j)=t(i,j,k,3,itrc)-t(i,j-1,k,3,itrc)
@@ -598,8 +733,8 @@
                   a1= cc1*KaE(j)+cc2-cc3*oKaE(j)
                   b1=-cc1*KaE(j)+cc2+cc3*oKaE(j)
                   betaD=a1+b1*rD
-                  cff=0.5_r8*MAX(0.0_r8,                                &
-     &                           MIN(2.0_r8, 2.0_r8*rD*rkaD, betaD))*   &
+                  cff=0.5_r8*MAX(0.0_r8, &
+     &                           MIN(2.0_r8, 2.0_r8*rD*rkaD, betaD))* &
      &                gradE(j)*KaE(j)
 # ifdef MASKING
                   jj=MAX(j-2,0)
@@ -617,8 +752,8 @@
                   a1= cc1*KaE(j)+cc2-cc3*oKaE(j)
                   b1=-cc1*KaE(j)+cc2+cc3*oKaE(j)
                   betaU=a1+b1*rU
-                  cff=0.5*MAX(0.0_r8,                                   &
-     &                        MIN(2.0_r8, 2.0_r8*rU*rkaU, betaU))*      &
+                  cff=0.5*MAX(0.0_r8, &
+     &                        MIN(2.0_r8, 2.0_r8*rU*rkaU, betaU))* &
      &                gradE(j)*KaE(j)
 # ifdef MASKING
                   jj=MIN(j+1,Mm(ng)+1)
@@ -630,9 +765,9 @@
               END DO
             END DO
 !
-          ELSE IF ((Hadvection(itrc,ng)%AKIMA4).or.                     &
-     &             (Hadvection(itrc,ng)%CENTERED4).or.                  &
-     &             (Hadvection(itrc,ng)%SPLIT_U3).or.                   &
+          ELSE IF ((Hadvection(itrc,ng)%AKIMA4).or. &
+     &             (Hadvection(itrc,ng)%CENTERED4).or. &
+     &             (Hadvection(itrc,ng)%SPLIT_U3).or. &
      &             (Hadvection(itrc,ng)%UPSTREAM3)) THEN
 !
 !  Fourth-order Akima, fourth-order centered differences, or third-order
@@ -640,7 +775,7 @@
 !
             DO j=Jstr,Jend
               DO i=Istrm1,Iendp2
-                FX(i,j)=t(i  ,j,k,3,itrc)-                              &
+                FX(i,j)=t(i  ,j,k,3,itrc)- &
      &                  t(i-1,j,k,3,itrc)
 # ifdef MASKING
                 FX(i,j)=FX(i,j)*umask(i,j)
@@ -673,7 +808,7 @@
                   ELSE
                     grad(i,j)=0.0_r8
                   END IF
-                ELSE IF ((Hadvection(itrc,ng)%CENTERED4).or.            &
+                ELSE IF ((Hadvection(itrc,ng)%CENTERED4).or. &
      &                   (Hadvection(itrc,ng)%SPLIT_U3)) THEN
                   grad(i,j)=0.5_r8*(FX(i+1,j)+FX(i,j))
                 END IF
@@ -685,18 +820,18 @@
             DO j=Jstr,Jend
               DO i=Istr,Iend+1
                 IF (Hadvection(itrc,ng)%UPSTREAM3) THEN
-                  FX(i,j)=Huon(i,j,k)*0.5_r8*                           &
-     &                    (t(i-1,j,k,3,itrc)+                           &
-     &                     t(i  ,j,k,3,itrc))-                          &
-     &                    cff1*(curv(i-1,j)*MAX(Huon(i,j,k),0.0_r8)+    &
+                  FX(i,j)=Huon(i,j,k)*0.5_r8* &
+     &                    (t(i-1,j,k,3,itrc)+ &
+     &                     t(i  ,j,k,3,itrc))- &
+     &                    cff1*(curv(i-1,j)*MAX(Huon(i,j,k),0.0_r8)+ &
      &                          curv(i  ,j)*MIN(Huon(i,j,k),0.0_r8))
-                ELSE IF ((Hadvection(itrc,ng)%AKIMA4).or.               &
-     &                   (Hadvection(itrc,ng)%CENTERED4).or.            &
+                ELSE IF ((Hadvection(itrc,ng)%AKIMA4).or. &
+     &                   (Hadvection(itrc,ng)%CENTERED4).or. &
      &                   (Hadvection(itrc,ng)%SPLIT_U3)) THEN
-                  FX(i,j)=Huon(i,j,k)*0.5_r8*                           &
-     &                    (t(i-1,j,k,3,itrc)+                           &
-     &                     t(i  ,j,k,3,itrc)-                           &
-     &                     cff2*(grad(i  ,j)-                           &
+                  FX(i,j)=Huon(i,j,k)*0.5_r8* &
+     &                    (t(i-1,j,k,3,itrc)+ &
+     &                     t(i  ,j,k,3,itrc)- &
+     &                     cff2*(grad(i  ,j)- &
      &                           grad(i-1,j)))
                 END IF
               END DO
@@ -704,7 +839,7 @@
 !
             DO j=Jstrm1,Jendp2
               DO i=Istr,Iend
-                FE(i,j)=t(i,j  ,k,3,itrc)-                              &
+                FE(i,j)=t(i,j  ,k,3,itrc)- &
      &                  t(i,j-1,k,3,itrc)
 # ifdef MASKING
                 FE(i,j)=FE(i,j)*vmask(i,j)
@@ -737,7 +872,7 @@
                   ELSE
                     grad(i,j)=0.0_r8
                   END IF
-                ELSE IF ((Hadvection(itrc,ng)%CENTERED4).or.            &
+                ELSE IF ((Hadvection(itrc,ng)%CENTERED4).or. &
      &                   (Hadvection(itrc,ng)%SPLIT_U3)) THEN
                   grad(i,j)=0.5_r8*(FE(i,j+1)+FE(i,j))
                 END IF
@@ -749,18 +884,18 @@
             DO j=Jstr,Jend+1
               DO i=Istr,Iend
                 IF (Hadvection(itrc,ng)%UPSTREAM3) THEN
-                  FE(i,j)=Hvom(i,j,k)*0.5_r8*                           &
-     &                    (t(i,j-1,k,3,itrc)+                           &
-     &                     t(i,j  ,k,3,itrc))-                          &
-     &                    cff1*(curv(i,j-1)*MAX(Hvom(i,j,k),0.0_r8)+    &
+                  FE(i,j)=Hvom(i,j,k)*0.5_r8* &
+     &                    (t(i,j-1,k,3,itrc)+ &
+     &                     t(i,j  ,k,3,itrc))- &
+     &                    cff1*(curv(i,j-1)*MAX(Hvom(i,j,k),0.0_r8)+ &
      &                          curv(i,j  )*MIN(Hvom(i,j,k),0.0_r8))
-                ELSE IF ((Hadvection(itrc,ng)%AKIMA4).or.               &
-     &                   (Hadvection(itrc,ng)%CENTERED4).or.            &
+                ELSE IF ((Hadvection(itrc,ng)%AKIMA4).or. &
+     &                   (Hadvection(itrc,ng)%CENTERED4).or. &
      &                   (Hadvection(itrc,ng)%SPLIT_U3)) THEN
-                  FE(i,j)=Hvom(i,j,k)*0.5_r8*                           &
-     &                    (t(i,j-1,k,3,itrc)+                           &
-     &                     t(i,j  ,k,3,itrc)-                           &
-     &                     cff2*(grad(i,j  )-                           &
+                  FE(i,j)=Hvom(i,j,k)*0.5_r8* &
+     &                    (t(i,j-1,k,3,itrc)+ &
+     &                     t(i,j  ,k,3,itrc)- &
+     &                     cff2*(grad(i,j  )- &
      &                           grad(i,j-1)))
                 END IF
               END DO
@@ -778,62 +913,62 @@
               Isrc=SOURCES(ng)%Isrc(is)
               Jsrc=SOURCES(ng)%Jsrc(is)
               IF (INT(SOURCES(ng)%Dsrc(is)).eq.0) THEN
-                IF ((Hadvection(itrc,ng)%MPDATA).or.                    &
+                IF ((Hadvection(itrc,ng)%MPDATA).or. &
      &              (Hadvection(itrc,ng)%HSIMT)) THEN
-                  LapplySrc=(IstrUm2.le.Isrc).and.                      &
-     &                      (Isrc.le.Iendp3).and.                       &
-     &                      (JstrVm2.le.Jsrc).and.                      &
+                  LapplySrc=(IstrUm2.le.Isrc).and. &
+     &                      (Isrc.le.Iendp3).and. &
+     &                      (JstrVm2.le.Jsrc).and. &
      &                      (Jsrc.le.Jendp2i)
                 ELSE
-                  LapplySrc=(Istr.le.Isrc).and.                         &
-     &                      (Isrc.le.Iend+1).and.                       &
-     &                      (Jstr.le.Jsrc).and.                         &
+                  LapplySrc=(Istr.le.Isrc).and. &
+     &                      (Isrc.le.Iend+1).and. &
+     &                      (Jstr.le.Jsrc).and. &
      &                      (Jsrc.le.Jend)
                 END IF
                 IF (LapplySrc) THEN
                   IF (LtracerSrc(itrc,ng)) THEN
-                    FX(Isrc,Jsrc)=Huon(Isrc,Jsrc,k)*                    &
+                    FX(Isrc,Jsrc)=Huon(Isrc,Jsrc,k)* &
      &                            SOURCES(ng)%Tsrc(is,k,itrc)
 # ifdef MASKING
                   ELSE
-                    IF ((rmask(Isrc  ,Jsrc).eq.0.0_r8).and.             &
+                    IF ((rmask(Isrc  ,Jsrc).eq.0.0_r8).and. &
      &                  (rmask(Isrc-1,Jsrc).eq.1.0_r8)) THEN
-                      FX(Isrc,Jsrc)=Huon(Isrc,Jsrc,k)*                  &
+                      FX(Isrc,Jsrc)=Huon(Isrc,Jsrc,k)* &
      &                              t(Isrc-1,Jsrc,k,3,itrc)
-                    ELSE IF ((rmask(Isrc  ,Jsrc).eq.1.0_r8).and.        &
+                    ELSE IF ((rmask(Isrc  ,Jsrc).eq.1.0_r8).and. &
      &                       (rmask(Isrc-1,Jsrc).eq.0.0_r8)) THEN
-                      FX(Isrc,Jsrc)=Huon(Isrc,Jsrc,k)*                  &
+                      FX(Isrc,Jsrc)=Huon(Isrc,Jsrc,k)* &
      &                              t(Isrc  ,Jsrc,k,3,itrc)
                     END IF
 # endif
                   END IF
                 END IF
               ELSE IF (INT(SOURCES(ng)%Dsrc(is)).eq.1) THEN
-                IF ((Hadvection(itrc,ng)%MPDATA).or.                    &
+                IF ((Hadvection(itrc,ng)%MPDATA).or. &
      &              (Hadvection(itrc,ng)%HSIMT)) THEN
-                  LapplySrc=(IstrUm2.le.Isrc).and.                      &
-     &                      (Isrc.le.Iendp2i).and.                      &
-     &                      (JstrVm2.le.Jsrc).and.                      &
+                  LapplySrc=(IstrUm2.le.Isrc).and. &
+     &                      (Isrc.le.Iendp2i).and. &
+     &                      (JstrVm2.le.Jsrc).and. &
      &                      (Jsrc.le.Jendp3)
                 ELSE
-                  LapplySrc=(Istr.le.Isrc).and.                         &
-     &                      (Isrc.le.Iend).and.                         &
-     &                      (Jstr.le.Jsrc).and.                         &
+                  LapplySrc=(Istr.le.Isrc).and. &
+     &                      (Isrc.le.Iend).and. &
+     &                      (Jstr.le.Jsrc).and. &
      &                      (Jsrc.le.Jend+1)
                 END IF
                 IF (LapplySrc) THEN
                   IF (LtracerSrc(itrc,ng)) THEN
-                    FE(Isrc,Jsrc)=Hvom(Isrc,Jsrc,k)*                    &
+                    FE(Isrc,Jsrc)=Hvom(Isrc,Jsrc,k)* &
      &                            SOURCES(ng)%Tsrc(is,k,itrc)
 # ifdef MASKING
                   ELSE
-                    IF ((rmask(Isrc,Jsrc  ).eq.0.0_r8).and.             &
+                    IF ((rmask(Isrc,Jsrc  ).eq.0.0_r8).and. &
      &                  (rmask(Isrc,Jsrc-1).eq.1.0_r8)) THEN
-                      FE(Isrc,Jsrc)=Hvom(Isrc,Jsrc,k)*                  &
+                      FE(Isrc,Jsrc)=Hvom(Isrc,Jsrc,k)* &
      &                              t(Isrc,Jsrc-1,k,3,itrc)
-                    ELSE IF ((rmask(Isrc,Jsrc  ).eq.1.0_r8).and.        &
+                    ELSE IF ((rmask(Isrc,Jsrc  ).eq.1.0_r8).and. &
      &                       (rmask(Isrc,Jsrc-1).eq.0.0_r8)) THEN
-                      FE(Isrc,Jsrc)=Hvom(Isrc,Jsrc,k)*                  &
+                      FE(Isrc,Jsrc)=Hvom(Isrc,Jsrc,k)* &
      &                              t(Isrc,Jsrc  ,k,3,itrc)
                     END IF
 # endif
@@ -854,13 +989,16 @@
               dg=Rcontact(cr)%donor_grid
               rg=Rcontact(cr)%receiver_grid
               IF (ng.eq.rg) THEN
-                CALL bry_fluxes (dg, rg, cr, iNLM, tile,                &
-     &                           IminS, ImaxS, JminS, JmaxS,            &
-     &                           ILB, IUB, JLB, JUB,                    &
-     &                           dt(ng), FX, FE,                        &
-     &                          BRY_CONTACT(iwest, cr)%Tflux(:,k,itrc), &
-     &                          BRY_CONTACT(ieast, cr)%Tflux(:,k,itrc), &
-     &                          BRY_CONTACT(isouth,cr)%Tflux(:,k,itrc), &
+                CALL bry_fluxes (dg, rg, cr, iNLM, tile, &
+     &                           IminS, ImaxS, JminS, JmaxS, &
+     &                           ILB, IUB, JLB, JUB, &
+     &                           dt(ng), FX, FE, &
+     &                          BRY_CONTACT(iwest, cr)%Tflux(:,k, &
+     &  itrc), &
+     &                          BRY_CONTACT(ieast, cr)%Tflux(:,k, &
+     &  itrc), &
+     &                          BRY_CONTACT(isouth,cr)%Tflux(:,k, &
+     &  itrc), &
      &                          BRY_CONTACT(inorth,cr)%Tflux(:,k,itrc))
               END IF
             END DO
@@ -950,20 +1088,20 @@
             END DO
             DO k=1,N(ng)-1
               DO i=Istr,Iend
-                cff=1.0_r8/(2.0_r8*Hz(i,j,k)+                           &
+                cff=1.0_r8/(2.0_r8*Hz(i,j,k)+ &
      &                      Hz(i,j,k+1)*(2.0_r8-CF(i,k)))
                 CF(i,k+1)=cff*Hz(i,j,k)
-                FC(i,k)=cff*(3.0_r8*(Hz(i,j,k  )*t(i,j,k+1,3,itrc)+     &
-     &                               Hz(i,j,k+1)*t(i,j,k  ,3,itrc))-    &
+                FC(i,k)=cff*(3.0_r8*(Hz(i,j,k  )*t(i,j,k+1,3,itrc)+ &
+     &                               Hz(i,j,k+1)*t(i,j,k  ,3,itrc))- &
      &                       Hz(i,j,k+1)*FC(i,k-1))
               END DO
             END DO
             DO i=Istr,Iend
 # ifdef NEUMANN
-              FC(i,N(ng))=(3.0_r8*t(i,j,N(ng),3,itrc)-FC(i,N(ng)-1))/   &
+              FC(i,N(ng))=(3.0_r8*t(i,j,N(ng),3,itrc)-FC(i,N(ng)-1))/ &
      &                    (2.0_r8-CF(i,N(ng)))
 # else
-              FC(i,N(ng))=(2.0_r8*t(i,j,N(ng),3,itrc)-FC(i,N(ng)-1))/   &
+              FC(i,N(ng))=(2.0_r8*t(i,j,N(ng),3,itrc)-FC(i,N(ng)-1))/ &
      &                    (1.0_r8-CF(i,N(ng)))
 # endif
             END DO
@@ -988,7 +1126,7 @@
 !
             DO k=1,N(ng)-1
               DO i=Istr,Iend
-                FC(i,k)=t(i,j,k+1,3,itrc)-                              &
+                FC(i,k)=t(i,j,k+1,3,itrc)- &
      &                  t(i,j,k  ,3,itrc)
               END DO
             END DO
@@ -1010,12 +1148,12 @@
             DO k=1,N(ng)-1
               DO i=Istr,Iend
 # ifdef WEC_VF
-                FC(i,k)=(W(i,j,k)+W_stokes(i,j,k))*                     &
+                FC(i,k)=(W(i,j,k)+W_stokes(i,j,k))* &
 # else
-                FC(i,k)=W(i,j,k)*                                       &
+                FC(i,k)=W(i,j,k)* &
 # endif
-     &                  0.5_r8*(t(i,j,k  ,3,itrc)+                      &
-     &                          t(i,j,k+1,3,itrc)-                      &
+     &                  0.5_r8*(t(i,j,k  ,3,itrc)+ &
+     &                          t(i,j,k+1,3,itrc)- &
      &                          cff1*(CF(i,k+1)-CF(i,k)))
               END DO
             END DO
@@ -1032,11 +1170,11 @@
             DO k=1,N(ng)-1
               DO i=Istr,Iend
 # ifdef WEC_VF
-                FC(i,k)=(W(i,j,k)+W_stokes(i,j,k))*                     &
+                FC(i,k)=(W(i,j,k)+W_stokes(i,j,k))* &
 # else
-                FC(i,k)=W(i,j,k)*                                       &
+                FC(i,k)=W(i,j,k)* &
 # endif
-     &                  0.5_r8*(t(i,j,k  ,3,itrc)+                      &
+     &                  0.5_r8*(t(i,j,k  ,3,itrc)+ &
      &                          t(i,j,k+1,3,itrc))
               END DO
             END DO
@@ -1059,7 +1197,7 @@
                 cff1=MAX(W(i,j,k),0.0_r8)
                 cff2=MIN(W(i,j,k),0.0_r8)
 # endif
-                FC(i,k)=cff1*t(i,j,k  ,3,itrc)+                         &
+                FC(i,k)=cff1*t(i,j,k  ,3,itrc)+ &
      &                  cff2*t(i,j,k+1,3,itrc)
               END DO
               FC(i,0)=0.0_r8
@@ -1079,10 +1217,10 @@
               DO k=1,N(ng)-1
                 cff=pm(i,j)*pn(i,j)*dt(ng)
 # ifdef WEC_VF
-                KaZ(k)=1.0_r8-ABS(cff*(W(i,j,k)+W_stokes(i,j,k))/       &
+                KaZ(k)=1.0_r8-ABS(cff*(W(i,j,k)+W_stokes(i,j,k))/ &
      &                            (z_r(i,j,k+1)-z_r(i,j,k)))
 # else
-                KaZ(k)=1.0_r8-ABS(cff*W(i,j,k)/                         &
+                KaZ(k)=1.0_r8-ABS(cff*W(i,j,k)/ &
      &                            (z_r(i,j,k+1)-z_r(i,j,k)))
 # endif
                 oKaZ(k)=1.0_r8/KaZ(k)
@@ -1114,8 +1252,9 @@
                     a1= cc1*KaZ(k)+cc2-cc3*oKaZ(k)
                     b1=-cc1*KaZ(k)+cc2+cc3*oKaZ(k)
                     betaD=a1+b1*rD
-                    cff=0.5_r8*MAX(0.0_r8,                              &
-     &                             MIN(2.0_r8, 2.0_r8*rD*rkaD, betaD))* &
+                    cff=0.5_r8*MAX(0.0_r8, &
+     &                             MIN(2.0_r8, 2.0_r8*rD*rkaD, &
+     &  betaD))* &
      &                  gradZ(k)*KaZ(k)
                     sw=t(i,j,k,3,itrc)+cff
                   ELSE
@@ -1129,8 +1268,9 @@
                     a1= cc1*KaZ(k)+cc2-cc3*oKaZ(k)
                     b1=-cc1*KaZ(k)+cc2+cc3*oKaZ(k)
                     betaU=a1+b1*rU
-                    cff=0.5_r8*MAX(0.0_r8,                              &
-     &                             MIN(2.0_r8, 2.0_r8*rU*rkaU, betaU))* &
+                    cff=0.5_r8*MAX(0.0_r8, &
+     &                             MIN(2.0_r8, 2.0_r8*rU*rkaU, &
+     &  betaU))* &
      &                  gradZ(k)*KaZ(k)
                     sw=t(i,j,k+1,3,itrc)-cff
                   END IF
@@ -1141,7 +1281,7 @@
               FC(i,N(ng))=0.0_r8
             END DO
 !
-          ELSE IF ((Vadvection(itrc,ng)%CENTERED4).or.                  &
+          ELSE IF ((Vadvection(itrc,ng)%CENTERED4).or. &
      &             (Vadvection(itrc,ng)%SPLIT_U3)) THEN
 !
 !  Fourth-order, central differences vertical advective flux
@@ -1153,33 +1293,33 @@
             DO k=2,N(ng)-2
               DO i=Istr,Iend
 # ifdef WEC_VF
-                FC(i,k)=(W(i,j,k)+W_stokes(i,j,k))*                     &
+                FC(i,k)=(W(i,j,k)+W_stokes(i,j,k))* &
 # else
-                FC(i,k)=W(i,j,k)*                                       &
+                FC(i,k)=W(i,j,k)* &
 # endif
-     &                  (cff2*(t(i,j,k  ,3,itrc)+                       &
-     &                         t(i,j,k+1,3,itrc))-                      &
-     &                   cff3*(t(i,j,k-1,3,itrc)+                       &
+     &                  (cff2*(t(i,j,k  ,3,itrc)+ &
+     &                         t(i,j,k+1,3,itrc))- &
+     &                   cff3*(t(i,j,k-1,3,itrc)+ &
      &                         t(i,j,k+2,3,itrc)))
               END DO
             END DO
             DO i=Istr,Iend
               FC(i,0)=0.0_r8
 # ifdef WEC_VF
-              FC(i,1)=(W(i,j,1)+W_stokes(i,j,1))*                       &
+              FC(i,1)=(W(i,j,1)+W_stokes(i,j,1))* &
 # else
-              FC(i,1)=W(i,j,1)*                                         &
+              FC(i,1)=W(i,j,1)* &
 # endif
-     &                (cff1*t(i,j,1,3,itrc)+                            &
-     &                 cff2*t(i,j,2,3,itrc)-                            &
+     &                (cff1*t(i,j,1,3,itrc)+ &
+     &                 cff2*t(i,j,2,3,itrc)- &
      &                 cff3*t(i,j,3,3,itrc))
 # ifdef WEC_VF
-              FC(i,N(ng)-1)=(W(i,j,N(ng)-1)+W_stokes(i,j,N(ng)-1))*     &
+              FC(i,N(ng)-1)=(W(i,j,N(ng)-1)+W_stokes(i,j,N(ng)-1))* &
 # else
-              FC(i,N(ng)-1)=W(i,j,N(ng)-1)*                             &
+              FC(i,N(ng)-1)=W(i,j,N(ng)-1)* &
 # endif
-     &                    (cff1*t(i,j,N(ng)  ,3,itrc)+                  &
-     &                     cff2*t(i,j,N(ng)-1,3,itrc)-                  &
+     &                    (cff1*t(i,j,N(ng)  ,3,itrc)+ &
+     &                     cff2*t(i,j,N(ng)-1,3,itrc)- &
      &                     cff3*t(i,j,N(ng)-2,3,itrc))
               FC(i,N(ng))=0.0_r8
             END DO
@@ -1198,8 +1338,8 @@
                 IF (INT(SOURCES(ng)%Dsrc(is)).eq.2) THEN
                   Isrc=SOURCES(ng)%Isrc(is)
                   Jsrc=SOURCES(ng)%Jsrc(is)
-                  IF (((Istr.le.Isrc).and.(Isrc.le.Iend+1)).and.        &
-     &                 ((Jstr.le.Jsrc).and.(Jsrc.le.Jend+1)).and.       &
+                  IF (((Istr.le.Isrc).and.(Isrc.le.Iend+1)).and. &
+     &                 ((Jstr.le.Jsrc).and.(Jsrc.le.Jend+1)).and. &
      &                 (j.eq.Jsrc)) THEN
                     DO k=1,N(ng)
                       cff=dt(ng)*pm(Isrc,Jsrc)*pn(Isrc,Jsrc)
@@ -1208,8 +1348,9 @@
                       ELSE
                         cff3=t(Isrc,Jsrc,k,3,itrc)
                       END IF
-                      Ta(Isrc,Jsrc,k,itrc)=Ta(Isrc,Jsrc,k,itrc)+        &
-     &                                     cff*SOURCES(ng)%Qsrc(is,k)*  &
+                      Ta(Isrc,Jsrc,k,itrc)=Ta(Isrc,Jsrc,k,itrc)+ &
+     &                                     cff*SOURCES(ng)%Qsrc(is, &
+     &  k)* &
      &                                     cff3
                     END DO
                   END IF
@@ -1357,7 +1498,8 @@
 # ifdef DIAGNOSTICS_TS
                 DiaTwrk(i,j,k,itrc,iTvadv)=-cff1
                 DO idiag=1,NDT
-                  DiaTwrk(i,j,k,itrc,idiag)=DiaTwrk(i,j,k,itrc,idiag)*  &
+                  DiaTwrk(i,j,k,itrc,idiag)=DiaTwrk(i,j,k,itrc, &
+     &  idiag)* &
      &                                      oHz(i,j,k)
                 END DO
 # endif
@@ -1373,27 +1515,27 @@
 !-----------------------------------------------------------------------
 !
       T_LOOP3 : DO itrc=1,NT(ng)
-        MPDATA : IF ((Hadvection(itrc,ng)%MPDATA).and.                  &
+        MPDATA : IF ((Hadvection(itrc,ng)%MPDATA).and. &
      &               (Vadvection(itrc,ng)%MPDATA)) THEN
-          CALL mpdata_adiff_tile (ng, tile,                             &
-     &                            LBi, UBi, LBj, UBj,                   &
-     &                            IminS, ImaxS, JminS, JmaxS,           &
+          CALL mpdata_adiff_tile (ng, tile, &
+     &                            LBi, UBi, LBj, UBj, &
+     &                            IminS, ImaxS, JminS, JmaxS, &
 # ifdef MASKING
-     &                            rmask, umask, vmask,                  &
+     &                            rmask, umask, vmask, &
 # endif
 # ifdef WET_DRY
-     &                            rmask_wet, umask_wet, vmask_wet,      &
+     &                            rmask_wet, umask_wet, vmask_wet, &
 # endif
-     &                            pm, pn, omn, om_u, on_v,              &
-     &                            z_r, oHz,                             &
-     &                            Huon, Hvom, W,                        &
+     &                            pm, pn, omn, om_u, on_v, &
+     &                            z_r, oHz, &
+     &                            Huon, Hvom, W, &
 #  ifdef WEC_VF
-     &                            W_stokes,                             &
+     &                            W_stokes, &
 #  endif
 #  ifdef OMEGA_IMPLICIT
-     &                            Wi,                                   &
+     &                            Wi, &
 #  endif
-     &                            t(:,:,:,3,itrc),                      &
+     &                            t(:,:,:,3,itrc), &
      &                            Ta(:,:,:,itrc),  Ua, Va, Wa)
 !
 !  Compute anti-diffusive corrected advection fluxes.
@@ -1403,8 +1545,8 @@
               DO i=Istr,Iend+1
                 cff1=MAX(Ua(i,j,k),0.0_r8)
                 cff2=MIN(Ua(i,j,k),0.0_r8)
-                FX(i,j)=(cff1*Ta(i-1,j,k,itrc)+                         &
-     &                   cff2*Ta(i  ,j,k,itrc))*                        &
+                FX(i,j)=(cff1*Ta(i-1,j,k,itrc)+ &
+     &                   cff2*Ta(i  ,j,k,itrc))* &
      &                  0.5_r8*(Hz(i,j,k)+Hz(i-1,j,k))*on_u(i,j)
               END DO
             END DO
@@ -1412,8 +1554,8 @@
               DO i=Istr,Iend
                 cff1=MAX(Va(i,j,k),0.0_r8)
                 cff2=MIN(Va(i,j,k),0.0_r8)
-                FE(i,j)=(cff1*Ta(i,j-1,k,itrc)+                         &
-     &                   cff2*Ta(i,j  ,k,itrc))*                        &
+                FE(i,j)=(cff1*Ta(i,j-1,k,itrc)+ &
+     &                   cff2*Ta(i,j  ,k,itrc))* &
      &                  0.5_r8*(Hz(i,j,k)+Hz(i,j-1,k))*om_v(i,j)
               END DO
             END DO
@@ -1428,11 +1570,14 @@
                 cff3=cff1+cff2
                 t(i,j,k,nnew,itrc)=Ta(i,j,k,itrc)*Hz(i,j,k)-cff3
 # ifdef DIAGNOSTICS_TS
-                DiaTwrk(i,j,k,itrc,iTxadv)=DiaTwrk(i,j,k,itrc,iTxadv)-  &
+                DiaTwrk(i,j,k,itrc,iTxadv)=DiaTwrk(i,j,k,itrc, &
+     &  iTxadv)- &
      &                                     cff1
-                DiaTwrk(i,j,k,itrc,iTyadv)=DiaTwrk(i,j,k,itrc,iTyadv)-  &
+                DiaTwrk(i,j,k,itrc,iTyadv)=DiaTwrk(i,j,k,itrc, &
+     &  iTyadv)- &
      &                                     cff2
-                DiaTwrk(i,j,k,itrc,iThadv)=DiaTwrk(i,j,k,itrc,iThadv)-  &
+                DiaTwrk(i,j,k,itrc,iThadv)=DiaTwrk(i,j,k,itrc, &
+     &  iThadv)- &
      &                                     cff3
 # endif
               END DO
@@ -1446,7 +1591,7 @@
               DO i=Istr,Iend
                 cff1=MAX(Wa(i,j,k),0.0_r8)
                 cff2=MIN(Wa(i,j,k),0.0_r8)
-                FC(i,k)=cff1*Ta(i,j,k  ,itrc)+                          &
+                FC(i,k)=cff1*Ta(i,j,k  ,itrc)+ &
      &                  cff2*Ta(i,j,k+1,itrc)
               END DO
             END DO
@@ -1468,10 +1613,11 @@
                 cff1=CF(i,0)*(FC(i,k)-FC(i,k-1))
                 t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)-cff1
 # ifdef DIAGNOSTICS_TS
-                DiaTwrk(i,j,k,itrc,iTvadv)=Dvadv(i,j,k,itrc)-           &
+                DiaTwrk(i,j,k,itrc,iTvadv)=Dvadv(i,j,k,itrc)- &
      &                                     cff1
                 DO idiag=1,NDT
-                  DiaTwrk(i,j,k,itrc,idiag)=DiaTwrk(i,j,k,itrc,idiag)*  &
+                  DiaTwrk(i,j,k,itrc,idiag)=DiaTwrk(i,j,k,itrc, &
+     &  idiag)* &
      &                                      oHz(i,j,k)
                 END DO
 # endif
@@ -1494,13 +1640,13 @@
 !
       IF (LwSrc(ng)) THEN
         DO itrc=1,NT(ng)
-          IF (.not.((Hadvection(itrc,ng)%MPDATA).and.                   &
+          IF (.not.((Hadvection(itrc,ng)%MPDATA).and. &
      &              (Vadvection(itrc,ng)%MPDATA))) THEN
             DO is=1,Nsrc(ng)
              IF (INT(SOURCES(ng)%Dsrc(is)).eq.2) THEN
                 Isrc=SOURCES(ng)%Isrc(is)
                 Jsrc=SOURCES(ng)%Jsrc(is)
-                IF (((Istr.le.Isrc).and.(Isrc.le.Iend+1)).and.          &
+                IF (((Istr.le.Isrc).and.(Isrc.le.Iend+1)).and. &
      &              ((Jstr.le.Jsrc).and.(Jsrc.le.Jend+1))) THEN
                   DO k=1,N(ng)
                     cff=dt(ng)*pm(Isrc,Jsrc)*pn(Isrc,Jsrc)
@@ -1512,8 +1658,10 @@
                     ELSE
                       cff3=t(Isrc,Jsrc,k,3,itrc)
                     END IF
-                    t(Isrc,Jsrc,k,nnew,itrc)=t(Isrc,Jsrc,k,nnew,itrc)+  &
-     &                                       cff*SOURCES(ng)%Qsrc(is,k)*&
+                    t(Isrc,Jsrc,k,nnew,itrc)=t(Isrc,Jsrc,k,nnew, &
+     &  itrc)+ &
+     & &
+     &  cff*SOURCES(ng)%Qsrc(is,k)* &
      &                                       cff3
                   END DO
                 END IF
@@ -1531,7 +1679,7 @@
 !
       cff1=1.0_r8/N(ng)
       DO itrc=1,NT(ng)
-        IF (.not.((Hadvection(itrc,ng)%MPDATA).and.                     &
+        IF (.not.((Hadvection(itrc,ng)%MPDATA).and. &
      &            (Vadvection(itrc,ng)%MPDATA))) THEN
           DO j=Jstr,Jend
             DO k=1,N(ng)
@@ -1541,7 +1689,7 @@
                 cff3=cff3*oHz(i,j,k)
 #  endif
                 cff=cff1*(bed_thick(i,j,nstp)-bed_thick(i,j,3))
-                t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)-                  &
+                t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)- &
      &                             cff*cff3
               END DO
             END DO
@@ -1615,9 +1763,9 @@
 #  ifdef DIAGNOSTICS_TS
               cff1=t(i,j,N(ng),nnew,itrc)*oHz(i,j,N(ng))
 #  endif
-              cff=1.0_r8/(BC(i,N(ng))+                                  &
+              cff=1.0_r8/(BC(i,N(ng))+ &
      &                    FCmax(i,N(ng)-1)*CF(i,N(ng)-1))
-              DC(i,N(ng))=cff*(DC(i,N(ng))+                             &
+              DC(i,N(ng))=cff*(DC(i,N(ng))+ &
      &                         FCmax(i,N(ng)-1)*DC(i,N(ng)-1))
 #  ifdef SPLINES_VDIFF
               t(i,j,N(ng),nnew,itrc)=DC(i,N(ng))
@@ -1625,8 +1773,8 @@
               t(i,j,N(ng),nnew,itrc)=DC(i,N(ng))*Hz(i,j,N(ng))
 #  endif
 #  ifdef DIAGNOSTICS_TS
-              DiaTwrk(i,j,N(ng),itrc,iTvadv)=DiaTwrk(i,j,N(ng),itrc,    &
-     &                                               iTvadv)+           &
+              DiaTwrk(i,j,N(ng),itrc,iTvadv)=DiaTwrk(i,j,N(ng),itrc, &
+     &                                               iTvadv)+ &
      &                                       DC(i,N(ng))-cff1
 #  endif
             END DO
@@ -1643,7 +1791,8 @@
                 t(i,j,k,nnew,itrc)=DC(i,k)*Hz(i,j,k)
 #  endif
 #  ifdef DIAGNOSTICS_TS
-                DiaTwrk(i,j,k,itrc,iTvadv)=DiaTwrk(i,j,k,itrc,iTvadv)+  &
+                DiaTwrk(i,j,k,itrc,iTvadv)=DiaTwrk(i,j,k,itrc, &
+     &  iTvadv)+ &
      &                                     DC(i,k)-cff1
 #  endif
               END DO
@@ -1662,7 +1811,7 @@
           ltrc=MIN(NAT,itrc)
 
 # ifdef SPLINES_VDIFF
-          IF (.not.((Hadvection(itrc,ng)%MPDATA).and.                   &
+          IF (.not.((Hadvection(itrc,ng)%MPDATA).and. &
      &              (Vadvection(itrc,ng)%MPDATA))) THEN
 !
 !  Use conservative, parabolic spline reconstruction of vertical
@@ -1672,9 +1821,9 @@
             cff1=1.0_r8/6.0_r8
             DO k=1,N(ng)-1
               DO i=Istr,Iend
-                FC(i,k)=cff1*Hz(i,j,k  )-                               &
+                FC(i,k)=cff1*Hz(i,j,k  )- &
      &                  dt(ng)*Akt(i,j,k-1,ltrc)*oHz(i,j,k  )
-                CF(i,k)=cff1*Hz(i,j,k+1)-                               &
+                CF(i,k)=cff1*Hz(i,j,k+1)- &
      &                  dt(ng)*Akt(i,j,k+1,ltrc)*oHz(i,j,k+1)
               END DO
             END DO
@@ -1688,11 +1837,11 @@
             cff1=1.0_r8/3.0_r8
             DO k=1,N(ng)-1
               DO i=Istr,Iend
-                BC(i,k)=cff1*(Hz(i,j,k)+Hz(i,j,k+1))+                   &
+                BC(i,k)=cff1*(Hz(i,j,k)+Hz(i,j,k+1))+ &
      &                  dt(ng)*Akt(i,j,k,ltrc)*(oHz(i,j,k)+oHz(i,j,k+1))
                 cff=1.0_r8/(BC(i,k)-FC(i,k)*CF(i,k-1))
                 CF(i,k)=cff*CF(i,k)
-                DC(i,k)=cff*(t(i,j,k+1,nnew,itrc)-t(i,j,k,nnew,itrc)-   &
+                DC(i,k)=cff*(t(i,j,k+1,nnew,itrc)-t(i,j,k,nnew,itrc)- &
      &                       FC(i,k)*DC(i,k-1))
               END DO
             END DO
@@ -1714,7 +1863,8 @@
                 cff1=dt(ng)*oHz(i,j,k)*(DC(i,k)-DC(i,k-1))
                 t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)+cff1
 #  ifdef DIAGNOSTICS_TS
-                DiaTwrk(i,j,k,itrc,iTvdif)=DiaTwrk(i,j,k,itrc,iTvdif)+  &
+                DiaTwrk(i,j,k,itrc,iTvdif)=DiaTwrk(i,j,k,itrc, &
+     &  iTvdif)+ &
      &                                     cff1
 #  endif
               END DO
@@ -1770,12 +1920,12 @@
 # ifdef DIAGNOSTICS_TS
                cff1=t(i,j,N(ng),nnew,itrc)*oHz(i,j,N(ng))
 # endif
-               DC(i,N(ng))=(DC(i,N(ng))-FC(i,N(ng)-1)*DC(i,N(ng)-1))/   &
+               DC(i,N(ng))=(DC(i,N(ng))-FC(i,N(ng)-1)*DC(i,N(ng)-1))/ &
      &                     (BC(i,N(ng))-FC(i,N(ng)-1)*CF(i,N(ng)-1))
                t(i,j,N(ng),nnew,itrc)=DC(i,N(ng))
 # ifdef DIAGNOSTICS_TS
-               DiaTwrk(i,j,N(ng),itrc,iTvdif)=                          &
-     &                              DiaTwrk(i,j,N(ng),itrc,iTvdif)+     &
+               DiaTwrk(i,j,N(ng),itrc,iTvdif)= &
+     &                              DiaTwrk(i,j,N(ng),itrc,iTvdif)+ &
      &                              t(i,j,N(ng),nnew,itrc)-cff1
 # endif
             END DO
@@ -1787,7 +1937,8 @@
                 DC(i,k)=DC(i,k)-CF(i,k)*DC(i,k+1)
                 t(i,j,k,nnew,itrc)=DC(i,k)
 # ifdef DIAGNOSTICS_TS
-                DiaTwrk(i,j,k,itrc,iTvdif)=DiaTwrk(i,j,k,itrc,iTvdif)+  &
+                DiaTwrk(i,j,k,itrc,iTvdif)=DiaTwrk(i,j,k,itrc, &
+     &  iTvdif)+ &
      &                                     t(i,j,k,nnew,itrc)-cff1
 # endif
               END DO
@@ -1797,6 +1948,11 @@
 # endif
         END DO
       END DO J_LOOP2
+
+# if defined ROMS_KOKKOS && defined KK_STAGE_STEP3D_T && \
+     defined SPLINES_VDIFF && defined DIAGNOSTICS_TS
+      END IF
+# endif
 
 # if defined AGE_MEAN && defined T_PASSIVE
 !
@@ -1819,12 +1975,12 @@
         DO k=1,N(ng)
           DO j=Jstr,Jend
             DO i=Istr,Iend
-              IF ((Hadvection(inert(itrc),ng)%MPDATA).and.              &
+              IF ((Hadvection(inert(itrc),ng)%MPDATA).and. &
      &            (Vadvection(inert(itrc),ng)%MPDATA)) THEN
-                t(i,j,k,nnew,iage)=t(i,j,k,nnew,iage)+                  &
+                t(i,j,k,nnew,iage)=t(i,j,k,nnew,iage)+ &
      &                             dt(ng)*t(i,j,k,nnew,inert(itrc))
               ELSE
-                t(i,j,k,nnew,iage)=t(i,j,k,nnew,iage)+                  &
+                t(i,j,k,nnew,iage)=t(i,j,k,nnew,iage)+ &
      &                             dt(ng)*t(i,j,k,3,inert(itrc))
               END IF
             END DO
@@ -1855,10 +2011,10 @@
 !
 !  Set lateral boundary conditions.
 !
-        CALL t3dbc_tile (ng, tile, itrc, ic,                            &
-     &                   LBi, UBi, LBj, UBj, N(ng), NT(ng),             &
-     &                   IminS, ImaxS, JminS, JmaxS,                    &
-     &                   nstp, nnew,                                    &
+        CALL t3dbc_tile (ng, tile, itrc, ic, &
+     &                   LBi, UBi, LBj, UBj, N(ng), NT(ng), &
+     &                   IminS, ImaxS, JminS, JmaxS, &
+     &                   nstp, nnew, &
      &                   t)
 !
 !  Nudge towards tracer climatology.
@@ -1867,10 +2023,10 @@
           DO k=1,N(ng)
             DO j=JstrR,JendR
               DO i=IstrR,IendR
-                t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)+                  &
-     &                             dt(ng)*                              &
-     &                             CLIMA(ng)%Tnudgcof(i,j,k,ic)*        &
-     &                             (CLIMA(ng)%tclm(i,j,k,ic)-           &
+                t(i,j,k,nnew,itrc)=t(i,j,k,nnew,itrc)+ &
+     &                             dt(ng)* &
+     &                             CLIMA(ng)%Tnudgcof(i,j,k,ic)* &
+     &                             (CLIMA(ng)%tclm(i,j,k,ic)- &
      &                              t(i,j,k,nnew,itrc))
               END DO
             END DO
@@ -1896,7 +2052,7 @@
         DO k=1,N(ng)
           DO j=JstrR,JendR
             DO i=IstrR,IendR
-              DiaTwrk(i,j,k,itrc,iTrate)=t(i,j,k,nnew,itrc)-            &
+              DiaTwrk(i,j,k,itrc,iTrate)=t(i,j,k,nnew,itrc)- &
      &                                   DiaTwrk(i,j,k,itrc,iTrate)
 !!            DiaTwrk(i,j,k,itrc,iTrate)=t(i,j,k,nnew,itrc)-            &
 !!   &                                   t(i,j,k,nstp,itrc)
@@ -1908,8 +2064,8 @@
 !  Apply periodic boundary conditions.
 !
         IF (EWperiodic(ng).or.NSperiodic(ng)) THEN
-          CALL exchange_r3d_tile (ng, tile,                             &
-     &                            LBi, UBi, LBj, UBj, 1, N(ng),         &
+          CALL exchange_r3d_tile (ng, tile, &
+     &                            LBi, UBi, LBj, UBj, 1, N(ng), &
      &                            t(:,:,:,nnew,itrc))
         END IF
       END DO
@@ -1917,10 +2073,10 @@
 !
 !  Exchange boundary data.
 !
-      CALL mp_exchange4d (ng, tile, iNLM, 1,                            &
-     &                    LBi, UBi, LBj, UBj, 1, N(ng), 1, NT(ng),      &
-     &                    NghostPoints,                                 &
-     &                    EWperiodic(ng), NSperiodic(ng),               &
+      CALL mp_exchange4d (ng, tile, iNLM, 1, &
+     &                    LBi, UBi, LBj, UBj, 1, N(ng), 1, NT(ng), &
+     &                    NghostPoints, &
+     &                    EWperiodic(ng), NSperiodic(ng), &
      &                    t(:,:,:,nnew,:))
 # endif
 # if defined FLOATS && defined FLOAT_VWALK
@@ -1941,16 +2097,16 @@
 !  Apply periodic boundary conditions.
 !
       IF (EWperiodic(ng).or.NSperiodic(ng)) THEN
-        CALL exchange_r3d_tile (ng, tile,                               &
-     &                          LBi, UBi, LBj, UBj, 1, N(ng),           &
+        CALL exchange_r3d_tile (ng, tile, &
+     &                          LBi, UBi, LBj, UBj, 1, N(ng), &
      &                          dAktdz)
       END IF
 
 #  ifdef DISTRIBUTE
-      CALL mp_exchange3d (ng, tile, iNLM, 1,                            &
-     &                    LBi, UBi, LBj, UBj, 1, N(ng),                 &
-     &                    NghostPoints,                                 &
-     &                    EWperiodic(ng), NSperiodic(ng),               &
+      CALL mp_exchange3d (ng, tile, iNLM, 1, &
+     &                    LBi, UBi, LBj, UBj, 1, N(ng), &
+     &                    NghostPoints, &
+     &                    EWperiodic(ng), NSperiodic(ng), &
      &                    dAktdz)
 #  endif
 # endif

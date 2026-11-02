@@ -73,6 +73,14 @@ project(roms VERSION 4.1 LANGUAGES CXX Fortran)
 #::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 option( ROMS_KOKKOS "Build ROMS with Kokkos compute kernels" OFF )
+option( ROMS_KOKKOS_STEP3D_T "Enable the U3/C4 and HSIMT tracer column kernel" OFF )
+option( ROMS_TRACER_TIMING "Report step3d_t module wall time" OFF )
+if( ROMS_TRACER_TIMING )
+  add_compile_definitions( KK_PROFILE_STEP3D_T )
+endif()
+if( ROMS_KOKKOS AND ROMS_KOKKOS_STEP3D_T )
+  add_compile_definitions( KK_STAGE_STEP3D_T )
+endif()
 set( ROMS_KOKKOS_BACKEND "serial" CACHE STRING
      "Kokkos execution space for the ROMS kernels: serial | openmp | sw64" )
 set_property( CACHE ROMS_KOKKOS_BACKEND PROPERTY STRINGS serial openmp sw64 )
@@ -402,6 +410,30 @@ if( ROMS_KOKKOS )
     add_executable( test_step2d_kokkos ROMS/Cpp/test_step2d_kokkos.cpp
       ROMS/Cpp/kokkos_config.cpp ROMS/Cpp/kokkos_step2d.cpp )
     target_link_libraries( test_step2d_kokkos Kokkos::kokkos )
+    if( ROMS_KOKKOS_STEP3D_T )
+      preprocess_fortran( ROMS/Cpp/test_step3d_t_reference.F )
+      add_executable( test_step3d_t_kokkos ${f90srcs}
+        ROMS/Cpp/test_step3d_t_kokkos.cpp ROMS/Cpp/kokkos_config.cpp
+        ROMS/Cpp/kokkos_step3d_t.cpp )
+      add_dependencies( test_step3d_t_kokkos Objects )
+      target_link_libraries( test_step3d_t_kokkos Kokkos::kokkos )
+      set_target_properties( test_step3d_t_kokkos PROPERTIES LINKER_LANGUAGE Fortran )
+      if( _kk_backend STREQUAL "sw64" )
+        target_compile_options( test_step3d_t_kokkos PRIVATE
+          "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive>" )
+      endif()
+
+      add_executable( bench_step3d_t_kokkos
+        ROMS/Cpp/bench_step3d_t.cpp ROMS/Cpp/kokkos_config.cpp
+        ROMS/Cpp/kokkos_step3d_t.cpp )
+      target_link_libraries( bench_step3d_t_kokkos Kokkos::kokkos )
+      set_target_properties( bench_step3d_t_kokkos PROPERTIES LINKER_LANGUAGE Fortran )
+      if( _kk_backend STREQUAL "sw64" )
+        target_compile_options( bench_step3d_t_kokkos PRIVATE
+          "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive>" )
+      endif()
+    endif()
+
     if( _kk_backend STREQUAL "sw64" )
       target_compile_options( test_step2d_kokkos PRIVATE
         -mhybrid-coding -fpermissive )
