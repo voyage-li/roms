@@ -98,6 +98,47 @@ The kernel therefore does roughly twice the horizontal and vertical flux
 work, with a k-inner access order against a (i,j,k,l,m) layout. Removing
 that duplication is the next optimization; it is not done here.
 
+## Other applications — 2026-11-02
+
+`build_app.sh APP [EXTRA_CPP_FLAGS] [HEADER_DIR]` builds one application
+three ways with an identical option set: pure Fortran, Kokkos Serial and
+Kokkos SW64. The base flags are
+`OUT_DOUBLE;VAR_RHO_2D;DIAGNOSTICS_UV;DIAGNOSTICS_TS`, because the step2d
+kernel requires the first three and the tracer kernel requires
+`DIAGNOSTICS_TS` in addition to `SPLINES_VDIFF`. Adding them to all three
+builds keeps the comparison like for like; it is a deviation from each
+stock case, and `VAR_RHO_2D` does change the 2D pressure-gradient
+formulation.
+
+Two-step runs with output, same comparison lists, `--rtol 1e-10` plus an
+absolute floor (`--tol 1e-20` for history, `1e-15` for diagnostics) so
+that fields whose own peak is ~1e-18 are not judged by relative error.
+
+| case | grid | tracers | extra flags | tracer kernel | ref->Serial | Serial->SW64 | worst Serial->SW64 |
+|---|---|---|---:|---|---:|---:|---:|
+| upwelling, both tracers HSIMT | 41x80x16 | 2 | - | runs, scheme (1,1) | 38/38 exact | 38/38 | 1.3e-15 rel |
+| bl_test | 39x4x30 | 2 | - | runs, scheme (0,0) | 22/22 | 22/22 | 2.4e-14 rel |
+| kelvin | 50x30x10 | 1 | - | compiled out (no SPLINES_VDIFF) | 17/17 | 17/17 | 1.6e-15 rel |
+| canyon | 65x48x15 | 1 | `SOLVE3D` | off (STEP3D_T=OFF build) | 8/8 | 8/8 | 1.7e-13 rel |
+| seamount | 49x48x13 | 1 | - | - | **build fails** | - | - |
+
+The kelvin and canyon cases have no `SPLINES_VDIFF`/`DIAGNOSTICS_TS` in
+their stock headers. Kelvin therefore proves that the tracer feature is
+absent (no kernel or fallback line at all, not a silent fallback) and that
+the step2d kernel still reproduces a wave solution. Canyon is a
+topography case; its 1.7e-13 relative drift is the largest seen so far and
+still four orders of magnitude inside the threshold — two steps of a
+strongly forced canyon flow amplify the ~1e-15 per-step difference more
+than the upwelling case does.
+
+seamount cannot be built against this ROMS revision: `analytical.F`
+compiles a branch that uses `io_err` without declaring it for that option
+set. That is an upstream source/option incompatibility, reproducible with
+both the tree header and the official `roms_test` header, and unrelated to
+the Kokkos kernels. The official `myroms/roms_test` headers otherwise
+target an older release; `bl_test.h` and `kelvin.h` from that repository
+compile and run unchanged, `seamount.h` does not.
+
 ## Numerical acceptance criteria (set before field comparisons)
 
 - Nonzero reference fields: max absolute difference / reference peak
