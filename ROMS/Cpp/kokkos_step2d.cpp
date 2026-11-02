@@ -30,7 +30,7 @@
 **
 ** Threading
 ** ---------
-** Two backends are supported, selected at build time:
+** Backends are selected at build time:
 **
 **   ROMS_KOKKOS_SERIAL  -- ROMS owns the parallelism and splits work by
 **                          tile across OpenMP threads; each call here
@@ -44,6 +44,12 @@
 **                          correct.  This is the useful configuration
 **                          for benchmarking the kernels themselves.
 **
+**   ROMS_KOKKOS_SW64    -- one host thread per MPI rank dispatches to CPEs.
+**                          HostSpace is shared; no array copy is required.
+**
+** The standalone driver initializes Kokkos before computing.  Guarded
+** initialization at each C entry also supports direct/embedded callers.
+**
 ** Do NOT use parallel_reduce: it touches the execution space instance's
 ** reduce scratch and is not safe under concurrent entry.
 */
@@ -53,6 +59,16 @@
 #if defined ROMS_KOKKOS
 
 #include <cmath>
+
+#if !defined SOLVE3D || !defined VAR_RHO_2D || !defined UV_ADV || \
+    !defined UV_COR || !defined UV_VIS2 || !defined DIAGNOSTICS_UV
+#  error "Kokkos step2d currently requires the diagnostic 3-D upwelling physics"
+#endif
+#if defined MASKING || defined WET_DRY || defined WEC || defined WEC_VF || \
+    defined NESTING || defined CURVGRID || defined UV_C2ADVECTION || \
+    defined UV_VIS4 || defined SINGLE_PRECISION
+#  error "Unsupported Kokkos step2d physics or precision configuration"
+#endif
 
 namespace {
 
@@ -150,32 +166,32 @@ constexpr int RLEV0 = 1, RLEV1 = 2;
 KOKKOS_INLINE_FUNCTION
 double ddx(const roms::Array3d<double>& a, int k, int i, int j,
            int fold_lo, int fold_hi, int lo_idx, int hi_idx) {
-  if (fold_lo && i == lo_idx) return ddx(a, k, i + 1, j, 0, 0, lo_idx, hi_idx);
-  if (fold_hi && i == hi_idx) return ddx(a, k, i - 1, j, 0, 0, lo_idx, hi_idx);
+  if (fold_lo && i == lo_idx) ++i;
+  else if (fold_hi && i == hi_idx) --i;
   return a(i - 1, j, k) - 2.0 * a(i, j, k) + a(i + 1, j, k);
 }
 
 KOKKOS_INLINE_FUNCTION
 double ddy(const roms::Array3d<double>& a, int k, int i, int j,
            int fold_lo, int fold_hi, int lo_idx, int hi_idx) {
-  if (fold_lo && j == lo_idx) return ddy(a, k, i, j + 1, 0, 0, lo_idx, hi_idx);
-  if (fold_hi && j == hi_idx) return ddy(a, k, i, j - 1, 0, 0, lo_idx, hi_idx);
+  if (fold_lo && j == lo_idx) ++j;
+  else if (fold_hi && j == hi_idx) --j;
   return a(i, j - 1, k) - 2.0 * a(i, j, k) + a(i, j + 1, k);
 }
 
 KOKKOS_INLINE_FUNCTION
 double ddx2(const roms::Array2d<double>& a, int i, int j,
             int fold_lo, int fold_hi, int lo_idx, int hi_idx) {
-  if (fold_lo && i == lo_idx) return ddx2(a, i + 1, j, 0, 0, lo_idx, hi_idx);
-  if (fold_hi && i == hi_idx) return ddx2(a, i - 1, j, 0, 0, lo_idx, hi_idx);
+  if (fold_lo && i == lo_idx) ++i;
+  else if (fold_hi && i == hi_idx) --i;
   return a(i - 1, j) - 2.0 * a(i, j) + a(i + 1, j);
 }
 
 KOKKOS_INLINE_FUNCTION
 double ddy2(const roms::Array2d<double>& a, int i, int j,
             int fold_lo, int fold_hi, int lo_idx, int hi_idx) {
-  if (fold_lo && j == lo_idx) return ddy2(a, i, j + 1, 0, 0, lo_idx, hi_idx);
-  if (fold_hi && j == hi_idx) return ddy2(a, i, j - 1, 0, 0, lo_idx, hi_idx);
+  if (fold_lo && j == lo_idx) ++j;
+  else if (fold_hi && j == hi_idx) --j;
   return a(i, j - 1) - 2.0 * a(i, j) + a(i, j + 1);
 }
 
@@ -200,9 +216,6 @@ void k_step2d_depth_flux(int ng, int tile, int krhs, int nfast,
                          void* ubar_p, void* vbar_p, void* Drhs_p,
                          void* DUon_p, void* DVom_p, int UBk,
                          const TileBounds* t) {
-  /* Kokkos must be initialized before an execution-space
-  ** instance exists; the Fortran kokkos_init hook is not
-  ** wired into the driver, so the first entry does it. */
   roms::initialize();
   (void)ng;
   (void)tile;
@@ -277,9 +290,6 @@ void k_step2d_time_average(int ng, int tile, int krhs,
                            void* DV_avg1_p, void* DV_avg2_p,
                            double cff1, double cff2,
                            const TileBounds* t) {
-  /* Kokkos must be initialized before an execution-space
-  ** instance exists; the Fortran kokkos_init hook is not
-  ** wired into the driver, so the first entry does it. */
   roms::initialize();
   (void)ng;
   (void)tile;
@@ -381,9 +391,6 @@ void k_step2d_zeta_step(int ng, int tile, int krhs, int kstp, int knew,
                         void* Dnew_p, void* zwrk_p,
                         void* rzeta_p, double dtfast, double rho0,
                         const TileBounds* t) {
-  /* Kokkos must be initialized before an execution-space
-  ** instance exists; the Fortran kokkos_init hook is not
-  ** wired into the driver, so the first entry does it. */
   roms::initialize();
   (void)ng;
   (void)tile;
@@ -530,9 +537,6 @@ void k_step2d_pressure_grad(int ng, int tile,
                             int NDM2d, int M2pgrd,
                             double g,
                             const TileBounds* t) {
-  /* Kokkos must be initialized before an execution-space
-  ** instance exists; the Fortran kokkos_init hook is not
-  ** wired into the driver, so the first entry does it. */
   roms::initialize();
   (void)ng;
   (void)tile;
@@ -634,9 +638,6 @@ void k_step2d_hadv_centered4(int ng, int tile, int krhs,
                              int M2xadv, int M2yadv, int M2hadv,
                              const EdgeFlags* e,
                              const TileBounds* t) {
-  /* Kokkos must be initialized before an execution-space
-  ** instance exists; the Fortran kokkos_init hook is not
-  ** wired into the driver, so the first entry does it. */
   roms::initialize();
   (void)ng;
   (void)tile;
@@ -910,9 +911,6 @@ void k_step2d_coriolis(int ng, int tile, int krhs,
                        void* DiaU2rhs_p, void* DiaV2rhs_p,
                        int NDM2d, int M2fcor,
                        const TileBounds* t) {
-  /* Kokkos must be initialized before an execution-space
-  ** instance exists; the Fortran kokkos_init hook is not
-  ** wired into the driver, so the first entry does it. */
   roms::initialize();
   (void)ng;
   (void)tile;
@@ -989,9 +987,6 @@ void k_step2d_psi_depth(int ng, int tile,
                         int IminS, int ImaxS, int JminS, int JmaxS,
                         void* Drhs_p, void* Drhs_psi_p,
                         const TileBounds* t) {
-  /* Kokkos must be initialized before an execution-space
-  ** instance exists; the Fortran kokkos_init hook is not
-  ** wired into the driver, so the first entry does it. */
   roms::initialize();
   (void)ng;
   (void)tile;
@@ -1040,9 +1035,6 @@ void k_step2d_hvisc2(int ng, int tile, int krhs,
                      void* DiaU2rhs_p, void* DiaV2rhs_p,
                      int NDM2d, int M2hvis, int M2xvis, int M2yvis,
                      const TileBounds* t) {
-  /* Kokkos must be initialized before an execution-space
-  ** instance exists; the Fortran kokkos_init hook is not
-  ** wired into the driver, so the first entry does it. */
   roms::initialize();
   (void)ng;
   (void)tile;
@@ -1194,9 +1186,6 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
                        void* DiaRUfrc_p, void* DiaRVfrc_p,
                        int NDM2d, int M2pgrd, int M2sstr, int M2bstr,
                        const TileBounds* t) {
-  /* Kokkos must be initialized before an execution-space
-  ** instance exists; the Fortran kokkos_init hook is not
-  ** wired into the driver, so the first entry does it. */
   roms::initialize();
   (void)ng;
   (void)tile;
@@ -1469,9 +1458,6 @@ void k_step2d_momentum_step(int ng, int tile, int kstp, int knew,
                             void* Dstp_p, void* Dnew_p,
                             int predictor, int first_2d_step, double dtfast,
                             const TileBounds* t) {
-  /* Kokkos must be initialized before an execution-space
-  ** instance exists; the Fortran kokkos_init hook is not
-  ** wired into the driver, so the first entry does it. */
   roms::initialize();
   (void)ng;
   (void)tile;
@@ -1627,9 +1613,6 @@ void k_step2d_store_rhs(int ng, int tile, int krhs,
                         void* DiaU2rhs_p, void* DiaV2rhs_p,
                         int NDM2d, int M2pgrd,
                         const TileBounds* t) {
-  /* Kokkos must be initialized before an execution-space
-  ** instance exists; the Fortran kokkos_init hook is not
-  ** wired into the driver, so the first entry does it. */
   roms::initialize();
   (void)ng;
   (void)tile;
@@ -1670,7 +1653,7 @@ void k_step2d_store_rhs(int ng, int tile, int krhs,
         for (int i = iu0; i <= iu1; ++i) {
           rubar(i, j, krhs) = rhs_ubar(i, j);
 #if defined DIAGNOSTICS_UV
-          for (int id = 1; id <= M2pgrd; ++id) {
+          for (int id = 1; id < NDM2d; ++id) {
             DiaRUbar(i, j, krhs, id) = DiaU2rhs(i, j, id);
           }
 #endif
@@ -1683,7 +1666,7 @@ void k_step2d_store_rhs(int ng, int tile, int krhs,
           for (int i = iv0; i <= iv1; ++i) {
             rvbar(i, j, krhs) = rhs_vbar(i, j);
 #if defined DIAGNOSTICS_UV
-            for (int id = 1; id <= M2pgrd; ++id) {
+            for (int id = 1; id < NDM2d; ++id) {
               DiaRVbar(i, j, krhs, id) = DiaV2rhs(i, j, id);
             }
 #endif
@@ -1695,35 +1678,11 @@ void k_step2d_store_rhs(int ng, int tile, int krhs,
 /*
 ** Fused right-hand-side kernel for the 2-D barotropic step.
 **
-** Included by kokkos_step2d.cpp.  Split out so it can be syntax-checked
-** against the real Kokkos configuration before it is wired up.
-**
-** What it replaces
-** ----------------
-** Five stages of step2d_LF_AM3.h run back to back with nothing between
-** them: no halo exchange, no open-boundary call, no zetabc.  Each only
-** accumulates into rhs_ubar/rhs_vbar.  Launched separately they cost
-** one Kokkos dispatch apiece -- about forty per fast step, over 8640
-** fast steps -- and at this problem's size the dispatch, not the
-** arithmetic, dominates.  Measured on a 128-core Xeon with the Fortran
-** side single-threaded: the unfused OpenMP build ran 17x slower at 8
-** threads than at 1.
-**
-** Here they are one launch.
-**
-** Equivalence with the staged code
-** --------------------------------
-** The staged version routes intermediates through scratch arrays:
-**
-**   grad / Dgrad          four-pass, refilled for the xi and eta
-**                         directions of ubar and vbar in turn
-**   UFx, UFe, VFx, VFe    advection fluxes, later reused by viscosity
-**   Drhs_psi              total depth averaged to psi points
-**
-** Every one is a pure function of read-only inputs at the moment it is
-** finally consumed, so it is recomputed here instead of stored.  That
-** is what collapses the loops.  Nothing crosses points, so the result
-** is bit-identical to the staged version.
+** Pressure gradient, advection, Coriolis and harmonic viscosity share
+** the same input fields and have no intervening halo exchange.  Inline
+** their flux stencils to avoid scratch-array traffic and intermediate
+** dispatches.  Validate this path directly against the staged kernels;
+** an end-to-end run must not also execute the Fortran RHS fallback.
 **
 ** Closed edges: the staged code filled a halo cell from its inward
 ** neighbour at one index per direction -- grad(Istr), grad(Iend+1),
@@ -1759,9 +1718,6 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
                         double g,
                         const EdgeFlags* e,
                         const TileBounds* t) {
-  /* Kokkos must be initialized before an execution-space
-  ** instance exists; the Fortran kokkos_init hook is not
-  ** wired into the driver, so the first entry does it. */
   roms::initialize();
   (void)ng;
   (void)tile;
@@ -1896,20 +1852,21 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
           ** and only ever read in the xi direction.
           */
           const double gy0 = ddy(ubar, krhs, i, j, fs, fn, Jstr - 1, Jend + 1);
-          const double dgy0 = ddy2(DVom, i, j, 0, 0, 0, 0);
+          const double dgy0 = ddx2(DVom, i, j, 0, 0, 0, 0);
           const double gy_1 = ddy(ubar, krhs, i, j - 1, fs, fn, Jstr - 1, Jend + 1);
-          const double dgy_1 = ddy2(DVom, i, j - 1, 0, 0, 0, 0);
+          const double dgy_1 = ddx2(DVom, i - 1, j, 0, 0, 0, 0);
           const double ufe =
               0.25 * (ubar(i, j, krhs) + ubar(i, j - 1, krhs) -
                       c6 * (gy0 + gy_1)) *
               (DVom(i, j) + DVom(i - 1, j) - c6 * (dgy0 + dgy_1));
 
           const double gy1 = ddy(ubar, krhs, i, j + 1, fs, fn, Jstr - 1, Jend + 1);
-          const double dgy1 = ddy2(DVom, i, j + 1, 0, 0, 0, 0);
+          const double dgy1 = ddx2(DVom, i, j + 1, 0, 0, 0, 0);
+          const double dgy1m = ddx2(DVom, i - 1, j + 1, 0, 0, 0, 0);
           const double ufe1 =
               0.25 * (ubar(i, j + 1, krhs) + ubar(i, j, krhs) -
                       c6 * (gy1 + gy0)) *
-              (DVom(i, j + 1) + DVom(i - 1, j + 1) - c6 * (dgy1 + dgy0));
+              (DVom(i, j + 1) + DVom(i - 1, j + 1) - c6 * (dgy1 + dgy1m));
 
           const double axadv = ufx - ufxm;
           const double ayadv = ufe1 - ufe;
@@ -1960,19 +1917,19 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
 
           const double uP =
               om_p(i, j) * om_p(i, j) * visc2_pp(i, j) * dp00 * 0.5 *
-              (pnom_p(i, j) *
+              (pmon_p(i, j) *
                    ((pn(i, j - 1) + pn(i, j)) * vbar(i, j, krhs) -
                     (pn(i - 1, j - 1) + pn(i - 1, j)) * vbar(i - 1, j, krhs)) +
-               pmon_p(i, j) *
+               pnom_p(i, j) *
                    ((pm(i - 1, j) + pm(i, j)) * ubar(i, j, krhs) -
                     (pm(i - 1, j - 1) + pm(i, j - 1)) * ubar(i, j - 1, krhs)));
           const double uPp =
               om_p(i, j + 1) * om_p(i, j + 1) *
               visc2_pp(i, j + 1) * dp0p * 0.5 *
-              (pnom_p(i, j + 1) *
+              (pmon_p(i, j + 1) *
                    ((pn(i, j) + pn(i, j + 1)) * vbar(i, j + 1, krhs) -
                     (pn(i - 1, j) + pn(i - 1, j + 1)) * vbar(i - 1, j + 1, krhs)) +
-               pmon_p(i, j + 1) *
+               pnom_p(i, j + 1) *
                    ((pm(i - 1, j + 1) + pm(i, j + 1)) * ubar(i, j + 1, krhs) -
                     (pm(i - 1, j) + pm(i, j)) * ubar(i, j, krhs)));
 
@@ -2014,23 +1971,24 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
 
           /* --- advection ---
           ** VFx block: grad over xi at V points folds at Istr-1 /
-          ** Iend+1; Dgrad holds DVom second differences along xi over
+          ** Iend+1; Dgrad holds DUon second differences along eta over
           ** [JstrV-1, Jend] with no fold. */
           const double gx0 = ddx(vbar, krhs, i, j, fw, fe, Istr - 1, Iend + 1);
           const double gxm = ddx(vbar, krhs, i - 1, j, fw, fe, Istr - 1, Iend + 1);
-          const double dx0 = ddx2(DUon, i, j, 0, 0, 0, 0);
-          const double dxm = ddx2(DUon, i, j - 1, 0, 0, 0, 0);
+          const double dx0 = ddy2(DUon, i, j, 0, 0, 0, 0);
+          const double dxm = ddy2(DUon, i, j - 1, 0, 0, 0, 0);
           const double vfx =
               0.25 * (vbar(i, j, krhs) + vbar(i - 1, j, krhs) -
                       c6 * (gx0 + gxm)) *
               (DUon(i, j) + DUon(i, j - 1) - c6 * (dx0 + dxm));
 
           const double gx1 = ddx(vbar, krhs, i + 1, j, fw, fe, Istr - 1, Iend + 1);
-          const double dx1 = ddx2(DUon, i + 1, j, 0, 0, 0, 0);
+          const double dx1 = ddy2(DUon, i + 1, j, 0, 0, 0, 0);
+          const double dx1m = ddy2(DUon, i + 1, j - 1, 0, 0, 0, 0);
           const double vfx1 =
               0.25 * (vbar(i + 1, j, krhs) + vbar(i, j, krhs) -
                       c6 * (gx1 + gx0)) *
-              (DUon(i + 1, j) + DUon(i + 1, j - 1) - c6 * (dx1 + dx0));
+              (DUon(i + 1, j) + DUon(i + 1, j - 1) - c6 * (dx1 + dx1m));
 
           /* VFe block: grad over eta at V points folds at Jstr /
           ** Jend+1, and here Dgrad folds the same way. */
@@ -2079,24 +2037,23 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
 
           const double vP =
               on_p(i, j) * on_p(i, j) * visc2_pp(i, j) * dp00 * 0.5 *
-              (pnom_p(i, j) *
+              (pmon_p(i, j) *
                    ((pn(i, j - 1) + pn(i, j)) * vbar(i, j, krhs) -
                     (pn(i - 1, j - 1) + pn(i - 1, j)) * vbar(i - 1, j, krhs)) +
-               pmon_p(i, j) *
+               pnom_p(i, j) *
                    ((pm(i - 1, j) + pm(i, j)) * ubar(i, j, krhs) -
                     (pm(i - 1, j - 1) + pm(i, j - 1)) * ubar(i, j - 1, krhs)));
           const double vPp =
               on_p(i + 1, j) * on_p(i + 1, j) *
               visc2_pp(i + 1, j) * dp10 * 0.5 *
-              (pnom_p(i + 1, j) *
+              (pmon_p(i + 1, j) *
                    ((pn(i + 1, j - 1) + pn(i + 1, j)) * vbar(i + 1, j, krhs) -
                     (pn(i, j - 1) + pn(i, j)) * vbar(i, j, krhs)) +
-               pmon_p(i + 1, j) *
+               pnom_p(i + 1, j) *
                    ((pm(i, j) + pm(i + 1, j)) * ubar(i + 1, j, krhs) -
                     (pm(i, j - 1) + pm(i + 1, j - 1)) * ubar(i + 1, j - 1, krhs)));
 
-          /* VFe at rho points from visc2_r: the staged code writes UFe
-          ** there, and this kernel keeps the same slot. */
+          /* VFe at rho points from visc2_r. */
           const double vR =
               om_r(i, j) * om_r(i, j) * visc2_r(i, j) * Drhs(i, j) * 0.5 *
               (pmon_r(i, j) *

@@ -9,9 +9,10 @@
 
 #include "kokkos_config.hpp"
 
-#if defined ROMS_KOKKOS
+#if defined ROMS_KOKKOS && !defined(__sw_slave__)
 
 #include <mutex>
+#include <iostream>
 
 namespace roms {
 
@@ -31,6 +32,9 @@ void initialize() {
     if (!Kokkos::is_initialized()) {
       Kokkos::initialize();
     }
+    std::cout << "ROMS Kokkos execution space: " << exec_space::name()
+              << std::endl;
+    Kokkos::print_configuration(std::cout);
   });
 }
 

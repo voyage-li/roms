@@ -11,33 +11,37 @@
 # Set the name of the Fortran compiler based on FORT and USE_MPI
 ###########################################################################
 
-if( MPI )
-  execute_process( COMMAND which mpif90
-                   OUTPUT_VARIABLE CMAKE_Fortran_COMPILER
-                   OUTPUT_STRIP_TRAILING_WHITESPACE )
-else()
-  execute_process( COMMAND which gfortran
-                   OUTPUT_VARIABLE CMAKE_Fortran_COMPILER
-                   OUTPUT_STRIP_TRAILING_WHITESPACE )
-endif()
+# project() has already selected and tested the compiler.  In particular,
+# do not replace a cross compiler supplied by a toolchain with host gfortran.
 
 ###########################################################################
 # FLAGS COMMON TO ALL BUILD TYPES
 ###########################################################################
 
-set( CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -frepack-arrays -fallow-argument-mismatch" )
+string( APPEND CMAKE_Fortran_FLAGS " -frepack-arrays" )
+if( CMAKE_Fortran_COMPILER_VERSION VERSION_GREATER_EQUAL 10 )
+  string( APPEND CMAKE_Fortran_FLAGS " -fallow-argument-mismatch" )
+endif()
+
+option( ROMS_FAST_MATH "Enable non-IEEE floating-point optimizations" ON )
 
 ###########################################################################
 # RELEASE FLAGS
 ###########################################################################
 
-set( CMAKE_Fortran_FLAGS_RELEASE "-O3 -ffast-math" )
+set( CMAKE_Fortran_FLAGS_RELEASE "-O3" )
+if( ROMS_FAST_MATH )
+  string( APPEND CMAKE_Fortran_FLAGS_RELEASE " -ffast-math" )
+endif()
 
 ###########################################################################
 # RELEASE WITH DEBUG INFORMATION FLAGS
 ###########################################################################
 
-set( CMAKE_Fortran_FLAGS_RELWITHDEBINFO "-O3 -g -ffast-math -fbounds-check -fbacktrace -fcheck=all" )
+set( CMAKE_Fortran_FLAGS_RELWITHDEBINFO "-O3 -g -fbounds-check -fbacktrace -fcheck=all" )
+if( ROMS_FAST_MATH )
+  string( APPEND CMAKE_Fortran_FLAGS_RELWITHDEBINFO " -ffast-math" )
+endif()
 
 ###########################################################################
 # DEBUG FLAGS

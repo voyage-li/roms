@@ -57,6 +57,12 @@
 
 #include "cppdefs.h"
 
+/* ROMS' CPU macro conflicts with Kokkos::SW64 and Tools::DeviceType::SW64.
+** It is needed by the Fortran preprocessor, not by the C++ kernels. */
+#ifdef SW64
+#  undef SW64
+#endif
+
 /*
 ** SW64 carries its own trap, and it has to be checked before Kokkos is
 ** pulled in so that a misconfigured build fails with this message rather
@@ -153,7 +159,7 @@ struct Array2d {
 
   KOKKOS_INLINE_FUNCTION
   T& operator()(int i, int j) const {
-    return p[(i - lb_i) + (j - lb_j) * ni];
+    return p[std::ptrdiff_t(i - lb_i) + std::ptrdiff_t(j - lb_j) * ni];
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -170,7 +176,8 @@ struct Array3d {
 
   KOKKOS_INLINE_FUNCTION
   T& operator()(int i, int j, int k) const {
-    return p[(i - lb_i) + (j - lb_j) * ni + (k - lb_k) * ni * nj];
+    return p[std::ptrdiff_t(i - lb_i) + std::ptrdiff_t(j - lb_j) * ni +
+             std::ptrdiff_t(k - lb_k) * ni * nj];
   }
 };
 
@@ -182,8 +189,9 @@ struct Array4d {
 
   KOKKOS_INLINE_FUNCTION
   T& operator()(int i, int j, int k, int l) const {
-    return p[(i - lb_i) + (j - lb_j) * ni + (k - lb_k) * ni * nj +
-             (l - lb_l) * ni * nj * nk];
+    return p[std::ptrdiff_t(i - lb_i) + std::ptrdiff_t(j - lb_j) * ni +
+             std::ptrdiff_t(k - lb_k) * ni * nj +
+             std::ptrdiff_t(l - lb_l) * ni * nj * nk];
   }
 };
 

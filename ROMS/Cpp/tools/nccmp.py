@@ -1,206 +1,141 @@
 #!/usr/bin/env python3
+"""Compare ROMS NetCDF arrays using ncdump, without Python NetCDF modules.
+
+--tol is an absolute tolerance; --rtol scales with the reference field's
+maximum magnitude. Missing fields, incomplete records and nonfinite values
+are failures, not silently skipped comparisons. With neither tolerance,
+values must agree exactly (this is not a bytewise comparison of the files).
 """
-Field-by-field comparison of two ROMS NetCDF histories.
-
-Written because the build machines have no netCDF4 Python module: the
-data is read back through "ncdump -p <digits>,<digits>" and parsed here.
-That is slower than a direct library read but needs nothing installed
-and keeps full precision in the text.
-
-Usage:
-    nccmp.py <ref.nc> <test.nc> [--vars v1,v2,...] [--tol T] [--quiet]
-
-For every variable it reports, over all time records at once:
-    maxabs     largest |a - b|
-    maxrel     largest |a - b| / max|a|   (guards against max|a| == 0)
-    where      flat index and record of the worst point
-    trend      maxabs on the first, middle and last record, so a growing
-               difference can be told apart from a constant one
-
-Exit status is 0 when every variable is within --tol (default 0, meaning
-exact) and 1 otherwise, so this can gate a test script.
-"""
-
 import argparse
+import math
 import re
 import subprocess
 import sys
 
-# ncdump prints floats in whatever precision -p asks for.  Ask for more
-# digits than double has so the round trip is exact.
-PRECISION = "17,17"
-
 DEFAULT_VARS = [
-    "zeta", "ubar", "vbar",
-    "u", "v",
-    "ubar_prsgrd", "vbar_prsgrd",
-    "ubar_hadv", "vbar_hadv",
-    "ubar_xadv", "ubar_yadv",
-    "vbar_xadv", "vbar_yadv",
-    "ubar_cor", "vbar_cor",
-    "ubar_hvisc", "vbar_hvisc",
-    "ubar_xvisc", "ubar_yvisc",
-    "vbar_xvisc", "vbar_yvisc",
-    "ubar_sstr", "vbar_sstr",
-    "ubar_bstr", "vbar_bstr",
+    "zeta", "ubar", "vbar", "u", "v",
+    "ubar_prsgrd", "vbar_prsgrd", "ubar_hadv", "vbar_hadv",
+    "ubar_xadv", "ubar_yadv", "vbar_xadv", "vbar_yadv",
+    "ubar_cor", "vbar_cor", "ubar_hvisc", "vbar_hvisc",
+    "ubar_xvisc", "ubar_yvisc", "vbar_xvisc", "vbar_yvisc",
+    "ubar_sstr", "vbar_sstr", "ubar_bstr", "vbar_bstr",
     "ubar_accel", "vbar_accel",
 ]
 
-NUM = re.compile(r"-?(?:\d+\.\d+(?:[eE][-+]?\d+)?|\d+\.?\d*[eE][-+]?\d+|\d+\.\d*|\d+|nan|NaN|inf|Infinity)")
+
+def dump(path, *options):
+    result = subprocess.run(["ncdump", *options, path], capture_output=True,
+                            text=True, check=False)
+    if result.returncode:
+        raise ValueError(result.stderr.strip() or f"ncdump failed: {path}")
+    return result.stdout
 
 
-def read_var(path, name):
-    """Return (values, dims) for one variable, or (None, None)."""
-    try:
-        out = subprocess.run(
-            ["ncdump", "-p", PRECISION, "-v", name, path],
-            capture_output=True, text=True, check=False,
-        ).stdout
-    except OSError as exc:
-        sys.exit(f"ncdump failed: {exc}")
-    if not out:
-        return None, None
+class Dataset:
+    def __init__(self, path):
+        self.path = path
+        self.header = dump(path, "-h")
+        self.dimensions = {}
+        for name, size in re.findall(r"^\s*(\w+)\s*=\s*(\d+)\s*;",
+                                     self.header, re.M):
+            self.dimensions[name] = int(size)
+        for name, size in re.findall(
+                r"^\s*(\w+)\s*=\s*UNLIMITED\s*;\s*//\s*\((\d+) currently\)",
+                self.header, re.M):
+            self.dimensions[name] = int(size)
+        self.variables = {}
+        for name, dims in re.findall(
+                r"^\s*\w+\s+(\w+)\(([^)]*)\)\s*;", self.header, re.M):
+            self.variables[name] = tuple(d.strip() for d in dims.split(","))
 
-    # Dimensions come from the header so the record count is known.
-    m = re.search(r"^\s*\w+\s+" + re.escape(name) + r"\(([^)]*)\)\s*;",
-                  out, re.M)
-    dims = [d.strip() for d in m.group(1).split(",")] if m else []
+    def read(self, name):
+        if name not in self.variables:
+            raise ValueError(f"{name} missing from {self.path}")
+        dims = self.variables[name]
+        shape = tuple(self.dimensions[d] for d in dims)
+        expected = math.prod(shape)
+        if not expected:
+            raise ValueError(f"{name}: no records in {self.path}")
+        output = dump(self.path, "-p", "17,17", "-v", name)
+        data = output[output.index("\ndata:") + 6:]
+        start = re.search(r"^\s*" + re.escape(name) + r"\s*=", data, re.M)
+        if not start:
+            raise ValueError(f"{name}: data absent in {self.path}")
+        end = data.index(";", start.end())
+        values = []
+        for token in re.split(r"[,\s]+", data[start.end():end].strip()):
+            if not token:
+                continue
+            if token == "_":
+                raise ValueError(f"{name}: unwritten/fill data in {self.path}")
+            value = float(token)
+            if not math.isfinite(value):
+                raise ValueError(f"{name}: nonfinite data in {self.path}")
+            values.append(value)
+        if len(values) != expected:
+            raise ValueError(f"{name}: expected {expected} values, got {len(values)}")
+        return dims, shape, values
 
-    # The assignment lives in the data section.  Find it by looking for
-    # the name followed by "=" at the start of a line's payload.
-    start = re.search(r"^[ \t]*" + re.escape(name) + r"[ \t]*=", out, re.M)
-    if not start:
-        return None, dims
-    end = out.find("\n }", start.end())
-    if end < 0:
-        end = out.find("\n}", start.end())
-    if end < 0:
-        end = len(out)
-    body = out[start.end():end]
 
-    vals = NUM.findall(body)
-    return [float(v) for v in vals], dims
-
-
-def fmt(x):
-    return "       0" if x == 0 else f"{x:.6e}"
-
-
-def compare(ref, test, name, tol):
-    a, dims = read_var(ref, name)
-    if a is None:
-        return None
-    b, _ = read_var(test, name)
-    if b is None:
-        print(f"  {name:14s} MISSING in test")
-        return False
-
-    n = min(len(a), len(b))
-    if n == 0:
-        return None
-    if len(a) != len(b):
-        print(f"  {name:14s} SIZE MISMATCH ref={len(a)} test={len(b)}")
-        return False
-
-    # Flat index -> per-record maxabs, for the growth check.  The
-    # record count comes from the "-- (N currently)" comment ncdump
-    # appends to an UNLIMITED dimension; without it a difference that
-    # stays bounded cannot be told from one that is growing.
-    nrec = 1
-    m = re.search(r"ocean_time\s*=\s*UNLIMITED\s*;\s*//\s*\((\d+)",
-                  _header(ref))
-    if m:
-        nrec = int(m.group(1))
-    else:
-        m = re.search(r"ocean_time\s*=\s*(\d+)", _header(ref))
-        if m:
-            nrec = int(m.group(1))
-
-    per_rec = n // nrec if nrec > 1 else n
-    recmax = []
-    worst = (0.0, 0, 0.0, 0.0)
-    amax = 0.0
-    for k in range(n):
-        d = abs(a[k] - b[k])
-        if abs(a[k]) > amax:
-            amax = abs(a[k])
-        if d > worst[0]:
-            worst = (d, k, a[k], b[k])
-        if nrec > 1:
-            r = k // per_rec
-            if r >= len(recmax):
-                recmax.append(0.0)
-            if d > recmax[r]:
-                recmax[r] = d
-
-    rel = worst[0] / (amax or 1.0)
-    # Per-record relative difference against that record's own peak
-    # magnitude.  This is the number that matters for "is this within
-    # acceptable accuracy": a constant 1e-9 relative offset everywhere
-    # is round-off, a value that climbs record after record is a bug.
-    trend = ""
-    if len(recmax) > 1:
-        peak = []
-        for r in range(len(recmax)):
-            lo, hi = r * per_rec, min((r + 1) * per_rec, n)
-            pk = max((abs(a[k]) for k in range(lo, hi)), default=0.0)
-            peak.append(pk or 1.0)
-        pct = [100.0 * recmax[r] / peak[r] for r in range(len(recmax))]
-        trend = "  [%] " + " ".join(f"{v:.2e}" for v in pct)
-    ok = worst[0] <= tol
-    mark = "ok" if ok else "DIFF"
-    print(f"  {name:14s} maxabs={fmt(worst[0])} maxrel={fmt(rel)} "
-          f"at idx {worst[1]}{trend}  {mark}")
-    if not ok and tol == 0:
-        print(f"                 ref={worst[2]!r} test={worst[3]!r}")
+def compare(a, b, name, atol, rtol, quiet, zero_tol=0.0):
+    dims, shape, av = a.read(name)
+    bdims, bshape, bv = b.read(name)
+    if (dims, shape) != (bdims, bshape):
+        raise ValueError(f"{name}: dimensions differ: {(dims, shape)} vs {(bdims, bshape)}")
+    worst = max(range(len(av)), key=lambda i: abs(av[i] - bv[i]))
+    delta = abs(av[worst] - bv[worst])
+    peak = max(map(abs, av))
+    relative = delta / peak if peak else (0.0 if delta == 0 else math.inf)
+    limit = atol + rtol * peak if peak else max(atol, zero_tol)
+    ok = delta <= limit
+    if not quiet or not ok:
+        ratio = (f"normrel={relative:.8e} pct={100 * relative:.4e}%" if peak
+                 else f"zero-reference abs-limit={limit:.3e}")
+        print(f"{name:15s} maxabs={delta:.8e} {ratio} "
+              f"idx={worst} {'PASS' if ok else 'FAIL'}")
+        if dims and dims[0] == "ocean_time":
+            n = math.prod(shape[1:])
+            trend = [max(abs(x - y) for x, y in zip(av[i:i+n], bv[i:i+n]))
+                     for i in range(0, len(av), n)]
+            print(" " * 16 + "per-record maxabs=" + " ".join(f"{d:.3e}" for d in trend))
     return ok
 
 
-_HDR_CACHE = {}
-
-
-def _header(path):
-    if path not in _HDR_CACHE:
-        _HDR_CACHE[path] = subprocess.run(
-            ["ncdump", "-h", path], capture_output=True, text=True).stdout
-    return _HDR_CACHE[path]
-
-
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("ref")
-    ap.add_argument("test")
-    ap.add_argument("--vars", default="")
-    ap.add_argument("--tol", type=float, default=0.0)
-    ap.add_argument("--quiet", action="store_true")
-    args = ap.parse_args()
-
-    names = [v.strip() for v in args.vars.split(",") if v.strip()] \
-        if args.vars else DEFAULT_VARS
-
-    print(f"ref  : {args.ref}")
-    print(f"test : {args.test}")
-    print(f"tol  : {args.tol:g}")
-
-    results = []
-    checked = 0
-    for name in names:
-        r = compare(args.ref, args.test, name, args.tol)
-        if r is None:
-            continue
-        checked += 1
-        results.append(r)
-
-    if checked == 0:
-        print("\nNo variables compared.")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("ref")
+    parser.add_argument("test")
+    parser.add_argument("--vars", default="")
+    parser.add_argument("--tol", type=float, default=0.0)
+    parser.add_argument("--rtol", type=float, default=0.0)
+    parser.add_argument("--zero-tol", type=float, default=0.0,
+                        help="absolute tolerance only for identically zero reference fields")
+    parser.add_argument("--quiet", action="store_true")
+    args = parser.parse_args()
+    if not all(math.isfinite(x) and x >= 0 for x in (args.tol, args.rtol, args.zero_tol)):
+        parser.error("tolerances must be finite and nonnegative")
+    try:
+        a, b = Dataset(args.ref), Dataset(args.test)
+        if "ocean_time" in a.variables or "ocean_time" in b.variables:
+            if a.read("ocean_time") != b.read("ocean_time"):
+                raise ValueError("record times differ")
+        names = [s.strip() for s in args.vars.split(",") if s.strip()] if args.vars else [
+            s for s in DEFAULT_VARS if s in a.variables or s in b.variables]
+        if not names:
+            raise ValueError("no variables selected")
+        failed = []
+        for name in names:
+            try:
+                if not compare(a, b, name, args.tol, args.rtol, args.quiet, args.zero_tol):
+                    failed.append(name)
+            except ValueError as exc:
+                print(f"FAIL: {exc}", file=sys.stderr)
+                failed.append(name)
+        print(f"{len(names) - len(failed)}/{len(names)} variables within tolerance")
+        return int(bool(failed))
+    except (OSError, ValueError) as exc:
+        print(f"FAIL: {exc}", file=sys.stderr)
         return 1
-
-    bad = [n for n, r in zip(names, results) if not r]
-    print(f"\n{checked - len(bad)}/{checked} variables within tol")
-    if bad:
-        print("outside:", ", ".join(bad))
-        return 1
-    return 0
 
 
 if __name__ == "__main__":

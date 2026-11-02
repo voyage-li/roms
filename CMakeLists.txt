@@ -50,6 +50,15 @@ if( DEFINED ENV{ECBUILD_MODULE_PATH} )
   set( IN_ECBUILD TRUE )
 endif()
 
+if( MPI AND NOT DEFINED CMAKE_Fortran_COMPILER AND
+    NOT DEFINED CMAKE_TOOLCHAIN_FILE )
+  find_program( ROMS_MPIF90 NAMES mpif90 )
+  if( NOT ROMS_MPIF90 )
+    message( FATAL_ERROR "MPI build requires an MPI Fortran compiler" )
+  endif()
+  set( CMAKE_Fortran_COMPILER "${ROMS_MPIF90}" CACHE FILEPATH "Fortran compiler" )
+endif()
+
 project(roms VERSION 4.1 LANGUAGES CXX Fortran)
 
 #::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
@@ -383,6 +392,21 @@ add_library( Objects OBJECT ${All_f90s} )
 
 if( ROMS_KOKKOS )
   target_link_libraries( Objects Kokkos::kokkos )
+  if( _kk_backend STREQUAL "sw64" )
+    target_compile_options( Objects PRIVATE
+      "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive>" )
+  endif()
+
+  option( ROMS_KOKKOS_TESTS "Build direct step2d regression tests" OFF )
+  if( ROMS_KOKKOS_TESTS )
+    add_executable( test_step2d_kokkos ROMS/Cpp/test_step2d_kokkos.cpp
+      ROMS/Cpp/kokkos_config.cpp ROMS/Cpp/kokkos_step2d.cpp )
+    target_link_libraries( test_step2d_kokkos Kokkos::kokkos )
+    if( _kk_backend STREQUAL "sw64" )
+      target_compile_options( test_step2d_kokkos PRIVATE
+        -mhybrid-coding -fpermissive )
+    endif()
+  endif()
 endif()
 
 if( IN_ECBUILD )
@@ -503,13 +527,13 @@ else()
 
     if( LIBSHARED AND LIBSTATIC )
       Message( STATUS "Both LIBSHARED and LIBSTATIC are enabled, the linker will probably default to the shared ROMS library." )
-      target_link_libraries( "${BIN}" ROMS ${netcdf_libs} )
+      target_link_libraries( "${BIN}" ROMS_shared ${netcdf_libs} )
     elseif( LIBSHARED )
       Message( STATUS "Linking ROMS using shared ROMS library." )
-      target_link_libraries( "${BIN}" ROMS ${netcdf_libs} )
+      target_link_libraries( "${BIN}" ROMS_shared ${netcdf_libs} )
     elseif( LIBSTATIC )
       Message( STATUS "Linking ROMS using static ROMS library." )
-      target_link_libraries( "${BIN}" ROMS ${netcdf_libs} )
+      target_link_libraries( "${BIN}" ROMS_static ${netcdf_libs} )
     else()
       Message( FATAL_ERROR "Unknown configuration!" )
     endif()
@@ -522,6 +546,15 @@ else()
     if( ROMS_KOKKOS )
       target_link_libraries( "${BIN}" Kokkos::kokkos )
       set_target_properties( "${BIN}" PROPERTIES LINKER_LANGUAGE Fortran )
+      if( SW64 )
+        # Static try-compile cannot discover the cross C++ implicit runtime.
+        # Append it after Kokkos archives: these toolchains link statically.
+        string( APPEND CMAKE_Fortran_STANDARD_LIBRARIES " -lstdc++" )
+        if( _kk_backend STREQUAL "sw64" )
+          string( APPEND CMAKE_Fortran_STANDARD_LIBRARIES
+            " -lstdc++_slave -lm_slave" )
+        endif()
+      endif()
     endif()
 
     # If ARPACK is needed, add to linking library list.

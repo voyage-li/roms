@@ -197,6 +197,31 @@ void k_step2d_store_rhs(int ng, int tile, int krhs,
                         int NDM2d, int M2pgrd,
                         const roms::TileBounds* t);
 
+/* Fused pressure, advection, Coriolis and harmonic-viscosity RHS. */
+void k_step2d_rhs_fused(int ng, int tile, int krhs,
+                        int LBi, int UBi, int LBj, int UBj,
+                        int IminS, int ImaxS, int JminS, int JmaxS,
+                        void* h_p, void* on_u_p, void* om_v_p,
+                        void* gzeta_p, void* gzeta2_p, void* gzetaSA_p,
+                        void* rhoA_p, void* zwrk_p,
+                        void* Drhs_p, void* fomn_p,
+                        void* ubar_p, void* vbar_p,
+                        void* DUon_p, void* DVom_p,
+                        void* pm_p, void* pn_p,
+                        void* pmon_r_p, void* pnom_r_p,
+                        void* pmon_p_p, void* pnom_p_p,
+                        void* om_r_p, void* on_r_p,
+                        void* om_p_p, void* on_p_p,
+                        void* visc2_r_p, void* visc2_p2_p,
+                        void* rhs_ubar_p, void* rhs_vbar_p,
+                        void* DiaU2rhs_p, void* DiaV2rhs_p,
+                        int NDM2d,
+                        int M2pgrd, int M2xadv, int M2yadv, int M2hadv,
+                        int M2fcor, int M2hvis, int M2xvis, int M2yvis,
+                        double g,
+                        const roms::EdgeFlags* e,
+                        const roms::TileBounds* t);
+
 }  // extern "C"
 
 #endif  // ROMS_KOKKOS

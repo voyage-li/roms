@@ -56,6 +56,9 @@
       USE roms_kernel_mod, ONLY : ROMS_initialize
       USE roms_kernel_mod, ONLY : ROMS_run
       USE roms_kernel_mod, ONLY : ROMS_finalize
+#ifdef ROMS_KOKKOS
+      USE kokkos_step2d_mod, ONLY : kokkos_init, kokkos_finalize
+#endif
 #if defined PIO_LIB && defined DISTRIBUTE
       USE set_pio_mod,     ONLY : finalize_pio
 #endif
@@ -67,6 +70,8 @@
       logical, save :: first
 
       integer :: ng, MyError, provided, required
+      integer(kind=SELECTED_INT_KIND(18)) :: wall_start, wall_end
+      integer(kind=SELECTED_INT_KIND(18)) :: wall_rate
 
 #ifdef DISTRIBUTE
 # ifdef MPI
@@ -107,8 +112,18 @@
 !-----------------------------------------------------------------------
 !
       IF (exit_flag.eq.NoError) THEN
+#ifdef ROMS_KOKKOS
+        CALL kokkos_init
+#endif
         first=.TRUE.
+        CALL SYSTEM_CLOCK (wall_start, wall_rate)
         CALL ROMS_initialize (first)
+        CALL SYSTEM_CLOCK (wall_end)
+        IF (Master.and.(wall_rate.gt.0)) THEN
+          WRITE (stdout,'(a,f14.6)') 'ROMS initialization wall: ', &
+     &                            REAL(wall_end-wall_start,r8)/ &
+     &                            REAL(wall_rate,r8)
+        END IF
       END IF
 !
 !-----------------------------------------------------------------------
@@ -121,7 +136,14 @@
         DO ng=1,Ngrids
           run_time=MAX(run_time, dt(ng)*ntimes(ng))
         END DO
+        CALL SYSTEM_CLOCK (wall_start, wall_rate)
         CALL ROMS_run (run_time)
+        CALL SYSTEM_CLOCK (wall_end)
+        IF (wall_rate.gt.0) THEN
+          WRITE (stdout,'(a,i0,a,f14.6)') &
+     &      'ROMS time stepping wall [rank=', MyRank, ']: ', &
+     &      REAL(wall_end-wall_start,r8)/REAL(wall_rate,r8)
+        END IF
       END IF
 !
 !-----------------------------------------------------------------------
@@ -131,6 +153,9 @@
       CALL ROMS_finalize
 #if defined PIO_LIB && defined DISTRIBUTE
       CALL finalize_pio
+#endif
+#ifdef ROMS_KOKKOS
+      CALL kokkos_finalize
 #endif
       CALL ROMS_deallocate_arrays
 #if defined DISTRIBUTE && defined MPI

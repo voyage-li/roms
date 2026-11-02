@@ -1239,9 +1239,8 @@
 !  These five stages have nothing between them -- no halo exchange, no
 !  open-boundary call, no zetabc -- and each only accumulates into
 !  rhs_ubar/rhs_vbar, so they collapse into a single dispatch.  That
-!  matters because at this problem's size a Kokkos launch costs more
-!  than the arithmetic it covers: unfused, the OpenMP backend ran 17x
-!  slower at 8 threads than at 1.
+!  reduces launch overhead without allowing the reference loops below
+!  to overwrite the fused result.
 !
       CALL k_step2d_rhs_fused (ng, tile, krhs,                          &
      &                         LBi, UBi, LBj, UBj,                      &
@@ -1265,7 +1264,9 @@
      &                         M2hadv, M2fcor, M2hvis, M2xvis,          &
      &                         M2yvis, g, KK_EDGE, KK_TILE)
 #endif
-#if defined ROMS_KOKKOS && defined KK_STAGE_PGRD && !defined KK_STAGE_FUSED
+#if defined ROMS_KOKKOS && defined KK_STAGE_FUSED
+/* Already evaluated by k_step2d_rhs_fused. */
+#elif defined ROMS_KOKKOS && defined KK_STAGE_PGRD
 !
 !  Kokkos path: the pressure-gradient loops live in
 !  ROMS/Cpp/kokkos_step2d.cpp.
@@ -1406,7 +1407,9 @@
         END IF
       END DO
 #endif /* ROMS_KOKKOS */
-#if defined ROMS_KOKKOS && defined KK_STAGE_HADV && !defined KK_STAGE_FUSED
+#if defined ROMS_KOKKOS && defined KK_STAGE_FUSED
+/* Already evaluated by k_step2d_rhs_fused. */
+#elif defined ROMS_KOKKOS && defined KK_STAGE_HADV
 !
 !  Kokkos path: the fourth-order advection loops live in
 !  ROMS/Cpp/kokkos_step2d.cpp.  Only UV_ADV without UV_C2ADVECTION is
@@ -1647,7 +1650,9 @@
 #endif
 
 #endif /* ROMS_KOKKOS */
-#if defined ROMS_KOKKOS && defined KK_STAGE_CORI && !defined KK_STAGE_FUSED
+#if defined ROMS_KOKKOS && defined KK_STAGE_FUSED
+/* Already evaluated by k_step2d_rhs_fused. */
+#elif defined ROMS_KOKKOS && defined KK_STAGE_CORI
 !
 !  Kokkos path: the Coriolis loops live in ROMS/Cpp/kokkos_step2d.cpp.
 !
@@ -1802,7 +1807,9 @@
 #endif
 #endif /* ROMS_KOKKOS */
 #if defined UV_VIS2 || defined UV_VIS4
-#if defined ROMS_KOKKOS && defined KK_STAGE_PSID && !defined KK_STAGE_FUSED
+#if defined ROMS_KOKKOS && defined KK_STAGE_FUSED
+/* Already evaluated by k_step2d_rhs_fused. */
+#elif defined ROMS_KOKKOS && defined KK_STAGE_PSID
 !
 !  Kokkos path: total depth at PSI points (step2d_LF_AM3.h).
 !
@@ -1830,7 +1837,9 @@
 #endif
 #endif /* ROMS_KOKKOS */
 #ifdef UV_VIS2
-#if defined ROMS_KOKKOS && defined KK_STAGE_HVIS && !defined KK_STAGE_FUSED
+#if defined ROMS_KOKKOS && defined KK_STAGE_FUSED
+/* Already evaluated by k_step2d_rhs_fused. */
+#elif defined ROMS_KOKKOS && defined KK_STAGE_HVIS
 !
 !  Kokkos path: harmonic horizontal viscosity.
 !
