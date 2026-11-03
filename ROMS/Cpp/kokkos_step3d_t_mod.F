@@ -6,7 +6,9 @@
      &                                      C_INTPTR_T, C_LOC
       implicit none
       PRIVATE
-      PUBLIC :: kokkos_tracer_config, k_step3d_t, kk_is_contiguous
+      PUBLIC :: kokkos_tracer_config, k_step3d_t, k_step3d_t_rows, &
+     &          k_step3d_t_chunks, &
+     &          kk_is_contiguous
 !
       TYPE, BIND(C) :: kokkos_tracer_config
         integer(C_INT) :: LBi, UBi, LBj, UBj
@@ -37,6 +39,27 @@
           TYPE(C_PTR), VALUE :: pm, pn, Hz, Huon, Hvom, W, zr, Akt
           TYPE(C_PTR), VALUE :: tracer, diagnostics
         END SUBROUTINE k_step3d_t
+!
+        SUBROUTINE k_step3d_t_rows (config, schemes, pm, pn, Hz, Huon, &
+     &                        Hvom, W, zr, Akt, tracer, diagnostics) &
+     &                        BIND(C, NAME='k_step3d_t_rows')
+          IMPORT :: kokkos_tracer_config, C_INT, C_PTR
+          TYPE(kokkos_tracer_config), INTENT(IN) :: config
+          integer(C_INT), INTENT(IN) :: schemes(*)
+          TYPE(C_PTR), VALUE :: pm, pn, Hz, Huon, Hvom, W, zr, Akt
+          TYPE(C_PTR), VALUE :: tracer, diagnostics
+        END SUBROUTINE k_step3d_t_rows
+!
+        SUBROUTINE k_step3d_t_chunks (config, schemes, pm, pn, Hz,      &
+     &                        Huon, Hvom, W, zr, Akt, tracer,           &
+     &                        diagnostics)                              &
+     &                        BIND(C, NAME='k_step3d_t_chunks')
+          IMPORT :: kokkos_tracer_config, C_INT, C_PTR
+          TYPE(kokkos_tracer_config), INTENT(IN) :: config
+          integer(C_INT), INTENT(IN) :: schemes(*)
+          TYPE(C_PTR), VALUE :: pm, pn, Hz, Huon, Hvom, W, zr, Akt
+          TYPE(C_PTR), VALUE :: tracer, diagnostics
+        END SUBROUTINE k_step3d_t_chunks
       END INTERFACE
       CONTAINS
       logical FUNCTION kk_contiguous2(a)

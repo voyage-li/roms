@@ -64,6 +64,11 @@
 !
       USE mod_param
       USE mod_scalars
+#if defined ROMS_KOKKOS && defined KK_STAGE_SETZETA
+      USE, INTRINSIC :: iso_c_binding, ONLY : C_LOC
+      USE kokkos_rhs3d_mod, ONLY : kokkos_tile_bounds, k_set_zeta,      &
+     &                             kk_fill_bounds
+#endif
 !
       USE exchange_2d_mod, ONLY : exchange_r2d_tile
 # ifdef DISTRIBUTE
@@ -77,18 +82,21 @@
       integer, intent(in) :: IminS, ImaxS, JminS, JmaxS
 !
 # ifdef ASSUMED_SHAPE
-      real(r8), intent(in) :: Zt_avg1(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: Zt_avg1(LBi:,LBj:)
 
-      real(r8), intent(out) :: zeta(LBi:,LBj:,:)
+      real(r8), TARGET, intent(out) :: zeta(LBi:,LBj:,:)
 # else
-      real(r8), intent(in) :: Zt_avg1(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: Zt_avg1(LBi:UBi,LBj:UBj)
 
-      real(r8), intent(out) :: zeta(LBi:UBi,LBj:UBj,3)
+      real(r8), TARGET, intent(out) :: zeta(LBi:UBi,LBj:UBj,3)
 # endif
 !
 !  Local variable declarations.
 !
       integer :: i, j
+#if defined ROMS_KOKKOS && defined KK_STAGE_SETZETA
+      TYPE(kokkos_tile_bounds) :: KK_TILE
+#endif
 
 # include "set_bounds.h"
 !
@@ -98,12 +106,24 @@
 !  step "n").
 !-----------------------------------------------------------------------
 !
+#if defined ROMS_KOKKOS && defined KK_STAGE_SETZETA
+!
+!  Kokkos path: the two copies live in ROMS/Cpp/kokkos_rhs3d.cpp
+!  (k_set_zeta).  The halo exchange below stays here.
+!
+      CALL kk_fill_bounds (KK_TILE, ng, tile)
+      CALL k_set_zeta (ng, tile,                                        &
+     &                 LBi, UBi, LBj, UBj,                              &
+     &                 IminS, ImaxS, JminS, JmaxS,                      &
+     &                 C_LOC(Zt_avg1), C_LOC(zeta), KK_TILE)
+#else
       DO j=JstrR,JendR
         DO i=IstrR,IendR
           zeta(i,j,1)=Zt_avg1(i,j)
           zeta(i,j,2)=Zt_avg1(i,j)
         END DO
       END DO
+#endif /* ROMS_KOKKOS && KK_STAGE_SETZETA */
 
       IF (EWperiodic(ng).or.NSperiodic(ng)) THEN
         CALL exchange_r2d_tile (ng, tile,                               &

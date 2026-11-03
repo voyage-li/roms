@@ -9,14 +9,17 @@ module load swgcc/1473 mpi/swuc
 export NF_CONFIG=${NF_CONFIG:-$HOME/ftao/local-saca/bin/nf-config}
 export NETCDF=${NETCDF:-$HOME/ftao/local-saca}
 export NETCDF_INCDIR=${NETCDF_INCDIR:-$HOME/ftao/local-saca/include}
-TAG=$BACKEND
+# BUILD_TAG names the build directory (default: the backend), e.g. sw64-opt.
+TAG=${BUILD_TAG:-$BACKEND}
 if [[ "$MPI" == ON ]]; then TAG=${TAG}-mpi; fi
 mkdir -p "$ROOT/build/$TAG" "$ROOT/logs"
 FLAGS='OUT_DOUBLE'
 KOKKOS=OFF
 if [[ "$BACKEND" != reference ]]; then
   KOKKOS=ON
-  FLAGS+=';KK_STAGE_FUSED;KK_STAGE_TAVG;KK_STAGE_COUP;KK_STAGE_MOMT;KK_STAGE_STOR'
+  # KK_STAGES overrides the stage list, e.g. to build a step2d-only binary
+  # whose Serial output can be compared bit for bit with build/reference.
+  FLAGS+=";${KK_STAGES:-KK_STAGE_FUSED;KK_STAGE_TAVG;KK_STAGE_COUP;KK_STAGE_MOMT;KK_STAGE_DIAG;KK_STAGE_STOR;KK_STAGE_UV3DMIX;KK_STAGE_T3DMIX;KK_STAGE_PRSGRD;KK_STAGE_OMEGA;KK_STAGE_SETZETA;KK_STAGE_PRE3D;KK_STAGE_STEP3DUV}"
 fi
 cmake -S "$ROOT" -B "$ROOT/build/$TAG" \
   -DCMAKE_TOOLCHAIN_FILE="$ROOT/Compilers/toolchain_SW64.cmake" \

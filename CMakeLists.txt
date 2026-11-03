@@ -401,8 +401,11 @@ add_library( Objects OBJECT ${All_f90s} )
 if( ROMS_KOKKOS )
   target_link_libraries( Objects Kokkos::kokkos )
   if( _kk_backend STREQUAL "sw64" )
+    # The fused RHS and hvisc2 touch 17+ arrays; GCC's default limit of 20
+    # alias-versioning checks makes it give up on those loops. 64 lets it
+    # vectorise hvisc2 (and the V pass of pressure_grad) instead.
     target_compile_options( Objects PRIVATE
-      "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive>" )
+      "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive;--param;vect-max-version-for-alias-checks=64>" )
   endif()
 
   option( ROMS_KOKKOS_TESTS "Build direct step2d regression tests" OFF )
@@ -432,11 +435,46 @@ if( ROMS_KOKKOS )
         target_compile_options( bench_step3d_t_kokkos PRIVATE
           "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive>" )
       endif()
+
+      # Same benchmark with the experimental TeamPolicy entries compiled in.
+      add_executable( bench_step3d_t_team_kokkos
+        ROMS/Cpp/bench_step3d_t.cpp ROMS/Cpp/kokkos_config.cpp
+        ROMS/Cpp/kokkos_step3d_t.cpp )
+      target_compile_definitions( bench_step3d_t_team_kokkos PRIVATE KK_STEP3D_T_TEAM )
+      target_link_libraries( bench_step3d_t_team_kokkos Kokkos::kokkos )
+      set_target_properties( bench_step3d_t_team_kokkos PROPERTIES LINKER_LANGUAGE Fortran )
+      if( _kk_backend STREQUAL "sw64" )
+        target_compile_options( bench_step3d_t_team_kokkos PRIVATE
+          "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive>" )
+      endif()
+    endif()
+
+    # Same step2d kernels with the experimental TeamPolicy entries.
+    add_executable( bench_step2d_team_kokkos
+      ROMS/Cpp/bench_step2d_team.cpp ROMS/Cpp/kokkos_config.cpp
+      ROMS/Cpp/kokkos_step2d.cpp ROMS/Cpp/kokkos_step2d_team.cpp )
+    target_compile_definitions( bench_step2d_team_kokkos PRIVATE KK_STEP2D_TEAM )
+    target_link_libraries( bench_step2d_team_kokkos Kokkos::kokkos )
+    if( _kk_backend STREQUAL "sw64" )
+      target_compile_options( bench_step2d_team_kokkos PRIVATE
+        "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive;--param;vect-max-version-for-alias-checks=64>" )
+
+      # Same kernels with the team scratch taken from the shared-LDM pool.
+      # Requires -cache_size 32 -ldm_share_mode 5 -ldm_share_size 128.
+      add_executable( bench_step2d_team_ldm_kokkos
+        ROMS/Cpp/bench_step2d_team.cpp ROMS/Cpp/kokkos_config.cpp
+        ROMS/Cpp/kokkos_step2d.cpp ROMS/Cpp/kokkos_step2d_team.cpp )
+      target_compile_definitions( bench_step2d_team_ldm_kokkos PRIVATE
+        KK_STEP2D_TEAM KK_STEP2D_TEAM_LDM )
+      target_link_libraries( bench_step2d_team_ldm_kokkos Kokkos::kokkos )
+      target_compile_options( bench_step2d_team_ldm_kokkos PRIVATE
+        "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive>" )
     endif()
 
     if( _kk_backend STREQUAL "sw64" )
       target_compile_options( test_step2d_kokkos PRIVATE
-        -mhybrid-coding -fpermissive )
+        -mhybrid-coding -fpermissive
+        --param vect-max-version-for-alias-checks=64 )
     endif()
   endif()
 endif()

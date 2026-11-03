@@ -25,9 +25,12 @@ export NETCDF=${NETCDF:-$HOME/ftao/local-saca}
 export NETCDF_INCDIR=${NETCDF_INCDIR:-$HOME/ftao/local-saca/include}
 BASE="OUT_DOUBLE;VAR_RHO_2D;DIAGNOSTICS_UV;DIAGNOSTICS_TS"
 [[ -n "$EXTRA" ]] && BASE="$BASE;$EXTRA"
-STAGES=";KK_STAGE_FUSED;KK_STAGE_TAVG;KK_STAGE_COUP;KK_STAGE_MOMT;KK_STAGE_STOR"
+STAGES=";KK_STAGE_FUSED;KK_STAGE_TAVG;KK_STAGE_COUP;KK_STAGE_MOMT;KK_STAGE_DIAG;KK_STAGE_STOR;KK_STAGE_UV3DMIX;KK_STAGE_T3DMIX;KK_STAGE_PRSGRD;KK_STAGE_OMEGA;KK_STAGE_SETZETA"
+MPI=${MPI:-OFF}
+SUFFIX=""
+[[ "$MPI" == ON ]] && SUFFIX="-mpi"
 mkdir -p logs build
-for backend in reference serial sw64; do
+for backend in ${BACKENDS:-reference serial sw64}; do
   KOKKOS=OFF
   TRACER=OFF
   FLAGS="$BASE"
@@ -36,7 +39,7 @@ for backend in reference serial sw64; do
     TRACER=ON
     FLAGS="$BASE$STAGES"
   fi
-  tag="${APP}-${backend}"
+  tag="${APP}-${backend}${SUFFIX}"
   echo "=== configuring $tag"
   cmake -S "$ROOT" -B "$ROOT/build/$tag" \
     -DCMAKE_TOOLCHAIN_FILE="$ROOT/Compilers/toolchain_SW64.cmake" \
@@ -46,7 +49,7 @@ for backend in reference serial sw64; do
     -DCMAKE_BUILD_TYPE=Release -DROMS_FAST_MATH=OFF -DROMS_KOKKOS_TESTS=OFF \
     -DROMS_APP="$APP" -DMY_HEADER_DIR="$HEADER_DIR" \
     -DROMS_KOKKOS="$KOKKOS" -DROMS_KOKKOS_BACKEND="$backend" \
-    -DMPI=OFF -DLIBTYPE=STATIC -DMY_CPP_FLAGS="$FLAGS" \
+    -DMPI="$MPI" -DLIBTYPE=STATIC -DMY_CPP_FLAGS="$FLAGS" \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON > "logs/configure-$tag.log" 2>&1
   echo "=== building $tag"
   cmake --build "$ROOT/build/$tag" --parallel "${BUILD_JOBS:-6}" \

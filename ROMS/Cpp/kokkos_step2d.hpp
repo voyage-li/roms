@@ -185,6 +185,19 @@ void k_step2d_momentum_step(int ng, int tile, int kstp, int knew,
                             int predictor, int first_2d_step, double dtfast,
                             const roms::TileBounds* t);
 
+/* Stage 17b: time-integrated 2-D momentum diagnostics (corrector). */
+
+void k_step2d_diag_int(int ng, int tile, int kstp, int first_2d_step,
+                       int LBi, int UBi, int LBj, int UBj,
+                       int IminS, int ImaxS, int JminS, int JmaxS,
+                       void* pm_p, void* pn_p,
+                       void* DiaU2rhs_p, void* DiaV2rhs_p,
+                       void* DiaRUbar_p, void* DiaRVbar_p,
+                       void* DiaU2int_p, void* DiaV2int_p,
+                       void* DiaU2wrk_p, void* DiaV2wrk_p,
+                       int NDM2d, double cff1, double cff2, double cff3,
+                       double fac, const roms::TileBounds* t);
+
 /* Stage 18: store the predictor right-hand side for the corrector. */
 
 void k_step2d_store_rhs(int ng, int tile, int krhs,

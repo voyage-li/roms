@@ -18,5 +18,13 @@ struct TracerConfig {
 extern "C" void k_step3d_t(const roms::TracerConfig* config,
     const int* schemes, void* pm, void* pn, void* Hz, void* Huon, void* Hvom,
     void* W, void* zr, void* Akt, void* tracer, void* diagnostics);
+extern "C" void k_step3d_t_rows(const roms::TracerConfig* config,
+    const int* schemes, void* pm, void* pn, void* Hz, void* Huon, void* Hvom,
+    void* W, void* zr, void* Akt, void* tracer, void* diagnostics);
+/* Production entry: the row kernel with the Fortran loop order inside
+** each chunk of columns (i innermost).  Same expressions, same result. */
+extern "C" void k_step3d_t_chunks(const roms::TracerConfig* config,
+    const int* schemes, void* pm, void* pn, void* Hz, void* Huon, void* Hvom,
+    void* W, void* zr, void* Akt, void* tracer, void* diagnostics);
 #endif
 #endif

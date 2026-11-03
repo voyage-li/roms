@@ -24,9 +24,25 @@ the available NetCDF/HDF5 archives require the MPI runtime. This does not
 turn on distributed ROMS or offload the Serial build. All compared builds
 use double output and `ROMS_FAST_MATH=OFF`. The mixed Fortran/C++ link also supplies host/slave C++ runtimes after
 the Kokkos archives. Both Kokkos builds explicitly
-enable FUSED, TAVG, COUP, MOMT and STOR; depth/flux and free-surface kernels
-are enabled directly by `ROMS_KOKKOS`. The tested physics is the diagnostic
-3-D upwelling combination. Unsupported physics fails compilation.
+enable FUSED, TAVG, COUP, MOMT, DIAG, STOR, UV3DMIX, T3DMIX,
+PRSGRD, OMEGA, SETZETA, PRE3D and STEP3DUV; depth/flux and free-surface
+kernels are enabled directly by `ROMS_KOKKOS`. The tested physics is the
+diagnostic 3-D upwelling combination. Unsupported physics fails
+compilation.  `KK_STAGES='KK_STAGE_FUSED;...'` replaces the stage list,
+for example to build a binary with only the step2d stages whose Serial
+output can be compared bit for bit with `build/reference`.  PRE3D and
+STEP3DUV are only in `build.sh`: bl_test defines SOLAR_SOURCE and
+LMD_MIXING, which the pre_step3d kernel rejects.
+
+`BUILD_TAG=sw64-opt bash ROMS/Cpp/tools/sw64/build.sh sw64` builds into
+`build/sw64-opt` instead of `build/sw64`, so a candidate never replaces the
+binary it is measured against.
+
+Set `ROMS_KK_TIMING=1` in the job environment to print, at shutdown, the
+wall time and call count of every Kokkos entry point.  Launches return only
+after their work is done, so these are the kernels' own in-model costs;
+subtracting their sum from `Model 2D kernel` leaves the Fortran still
+running on the management core.
 
 ## Direct target regressions
 
@@ -71,6 +87,21 @@ reference fields, use a separate `--zero-tol 1e-20` absolute threshold;
 nonzero fields still use the `1e-10` normalized relative threshold. Missing required variables,
 nonfinite/fill data and mismatched shapes/record times must fail. Matching
 rounded KE in stdout is not array-level or bitwise validation.
+
+`nccmp.py` without `--vars` checks only zeta, ubar, vbar, u, v and the
+2-D momentum diagnostics.  Use `cmp_all.sh`, which lists all 101
+time-dependent fields of the three files (tracers, w, omega, rho, the
+3-D momentum and tracer budget terms, the second moments and tracer
+fluxes in the averages):
+
+```sh
+bash ROMS/Cpp/tools/sw64/cmp_all.sh runs/smoke/reference runs/x/serial
+bash ROMS/Cpp/tools/sw64/cmp_all.sh runs/smoke/reference runs/x/sw64 \
+  --rtol 1e-10 --zero-tol 1e-20
+```
+
+The first line, with no tolerance, demands equal values; the Kokkos
+Serial build currently meets that against the pure Fortran build.
 
 ## Short performance run
 

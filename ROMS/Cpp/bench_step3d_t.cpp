@@ -21,6 +21,11 @@
 #include <cstdlib>
 #include <vector>
 
+#ifdef KK_STEP3D_T_TEAM
+extern "C" void k_step3d_t_team(const roms::TracerConfig*, const int*, int,
+    void*,void*,void*,void*,void*,void*,void*,void*,void*,void*,void*);
+#endif
+
 namespace {
 
 double median(std::vector<double> v) {
@@ -54,6 +59,13 @@ void bench(int nx, int ny, int levels, int ndt, int reps) {
   std::vector<double> zr(cells*levels);
   std::vector<double> w(cells*(levels+1)), akt(cells*(levels+1)*2);
   std::vector<double> t(cells*levels*3*2), diag(cells*levels*2*ndt);
+#ifdef KK_STEP3D_T_TEAM
+  const std::size_t team_need=std::max(std::size_t(columns)*2*(levels+1),
+      std::size_t(ny)*((std::size_t(nx)+1)*levels+64*2*(levels+1)));
+  std::vector<double> team_scratch(team_need);
+#else
+  std::vector<double> team_scratch(1);
+#endif
   const double bytes = 8.0*(pm.size()+pn.size()+4.0*hz.size()+w.size()+
       akt.size()+t.size()+diag.size());
 
@@ -89,28 +101,72 @@ void bench(int nx, int ny, int levels, int ndt, int reps) {
       av(i,j,k,it)=1e-4*(1+0.01*k+0.001*i+0.002*j+0.1*it);
   }
   int schemes[2]={0,1};
-  auto call=[&]{
-    k_step3d_t(&p,schemes,pm.data(),pn.data(),hz.data(),hu.data(),hv.data(),
-        w.data(),zr.data(),akt.data(),t.data(),diag.data());
-  };
-  call();  // warm-up, also sizes the scratch
-  std::vector<double> times;
-  for (int r=0;r<reps;++r) {
+  auto reset=[&]{
     for (int it=1;it<=2;++it) for (int k=1;k<=levels;++k)
       for (int j=p.Jstr;j<=p.Jend;++j) for (int i=p.Istr;i<=p.Iend;++i)
         tv(i,j,k,p.nnew,it)=tv(i,j,k,3,it);
-    const auto t0=std::chrono::steady_clock::now();
-    call();
-    const auto t1=std::chrono::steady_clock::now();
-    times.push_back(std::chrono::duration<double>(t1-t0).count());
+  };
+  auto measure=[&](const char* tag, int mode) {
+    auto call=[&]{
+#ifdef KK_STEP3D_T_TEAM
+      if (mode>=0) {
+        k_step3d_t_team(&p,schemes,mode,pm.data(),pn.data(),hz.data(),hu.data(),
+            hv.data(),w.data(),zr.data(),akt.data(),t.data(),diag.data(),
+            team_scratch.data());
+        return;
+      }
+#else
+      (void)mode;
+#endif
+      k_step3d_t(&p,schemes,pm.data(),pn.data(),hz.data(),hu.data(),hv.data(),
+          w.data(),zr.data(),akt.data(),t.data(),diag.data());
+    };
+    call();  // warm-up, also sizes any scratch
+    std::vector<double> times;
+    for (int r=0;r<reps;++r) {
+      reset();
+      const auto t0=std::chrono::steady_clock::now();
+      call();
+      const auto t1=std::chrono::steady_clock::now();
+      times.push_back(std::chrono::duration<double>(t1-t0).count());
+    }
+    const double best=*std::min_element(times.begin(),times.end());
+    const double updates=double(columns)*levels*2.0;
+    std::printf("%-6s %-13s cols=%-7zu N=%-3d best=%8.4f s median=%8.4f s "
+        "%6.2f ns/update footprint=%5.2f GB\n",
+        roms::exec_space::name(),tag,columns,levels,best,median(times),
+        1e9*best/updates,bytes/1e9);
+    std::fflush(stdout);
+  };
+  measure("range",-1);
+#ifdef KK_STEP3D_T_TEAM
+  measure("team-columns",0);
+  measure("team-rows",1);
+  {
+    // The team variants must reproduce the range kernel exactly, not
+    // merely closely: same expressions, same order, shared fluxes only.
+    const auto t_ref=t, diag_ref=diag;
+    reset();
+    k_step3d_t(&p,schemes,pm.data(),pn.data(),hz.data(),hu.data(),hv.data(),
+        w.data(),zr.data(),akt.data(),t.data(),diag.data());
+    const auto t_range=t, diag_range=diag;
+    double et=0.0, ed=0.0;
+    for (int mode=0;mode<2;++mode) {
+      t=t_ref; diag=diag_ref;
+      reset();
+      k_step3d_t_team(&p,schemes,mode,pm.data(),pn.data(),hz.data(),hu.data(),
+          hv.data(),w.data(),zr.data(),akt.data(),t.data(),diag.data(),
+          team_scratch.data());
+      double e1=0.0, e2=0.0;
+      for (std::size_t k=0;k<t.size();++k) e1=std::max(e1,std::abs(t[k]-t_range[k]));
+      for (std::size_t k=0;k<diag.size();++k) e2=std::max(e2,std::abs(diag[k]-diag_range[k]));
+      et=std::max(et,e1); ed=std::max(ed,e2);
+    }
+    std::printf("%-6s verify       cols=%-7zu N=%-3d max|d t|=%.3e max|d diag|=%.3e %s\n",
+        roms::exec_space::name(),columns,levels,et,ed,
+        (et==0.0 && ed==0.0) ? "identical" : "DIFFERS");
   }
-  const double best=*std::min_element(times.begin(),times.end());
-  const double updates=double(columns)*levels*2.0;
-  std::printf("%-6s cols=%-7zu N=%-3d updates=%-9.0f ndt=%-3d "
-      "best=%8.4f s median=%8.4f s %6.2f ns/update footprint=%5.2f GB\n",
-      roms::exec_space::name(),columns,levels,updates,ndt,best,
-      median(times),1e9*best/updates,bytes/1e9);
-  std::fflush(stdout);
+#endif
 }
 
 }  // namespace
@@ -121,10 +177,15 @@ int main(int argc, char** argv) {
     const int reps = argc > 1 ? std::atoi(argv[1]) : 3;
     const int ndt = argc > 2 ? std::atoi(argv[2]) : 20;
     std::printf("step3d_t kernel benchmark, %d reps, %d diagnostics\n", reps, ndt);
-    bench(254, 254, 16, ndt, reps);
-    bench(510, 510, 16, ndt, reps);
-    bench(254, 254, 32, ndt, reps);
-    bench(510, 510, 32, ndt, reps);
+    if (argc >= 6) {
+      bench(std::atoi(argv[3]), std::atoi(argv[4]), std::atoi(argv[5]), ndt,
+            reps);
+    } else {
+      bench(254, 254, 16, ndt, reps);
+      bench(510, 510, 16, ndt, reps);
+      bench(254, 254, 32, ndt, reps);
+      bench(510, 510, 32, ndt, reps);
+    }
   }
   Kokkos::finalize();
   return 0;

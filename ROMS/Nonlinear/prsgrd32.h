@@ -136,6 +136,11 @@
 !
       USE mod_param
       USE mod_scalars
+#if defined ROMS_KOKKOS && defined KK_STAGE_PRSGRD
+      USE, INTRINSIC :: iso_c_binding, ONLY : C_LOC
+      USE kokkos_rhs3d_mod, ONLY : kokkos_tile_bounds, k_prsgrd32,      &
+     &                             kk_fill_bounds
+#endif
 !
 !  Imported variable declarations.
 !
@@ -153,12 +158,12 @@
       real(r8), intent(in) :: umask_wet(LBi:,LBj:)
       real(r8), intent(in) :: vmask_wet(LBi:,LBj:)
 # endif
-      real(r8), intent(in) :: om_v(LBi:,LBj:)
-      real(r8), intent(in) :: on_u(LBi:,LBj:)
-      real(r8), intent(in) :: Hz(LBi:,LBj:,:)
-      real(r8), intent(in) :: z_r(LBi:,LBj:,:)
-      real(r8), intent(in) :: z_w(LBi:,LBj:,0:)
-      real(r8), intent(in) :: rho(LBi:,LBj:,:)
+      real(r8), TARGET, intent(in) :: om_v(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: on_u(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: Hz(LBi:,LBj:,:)
+      real(r8), TARGET, intent(in) :: z_r(LBi:,LBj:,:)
+      real(r8), TARGET, intent(in) :: z_w(LBi:,LBj:,0:)
+      real(r8), TARGET, intent(in) :: rho(LBi:,LBj:,:)
 # ifdef TIDE_GENERATING_FORCES
       real(r8), intent(in) :: eq_tide(LBi:,LBj:)
 # endif
@@ -169,11 +174,11 @@
       real(r8), intent(in) :: Pair(LBi:,LBj:)
 # endif
 # ifdef DIAGNOSTICS_UV
-      real(r8), intent(inout) :: DiaRU(LBi:,LBj:,:,:,:)
-      real(r8), intent(inout) :: DiaRV(LBi:,LBj:,:,:,:)
+      real(r8), TARGET, intent(inout) :: DiaRU(LBi:,LBj:,:,:,:)
+      real(r8), TARGET, intent(inout) :: DiaRV(LBi:,LBj:,:,:,:)
 # endif
-      real(r8), intent(inout) :: ru(LBi:,LBj:,0:,:)
-      real(r8), intent(inout) :: rv(LBi:,LBj:,0:,:)
+      real(r8), TARGET, intent(inout) :: ru(LBi:,LBj:,0:,:)
+      real(r8), TARGET, intent(inout) :: rv(LBi:,LBj:,0:,:)
 #else
 # ifdef MASKING
       real(r8), intent(in) :: umask(LBi:UBi,LBj:UBj)
@@ -183,12 +188,12 @@
       real(r8), intent(in) :: umask_wet(LBi:UBi,LBj:UBj)
       real(r8), intent(in) :: vmask_wet(LBi:UBi,LBj:UBj)
 # endif
-      real(r8), intent(in) :: om_v(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: on_u(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: Hz(LBi:UBi,LBj:UBj,N(ng))
-      real(r8), intent(in) :: z_r(LBi:UBi,LBj:UBj,N(ng))
-      real(r8), intent(in) :: z_w(LBi:UBi,LBj:UBj,0:N(ng))
-      real(r8), intent(in) :: rho(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), TARGET, intent(in) :: om_v(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: on_u(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: Hz(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), TARGET, intent(in) :: z_r(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), TARGET, intent(in) :: z_w(LBi:UBi,LBj:UBj,0:N(ng))
+      real(r8), TARGET, intent(in) :: rho(LBi:UBi,LBj:UBj,N(ng))
 # ifdef TIDE_GENERATING_FORCES
       real(r8), intent(in) :: eq_tide(LBi:UBi,LBj:UBj)
 # endif
@@ -199,16 +204,19 @@
       real(r8), intent(in) :: Pair(LBi:UBi,LBj:UBj)
 # endif
 # ifdef DIAGNOSTICS_UV
-      real(r8), intent(inout) :: DiaRU(LBi:UBi,LBj:UBj,N(ng),2,NDrhs)
-      real(r8), intent(inout) :: DiaRV(LBi:UBi,LBj:UBj,N(ng),2,NDrhs)
+      real(r8), TARGET, intent(inout) :: DiaRU(LBi:UBi,LBj:UBj,N(ng),2,NDrhs)
+      real(r8), TARGET, intent(inout) :: DiaRV(LBi:UBi,LBj:UBj,N(ng),2,NDrhs)
 # endif
-      real(r8), intent(inout) :: ru(LBi:UBi,LBj:UBj,0:N(ng),2)
-      real(r8), intent(inout) :: rv(LBi:UBi,LBj:UBj,0:N(ng),2)
+      real(r8), TARGET, intent(inout) :: ru(LBi:UBi,LBj:UBj,0:N(ng),2)
+      real(r8), TARGET, intent(inout) :: rv(LBi:UBi,LBj:UBj,0:N(ng),2)
 #endif
 !
 !  Local variable declarations.
 !
       integer :: i, j, k
+#if defined ROMS_KOKKOS && defined KK_STAGE_PRSGRD
+      TYPE(kokkos_tile_bounds) :: KK_TILE
+#endif
 
       real(r8), parameter :: OneFifth = 0.2_r8
       real(r8), parameter :: OneTwelfth = 1.0_r8/12.0_r8
@@ -219,8 +227,9 @@
 #ifdef ATM_PRESS
       real(r8) :: OneAtm, fac
 #endif
-      real(r8), dimension(IminS:ImaxS,JminS:JmaxS,N(ng)) :: P
+      real(r8), TARGET, dimension(IminS:ImaxS,JminS:JmaxS,N(ng)) :: P
 
+#if !(defined ROMS_KOKKOS && defined KK_STAGE_PRSGRD)
       real(r8), dimension(IminS:ImaxS,0:N(ng)) :: dR
       real(r8), dimension(IminS:ImaxS,0:N(ng)) :: dZ
 
@@ -228,6 +237,7 @@
       real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: aux
       real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: dRx
       real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: dZx
+#endif
 !
 #include "set_bounds.h"
 !
@@ -235,6 +245,25 @@
 !  Preliminary step (same for XI- and ETA-components):
 !-----------------------------------------------------------------------
 !
+#if defined ROMS_KOKKOS && defined KK_STAGE_PRSGRD
+!
+!  Kokkos path: the pressure recursion and both gradient passes live in
+!  ROMS/Cpp/kokkos_rhs3d.cpp (k_prsgrd32).
+!
+      CALL kk_fill_bounds (KK_TILE, ng, tile)
+      CALL k_prsgrd32 (ng, tile, nrhs,                                  &
+     &                 LBi, UBi, LBj, UBj,                              &
+     &                 IminS, ImaxS, JminS, JmaxS,                      &
+     &                 C_LOC(om_v), C_LOC(on_u), C_LOC(Hz),             &
+     &                 C_LOC(z_r), C_LOC(z_w), C_LOC(rho), C_LOC(P),    &
+     &                 C_LOC(ru), C_LOC(rv),                            &
+#ifdef DIAGNOSTICS_UV
+     &                 C_LOC(DiaRU), C_LOC(DiaRV),                      &
+#else
+     &                 C_LOC(ru), C_LOC(rv),                            &
+#endif
+     &                 N(ng), NDrhs, M3pgrd, g, rho0, KK_TILE)
+#else
       GRho=g/rho0
       GRho0=1000.0_r8*GRho
       HalfGRho=0.5_r8*GRho
@@ -431,6 +460,7 @@
           END DO
         END DO
       END DO
+#endif /* ROMS_KOKKOS && KK_STAGE_PRSGRD */
 !
       RETURN
       END SUBROUTINE prsgrd32_tile

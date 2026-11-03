@@ -163,6 +163,11 @@
       USE mod_param
       USE mod_scalars
       USE mod_sources
+# if defined ROMS_KOKKOS && defined KK_STAGE_PRE3D
+      USE, INTRINSIC :: iso_c_binding, ONLY : C_LOC, C_INT
+      USE kokkos_step3d_mod, ONLY : kokkos_pre3d_config,                &
+     &                              k_pre_step3d_t, k_pre_step3d_uv
+# endif
 !
       USE exchange_3d_mod, ONLY : exchange_r3d_tile
 # ifdef DISTRIBUTE
@@ -186,53 +191,53 @@
       real(r8), intent(in) :: rmask_wet(LBi:,LBj:)
 #   endif
 #  endif
-      real(r8), intent(in) :: pm(LBi:,LBj:)
-      real(r8), intent(in) :: pn(LBi:,LBj:)
-      real(r8), intent(in) :: Hz(LBi:,LBj:,:)
-      real(r8), intent(in) :: Huon(LBi:,LBj:,:)
-      real(r8), intent(in) :: Hvom(LBi:,LBj:,:)
-      real(r8), intent(in) :: z_r(LBi:,LBj:,:)
+      real(r8), intent(in), TARGET :: pm(LBi:,LBj:)
+      real(r8), intent(in), TARGET :: pn(LBi:,LBj:)
+      real(r8), intent(in), TARGET :: Hz(LBi:,LBj:,:)
+      real(r8), intent(in), TARGET :: Huon(LBi:,LBj:,:)
+      real(r8), intent(in), TARGET :: Hvom(LBi:,LBj:,:)
+      real(r8), intent(in), TARGET :: z_r(LBi:,LBj:,:)
       real(r8), intent(in) :: z_w(LBi:,LBj:,0:)
-      real(r8), intent(in) :: btflx(LBi:,LBj:,:)
-      real(r8), intent(in) :: bustr(LBi:,LBj:)
-      real(r8), intent(in) :: bvstr(LBi:,LBj:)
-      real(r8), intent(in) :: stflx(LBi:,LBj:,:)
-      real(r8), intent(in) :: sustr(LBi:,LBj:)
-      real(r8), intent(in) :: svstr(LBi:,LBj:)
+      real(r8), intent(in), TARGET :: btflx(LBi:,LBj:,:)
+      real(r8), intent(in), TARGET :: bustr(LBi:,LBj:)
+      real(r8), intent(in), TARGET :: bvstr(LBi:,LBj:)
+      real(r8), intent(in), TARGET :: stflx(LBi:,LBj:,:)
+      real(r8), intent(in), TARGET :: sustr(LBi:,LBj:)
+      real(r8), intent(in), TARGET :: svstr(LBi:,LBj:)
 #  ifdef SOLAR_SOURCE
       real(r8), intent(in) :: srflx(LBi:,LBj:)
 #  endif
 #  ifdef SUN
-      real(r8), intent(in) :: Akt(LBi:UBi,LBj:UBj,0:N(ng),NAT)
+      real(r8), intent(in), TARGET :: Akt(LBi:UBi,LBj:UBj,0:N(ng),NAT)
 #  else
-      real(r8), intent(in) :: Akt(LBi:,LBj:,0:,:)
+      real(r8), intent(in), TARGET :: Akt(LBi:,LBj:,0:,:)
 #  endif
-      real(r8), intent(in) :: Akv(LBi:,LBj:,0:)
+      real(r8), intent(in), TARGET :: Akv(LBi:,LBj:,0:)
 #  ifdef LMD_NONLOCAL
       real(r8), intent(in) :: ghats(LBi:,LBj:,0:,:)
 #  endif
-      real(r8), intent(in) :: W(LBi:,LBj:,0:)
+      real(r8), intent(in), TARGET :: W(LBi:,LBj:,0:)
 #  ifdef WEC_VF
       real(r8), intent(in) :: W_stokes(LBi:,LBj:,0:)
 #  endif
-      real(r8), intent(in) :: ru(LBi:,LBj:,0:,:)
-      real(r8), intent(in) :: rv(LBi:,LBj:,0:,:)
+      real(r8), intent(in), TARGET :: ru(LBi:,LBj:,0:,:)
+      real(r8), intent(in), TARGET :: rv(LBi:,LBj:,0:,:)
 #  ifdef DIAGNOSTICS_TS
-      real(r8), intent(inout) :: DiaTwrk(LBi:,LBj:,:,:,:)
+      real(r8), intent(inout), TARGET :: DiaTwrk(LBi:,LBj:,:,:,:)
 #  endif
 #  ifdef DIAGNOSTICS_UV
-      real(r8), intent(inout) :: DiaU3wrk(LBi:,LBj:,:,:)
-      real(r8), intent(inout) :: DiaV3wrk(LBi:,LBj:,:,:)
-      real(r8), intent(inout) :: DiaRU(LBi:,LBj:,:,:,:)
-      real(r8), intent(inout) :: DiaRV(LBi:,LBj:,:,:,:)
+      real(r8), intent(inout), TARGET :: DiaU3wrk(LBi:,LBj:,:,:)
+      real(r8), intent(inout), TARGET :: DiaV3wrk(LBi:,LBj:,:,:)
+      real(r8), intent(inout), TARGET :: DiaRU(LBi:,LBj:,:,:,:)
+      real(r8), intent(inout), TARGET :: DiaRV(LBi:,LBj:,:,:,:)
 #  endif
 #  ifdef SUN
-      real(r8), intent(inout) :: t(LBi:UBi,LBj:UBj,N(ng),3,NT(ng))
+      real(r8), intent(inout), TARGET :: t(LBi:UBi,LBj:UBj,N(ng),3,NT(ng))
 #  else
-      real(r8), intent(inout) :: t(LBi:,LBj:,:,:,:)
+      real(r8), intent(inout), TARGET :: t(LBi:,LBj:,:,:,:)
 #  endif
-      real(r8), intent(inout) :: u(LBi:,LBj:,:,:)
-      real(r8), intent(inout) :: v(LBi:,LBj:,:,:)
+      real(r8), intent(inout), TARGET :: u(LBi:,LBj:,:,:)
+      real(r8), intent(inout), TARGET :: v(LBi:,LBj:,:,:)
 
 # else
 
@@ -244,46 +249,46 @@
       real(r8), intent(in) :: rmask_wet(LBi:UBi,LBj:UBj)
 #   endif
 #  endif
-      real(r8), intent(in) :: pm(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: pn(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: Hz(LBi:UBi,LBj:UBj,N(ng))
-      real(r8), intent(in) :: Huon(LBi:UBi,LBj:UBj,N(ng))
-      real(r8), intent(in) :: Hvom(LBi:UBi,LBj:UBj,N(ng))
-      real(r8), intent(in) :: z_r(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), intent(in), TARGET :: pm(LBi:UBi,LBj:UBj)
+      real(r8), intent(in), TARGET :: pn(LBi:UBi,LBj:UBj)
+      real(r8), intent(in), TARGET :: Hz(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), intent(in), TARGET :: Huon(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), intent(in), TARGET :: Hvom(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), intent(in), TARGET :: z_r(LBi:UBi,LBj:UBj,N(ng))
       real(r8), intent(in) :: z_w(LBi:UBi,LBj:UBj,0:N(ng))
-      real(r8), intent(in) :: btflx(LBi:UBi,LBj:UBj,NT(ng))
-      real(r8), intent(in) :: bustr(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: bvstr(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: stflx(LBi:UBi,LBj:UBj,NT(ng))
-      real(r8), intent(in) :: sustr(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: svstr(LBi:UBi,LBj:UBj)
+      real(r8), intent(in), TARGET :: btflx(LBi:UBi,LBj:UBj,NT(ng))
+      real(r8), intent(in), TARGET :: bustr(LBi:UBi,LBj:UBj)
+      real(r8), intent(in), TARGET :: bvstr(LBi:UBi,LBj:UBj)
+      real(r8), intent(in), TARGET :: stflx(LBi:UBi,LBj:UBj,NT(ng))
+      real(r8), intent(in), TARGET :: sustr(LBi:UBi,LBj:UBj)
+      real(r8), intent(in), TARGET :: svstr(LBi:UBi,LBj:UBj)
 #  ifdef SOLAR_SOURCE
       real(r8), intent(in) :: srflx(LBi:UBi,LBj:UBj)
 #  endif
-      real(r8), intent(in) :: Akt(LBi:UBi,LBj:UBj,0:N(ng),NAT)
-      real(r8), intent(in) :: Akv(LBi:UBi,LBj:UBj,0:N(ng))
+      real(r8), intent(in), TARGET :: Akt(LBi:UBi,LBj:UBj,0:N(ng),NAT)
+      real(r8), intent(in), TARGET :: Akv(LBi:UBi,LBj:UBj,0:N(ng))
 #  ifdef LMD_NONLOCAL
       real(r8), intent(in) :: ghats(LBi:UBi,LBj:UBj,0:N(ng),NAT)
 #  endif
-      real(r8), intent(in) :: W(LBi:UBi,LBj:UBj,0:N(ng))
+      real(r8), intent(in), TARGET :: W(LBi:UBi,LBj:UBj,0:N(ng))
 #  ifdef WEC_VF
       real(r8), intent(in) :: W_stokes(LBi:UBi,LBj:UBj,0:N(ng))
 #  endif
-      real(r8), intent(in) :: ru(LBi:UBi,LBj:UBj,0:N(ng),2)
-      real(r8), intent(in) :: rv(LBi:UBi,LBj:UBj,0:N(ng),2)
+      real(r8), intent(in), TARGET :: ru(LBi:UBi,LBj:UBj,0:N(ng),2)
+      real(r8), intent(in), TARGET :: rv(LBi:UBi,LBj:UBj,0:N(ng),2)
 #  ifdef DIAGNOSTICS_TS
-      real(r8), intent(inout) :: DiaTwrk(LBi:UBi,LBj:UBj,N(ng),NT(ng),  &
+      real(r8), intent(inout), TARGET :: DiaTwrk(LBi:UBi,LBj:UBj,N(ng),NT(ng),  &
      &                                   NDT)
 #  endif
 #  ifdef DIAGNOSTICS_UV
-      real(r8), intent(inout) :: DiaU3wrk(LBi:UBi,LBj:UBj,N(ng),NDM3d)
-      real(r8), intent(inout) :: DiaV3wrk(LBi:UBi,LBj:UBj,N(ng),NDM3d)
-      real(r8), intent(inout) :: DiaRU(LBi:UBi,LBj:UBj,N(ng),2,NDrhs)
-      real(r8), intent(inout) :: DiaRV(LBi:UBi,LBj:UBj,N(ng),2,NDrhs)
+      real(r8), intent(inout), TARGET :: DiaU3wrk(LBi:UBi,LBj:UBj,N(ng),NDM3d)
+      real(r8), intent(inout), TARGET :: DiaV3wrk(LBi:UBi,LBj:UBj,N(ng),NDM3d)
+      real(r8), intent(inout), TARGET :: DiaRU(LBi:UBi,LBj:UBj,N(ng),2,NDrhs)
+      real(r8), intent(inout), TARGET :: DiaRV(LBi:UBi,LBj:UBj,N(ng),2,NDrhs)
 #  endif
-      real(r8), intent(inout) :: t(LBi:UBi,LBj:UBj,N(ng),3,NT(ng))
-      real(r8), intent(inout) :: u(LBi:UBi,LBj:UBj,N(ng),2)
-      real(r8), intent(inout) :: v(LBi:UBi,LBj:UBj,N(ng),2)
+      real(r8), intent(inout), TARGET :: t(LBi:UBi,LBj:UBj,N(ng),3,NT(ng))
+      real(r8), intent(inout), TARGET :: u(LBi:UBi,LBj:UBj,N(ng),2)
+      real(r8), intent(inout), TARGET :: v(LBi:UBi,LBj:UBj,N(ng),2)
 # endif
 !
 !  Local variable declarations.
@@ -312,8 +317,142 @@
       real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: FX
       real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: curv
       real(r8), dimension(IminS:ImaxS,JminS:JmaxS) :: grad
+# if defined ROMS_KOKKOS && defined KK_STAGE_PRE3D
+      TYPE(kokkos_pre3d_config) :: kk_cfg
+      integer(C_INT) :: kk_hadv(NT(ng)), kk_vadv(NT(ng))
+      logical :: kk_fast
+# endif
 
 # include "set_bounds.h"
+# if defined ROMS_KOKKOS && defined KK_STAGE_PRE3D
+!
+!-----------------------------------------------------------------------
+!  Kokkos path: the tracer and 3D momentum predictor loops below live in
+!  ROMS/Cpp/kokkos_step3d.cpp.  It is taken for the whole tile when
+!  every tracer uses a scheme the kernel implements and there are no
+!  tracer point sources; otherwise the Fortran loops run.  The lateral
+!  boundary conditions and exchanges at the end run in both cases.
+!-----------------------------------------------------------------------
+!
+      kk_fast=(.not.LuvSrc(ng)).and.(N(ng).ge.3)
+      DO itrc=1,NT(ng)
+        kk_hadv(itrc)=0
+        IF (Hadvection(itrc,ng)%CENTERED2) THEN
+          kk_hadv(itrc)=1
+        ELSE IF ((Hadvection(itrc,ng)%MPDATA).or.                       &
+     &           (Hadvection(itrc,ng)%HSIMT)) THEN
+          kk_hadv(itrc)=2
+        ELSE IF (Hadvection(itrc,ng)%UPSTREAM3) THEN
+          kk_hadv(itrc)=3
+        ELSE IF (Hadvection(itrc,ng)%AKIMA4) THEN
+          kk_hadv(itrc)=4
+        ELSE IF ((Hadvection(itrc,ng)%CENTERED4).or.                    &
+     &           (Hadvection(itrc,ng)%SPLIT_U3)) THEN
+          kk_hadv(itrc)=5
+        END IF
+        kk_vadv(itrc)=0
+        IF (Vadvection(itrc,ng)%SPLINES) THEN
+          kk_vadv(itrc)=6
+        ELSE IF (Vadvection(itrc,ng)%AKIMA4) THEN
+          kk_vadv(itrc)=4
+        ELSE IF (Vadvection(itrc,ng)%CENTERED2) THEN
+          kk_vadv(itrc)=1
+        ELSE IF ((Vadvection(itrc,ng)%MPDATA).or.                       &
+     &           (Vadvection(itrc,ng)%HSIMT)) THEN
+          kk_vadv(itrc)=2
+        ELSE IF ((Vadvection(itrc,ng)%CENTERED4).or.                    &
+     &           (Vadvection(itrc,ng)%SPLIT_U3)) THEN
+          kk_vadv(itrc)=5
+        END IF
+        IF ((kk_hadv(itrc).eq.0).or.(kk_vadv(itrc).eq.0)) THEN
+          kk_fast=.FALSE.
+        END IF
+      END DO
+      IF (kk_fast) THEN
+        kk_cfg%LBi=LBi
+        kk_cfg%UBi=UBi
+        kk_cfg%LBj=LBj
+        kk_cfg%UBj=UBj
+        kk_cfg%Istr=Istr
+        kk_cfg%Iend=Iend
+        kk_cfg%Jstr=Jstr
+        kk_cfg%Jend=Jend
+        kk_cfg%IstrU=IstrU
+        kk_cfg%JstrV=JstrV
+        kk_cfg%N=N(ng)
+        kk_cfg%NT=NT(ng)
+        kk_cfg%NAT=NAT
+        kk_cfg%nrhs=nrhs
+        kk_cfg%nstp=nstp
+        kk_cfg%nnew=nnew
+        IF (iic(ng).eq.ntfirst(ng)) THEN
+          kk_cfg%step=0
+        ELSE IF (iic(ng).eq.(ntfirst(ng)+1)) THEN
+          kk_cfg%step=1
+        ELSE
+          kk_cfg%step=2
+        END IF
+#  ifdef DIAGNOSTICS_TS
+        kk_cfg%NDT=NDT
+        kk_cfg%iTrate=iTrate
+        kk_cfg%iTvdif=iTvdif
+#  else
+        kk_cfg%NDT=0
+        kk_cfg%iTrate=0
+        kk_cfg%iTvdif=0
+#  endif
+#  ifdef DIAGNOSTICS_UV
+        kk_cfg%NDM3d=NDM3d
+        kk_cfg%NDrhs=NDrhs
+        kk_cfg%M3pgrd=M3pgrd
+        kk_cfg%M3vvis=M3vvis
+        kk_cfg%M3rate=M3rate
+#  else
+        kk_cfg%NDM3d=0
+        kk_cfg%NDrhs=0
+        kk_cfg%M3pgrd=0
+        kk_cfg%M3vvis=0
+        kk_cfg%M3rate=0
+#  endif
+        kk_cfg%fold_w=MERGE(1,0,                                        &
+     &    (.not.(CompositeGrid(iwest ,ng).or.EWperiodic(ng))).and.      &
+     &    DOMAIN(ng)%Western_Edge (tile))
+        kk_cfg%fold_e=MERGE(1,0,                                        &
+     &    (.not.(CompositeGrid(ieast ,ng).or.EWperiodic(ng))).and.      &
+     &    DOMAIN(ng)%Eastern_Edge (tile))
+        kk_cfg%fold_s=MERGE(1,0,                                        &
+     &    (.not.(CompositeGrid(isouth,ng).or.NSperiodic(ng))).and.      &
+     &    DOMAIN(ng)%Southern_Edge(tile))
+        kk_cfg%fold_n=MERGE(1,0,                                        &
+     &    (.not.(CompositeGrid(inorth,ng).or.NSperiodic(ng))).and.      &
+     &    DOMAIN(ng)%Northern_Edge(tile))
+        kk_cfg%dt=dt(ng)
+        kk_cfg%lambda=lambda
+#  ifndef TS_FIXED
+        CALL k_pre_step3d_t (kk_cfg, kk_hadv, kk_vadv,                  &
+     &                       C_LOC(pm), C_LOC(pn), C_LOC(Hz),           &
+     &                       C_LOC(Huon), C_LOC(Hvom), C_LOC(z_r),      &
+     &                       C_LOC(W), C_LOC(Akt), C_LOC(btflx),        &
+     &                       C_LOC(stflx), C_LOC(t),                    &
+#   ifdef DIAGNOSTICS_TS
+     &                       C_LOC(DiaTwrk))
+#   else
+     &                       C_LOC(t))
+#   endif
+#  endif
+        CALL k_pre_step3d_uv (kk_cfg, C_LOC(pm), C_LOC(pn), C_LOC(Hz),  &
+     &                        C_LOC(z_r), C_LOC(Akv),                   &
+     &                        C_LOC(bustr), C_LOC(bvstr),               &
+     &                        C_LOC(sustr), C_LOC(svstr),               &
+     &                        C_LOC(ru), C_LOC(rv), C_LOC(u), C_LOC(v), &
+#  ifdef DIAGNOSTICS_UV
+     &                        C_LOC(DiaU3wrk), C_LOC(DiaV3wrk),         &
+     &                        C_LOC(DiaRU), C_LOC(DiaRV))
+#  else
+     &                        C_LOC(u), C_LOC(v), C_LOC(u), C_LOC(v))
+#  endif
+      ELSE
+# endif /* ROMS_KOKKOS && KK_STAGE_PRE3D */
 
 # ifndef TS_FIXED
 !
@@ -1142,6 +1281,9 @@
           END IF
         END IF
       END DO J_LOOP2
+# if defined ROMS_KOKKOS && defined KK_STAGE_PRE3D
+      END IF
+# endif
 
 # ifndef TS_FIXED
 !

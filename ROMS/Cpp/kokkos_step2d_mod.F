@@ -45,6 +45,7 @@
       PUBLIC :: k_step2d_hvisc2
       PUBLIC :: k_step2d_coupling
       PUBLIC :: k_step2d_momentum_step
+      PUBLIC :: k_step2d_diag_int
       PUBLIC :: k_step2d_store_rhs
       PUBLIC :: kokkos_init
       PUBLIC :: kokkos_finalize
@@ -369,6 +370,30 @@
           real(C_DOUBLE), VALUE :: dtfast
           type(kokkos_tile_bounds), INTENT(IN) :: tl
         END SUBROUTINE k_step2d_momentum_step
+!
+        SUBROUTINE k_step2d_diag_int (kng, ktile, kstp, first_2d_step,     &
+     &                                LBi, UBi, LBj, UBj,                &
+     &                                IminS, ImaxS, JminS, JmaxS,        &
+     &                                pm_p, pn_p,                        &
+     &                                DiaU2rhs_p, DiaV2rhs_p,            &
+     &                                DiaRUbar_p, DiaRVbar_p,            &
+     &                                DiaU2int_p, DiaV2int_p,            &
+     &                                DiaU2wrk_p, DiaV2wrk_p,            &
+     &                                NDM2d, cff1, cff2, cff3, fac, tl)  &
+     &          BIND(C, NAME='k_step2d_diag_int')
+          IMPORT :: C_PTR, C_INT, C_DOUBLE, kokkos_tile_bounds
+          integer(C_INT), VALUE :: kng, ktile, kstp, first_2d_step
+          integer(C_INT), VALUE :: LBi, UBi, LBj, UBj
+          integer(C_INT), VALUE :: IminS, ImaxS, JminS, JmaxS
+          type(C_PTR),    VALUE :: pm_p, pn_p
+          type(C_PTR),    VALUE :: DiaU2rhs_p, DiaV2rhs_p
+          type(C_PTR),    VALUE :: DiaRUbar_p, DiaRVbar_p
+          type(C_PTR),    VALUE :: DiaU2int_p, DiaV2int_p
+          type(C_PTR),    VALUE :: DiaU2wrk_p, DiaV2wrk_p
+          integer(C_INT), VALUE :: NDM2d
+          real(C_DOUBLE), VALUE :: cff1, cff2, cff3, fac
+          type(kokkos_tile_bounds), INTENT(IN) :: tl
+        END SUBROUTINE k_step2d_diag_int
 !
         SUBROUTINE k_step2d_store_rhs (kng, ktile, kkrhs,                   &
      &                                 LBi, UBi, LBj, UBj,               &

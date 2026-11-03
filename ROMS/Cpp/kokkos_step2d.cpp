@@ -217,6 +217,7 @@ void k_step2d_depth_flux(int ng, int tile, int krhs, int nfast,
                          void* DUon_p, void* DVom_p, int UBk,
                          const TileBounds* t) {
   roms::initialize();
+  ROMS_KK_TIMER("step2d depth_flux");
   (void)ng;
   (void)tile;
   (void)nfast;
@@ -246,28 +247,29 @@ void k_step2d_depth_flux(int ng, int tile, int krhs, int nfast,
   const int i_end = t->Iendp2;
   const int j_end = t->Jendp2;
 
+  /*
+  ** One launch per call: every row computes its own Drhs, then DUon from
+  ** that row.  DVom needs Drhs of row j-1, which another work item owns,
+  ** so it is recomputed from the same two operands -- the identical sum,
+  ** not a re-read -- and no row waits for another.
+  */
   Kokkos::parallel_for(
       range_policy(j_start, j_end + 1), KOKKOS_LAMBDA(int j) {
         for (int i = i_start; i <= i_end; ++i) {
           Drhs(i, j) = zeta(i, j, krhs) + h(i, j);
         }
-      });
-
-  Kokkos::parallel_for(
-      range_policy(j_start, j_end + 1), KOKKOS_LAMBDA(int j) {
         for (int i = i_start + 1; i <= i_end; ++i) {
           const double cff  = 0.5 * on_u(i, j);
           const double cff1 = cff * (Drhs(i, j) + Drhs(i - 1, j));
           DUon(i, j) = ubar(i, j, krhs) * cff1;
         }
-      });
-
-  Kokkos::parallel_for(
-      range_policy(j_start + 1, j_end + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = i_start; i <= i_end; ++i) {
-          const double cff  = 0.5 * om_v(i, j);
-          const double cff1 = cff * (Drhs(i, j) + Drhs(i, j - 1));
-          DVom(i, j) = vbar(i, j, krhs) * cff1;
+        if (j > j_start) {
+          for (int i = i_start; i <= i_end; ++i) {
+            const double drhs_s = zeta(i, j - 1, krhs) + h(i, j - 1);
+            const double cff  = 0.5 * om_v(i, j);
+            const double cff1 = cff * (Drhs(i, j) + drhs_s);
+            DVom(i, j) = vbar(i, j, krhs) * cff1;
+          }
         }
       });
 }
@@ -291,6 +293,7 @@ void k_step2d_time_average(int ng, int tile, int krhs,
                            double cff1, double cff2,
                            const TileBounds* t) {
   roms::initialize();
+  ROMS_KK_TIMER("step2d time_average");
   (void)ng;
   (void)tile;
 
@@ -312,6 +315,8 @@ void k_step2d_time_average(int ng, int tile, int krhs,
   const int Jstr  = t->Jstr;
   const int JstrR = t->JstrR, JendR = t->JendR;
 
+  /* U and V rows share one launch.  Every update is pointwise, and the
+  ** V rows [Jstr, JendR] lie inside the U rows [JstrR, JendR]. */
   if (predictor) {
     if (first_step) {
       Kokkos::parallel_for(
@@ -321,13 +326,11 @@ void k_step2d_time_average(int ng, int tile, int krhs,
               DU_avg1(i, j) = 0.0;
               DU_avg2(i, j) = cff2 * DUon(i, j);
             }
-          });
-
-      Kokkos::parallel_for(
-          range_policy(Jstr, JendR + 1), KOKKOS_LAMBDA(int j) {
-            for (int i = IstrR; i <= IendR; ++i) {
-              DV_avg1(i, j) = 0.0;
-              DV_avg2(i, j) = cff2 * DVom(i, j);
+            if (j >= Jstr) {
+              for (int i = IstrR; i <= IendR; ++i) {
+                DV_avg1(i, j) = 0.0;
+                DV_avg2(i, j) = cff2 * DVom(i, j);
+              }
             }
           });
     } else {
@@ -340,13 +343,11 @@ void k_step2d_time_average(int ng, int tile, int krhs,
               DU_avg1(i, j) += cff1 * DUon(i, j);
               DU_avg2(i, j) += cff2 * DUon(i, j);
             }
-          });
-
-      Kokkos::parallel_for(
-          range_policy(Jstr, JendR + 1), KOKKOS_LAMBDA(int j) {
-            for (int i = IstrR; i <= IendR; ++i) {
-              DV_avg1(i, j) += cff1 * DVom(i, j);
-              DV_avg2(i, j) += cff2 * DVom(i, j);
+            if (j >= Jstr) {
+              for (int i = IstrR; i <= IendR; ++i) {
+                DV_avg1(i, j) += cff1 * DVom(i, j);
+                DV_avg2(i, j) += cff2 * DVom(i, j);
+              }
             }
           });
     }
@@ -356,12 +357,10 @@ void k_step2d_time_average(int ng, int tile, int krhs,
           for (int i = Istr; i <= IendR; ++i) {
             DU_avg2(i, j) += cff2 * DUon(i, j);
           }
-        });
-
-    Kokkos::parallel_for(
-        range_policy(Jstr, JendR + 1), KOKKOS_LAMBDA(int j) {
-          for (int i = IstrR; i <= IendR; ++i) {
-            DV_avg2(i, j) += cff2 * DVom(i, j);
+          if (j >= Jstr) {
+            for (int i = IstrR; i <= IendR; ++i) {
+              DV_avg2(i, j) += cff2 * DVom(i, j);
+            }
           }
         });
   }
@@ -392,10 +391,10 @@ void k_step2d_zeta_step(int ng, int tile, int krhs, int kstp, int knew,
                         void* rzeta_p, double dtfast, double rho0,
                         const TileBounds* t) {
   roms::initialize();
+  ROMS_KK_TIMER("step2d zeta_step");
   (void)ng;
   (void)tile;
   (void)nfast;
-  (void)predictor;
   (void)UBk;
 
   const Shape s{LBi, UBi, LBj, UBj, IminS, ImaxS, JminS, JmaxS};
@@ -433,6 +432,20 @@ void k_step2d_zeta_step(int ng, int tile, int krhs, int kstp, int knew,
   const int j0 = t->JstrV - 1, j1 = t->Jend;
   const int i0 = t->IstrU - 1, i1 = t->Iend;
 
+  /*
+  ** The reload of zeta(:,:,knew) and, on predictor steps, of
+  ** rzeta(:,:,krhs) run in the same launch as the update.  Their rows
+  ** [Jstr, Jend] and columns [Istr, Iend] lie inside the update's
+  ** [JstrV-1, Jend] x [IstrU-1, Iend], and each row copies only values
+  ** it has just computed.  No work item reads zeta or rzeta of another
+  ** row, so the copy cannot overtake a reader even if knew aliases kstp
+  ** or krhs.  The rzeta copy used to be a separate Fortran loop on the
+  ** management core.
+  */
+  const int ai0 = t->Istr, ai1 = t->Iend;
+  const int aj0 = t->Jstr;
+  const int store = predictor;
+
   if (first_2d_step) {
     const double cff1 = dtfast;
 
@@ -450,6 +463,12 @@ void k_step2d_zeta_step(int ng, int tile, int krhs, int kstp, int knew,
             gzeta(i, j)     = (fac + rhoS(i, j)) * zw;
             gzeta2(i, j)    = gzeta(i, j) * zw;
             gzetaSA(i, j)   = zw * (rhoS(i, j) - rhoA(i, j));
+          }
+          if (j >= aj0) {
+            for (int i = ai0; i <= ai1; ++i) zeta(i, j, knew) = zeta_new(i, j);
+            if (store) {
+              for (int i = ai0; i <= ai1; ++i) rzeta(i, j, krhs) = rhs_zeta(i, j);
+            }
           }
         });
   } else if (predictor) {
@@ -472,6 +491,10 @@ void k_step2d_zeta_step(int ng, int tile, int krhs, int kstp, int knew,
             gzeta(i, j)     = (fac + rhoS(i, j)) * zw;
             gzeta2(i, j)    = gzeta(i, j) * zw;
             gzetaSA(i, j)   = zw * (rhoS(i, j) - rhoA(i, j));
+          }
+          if (j >= aj0) {
+            for (int i = ai0; i <= ai1; ++i) zeta(i, j, knew) = zeta_new(i, j);
+            for (int i = ai0; i <= ai1; ++i) rzeta(i, j, krhs) = rhs_zeta(i, j);
           }
         });
   } else {
@@ -498,18 +521,12 @@ void k_step2d_zeta_step(int ng, int tile, int krhs, int kstp, int knew,
             gzeta2(i, j)    = gzeta(i, j) * zw;
             gzetaSA(i, j)   = zw * (rhoS(i, j) - rhoA(i, j));
           }
+          if (j >= aj0) {
+            for (int i = ai0; i <= ai1; ++i) zeta(i, j, knew) = zeta_new(i, j);
+          }
         });
   }
 
-  const int ai0 = t->Istr, ai1 = t->Iend;
-  const int aj0 = t->Jstr, aj1 = t->Jend;
-
-  Kokkos::parallel_for(
-      range_policy(aj0, aj1 + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = ai0; i <= ai1; ++i) {
-          zeta(i, j, knew) = zeta_new(i, j);
-        }
-      });
 }
 
 /*======================================================================
@@ -538,6 +555,7 @@ void k_step2d_pressure_grad(int ng, int tile,
                             double g,
                             const TileBounds* t) {
   roms::initialize();
+  ROMS_KK_TIMER("step2d pressure_grad");
   (void)ng;
   (void)tile;
 
@@ -639,6 +657,7 @@ void k_step2d_hadv_centered4(int ng, int tile, int krhs,
                              const EdgeFlags* e,
                              const TileBounds* t) {
   roms::initialize();
+  ROMS_KK_TIMER("step2d hadv_centered4");
   (void)ng;
   (void)tile;
   (void)NDM2d;
@@ -912,6 +931,7 @@ void k_step2d_coriolis(int ng, int tile, int krhs,
                        int NDM2d, int M2fcor,
                        const TileBounds* t) {
   roms::initialize();
+  ROMS_KK_TIMER("step2d coriolis");
   (void)ng;
   (void)tile;
   (void)NDM2d;
@@ -988,6 +1008,7 @@ void k_step2d_psi_depth(int ng, int tile,
                         void* Drhs_p, void* Drhs_psi_p,
                         const TileBounds* t) {
   roms::initialize();
+  ROMS_KK_TIMER("step2d psi_depth");
   (void)ng;
   (void)tile;
 
@@ -1036,6 +1057,7 @@ void k_step2d_hvisc2(int ng, int tile, int krhs,
                      int NDM2d, int M2hvis, int M2xvis, int M2yvis,
                      const TileBounds* t) {
   roms::initialize();
+  ROMS_KK_TIMER("step2d hvisc2");
   (void)ng;
   (void)tile;
   (void)NDM2d;
@@ -1187,6 +1209,7 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
                        int NDM2d, int M2pgrd, int M2sstr, int M2bstr,
                        const TileBounds* t) {
   roms::initialize();
+  ROMS_KK_TIMER("step2d coupling");
   (void)ng;
   (void)tile;
   (void)NDM2d;
@@ -1235,6 +1258,10 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
 
   const bool first = (first_2d_step != 0) && (predictor != 0);
 
+  /* Each branch is one launch: the U rows [Jstr, Jend] contain the V
+  ** rows [JstrV, Jend], and U and V touch disjoint arrays, each only
+  ** at its own point. */
+
   if (first && iic == ntfirst) {
     Kokkos::parallel_for(
         range_policy(jv0, jv1 + 1), KOKKOS_LAMBDA(int j) {
@@ -1254,10 +1281,6 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
             DiaRUfrc(i, j, istp, M2bstr) = DiaRUfrc(i, j, 3, M2bstr);
 #endif
           }
-        });
-
-    Kokkos::parallel_for(
-        range_policy(jv0, jv1 + 1), KOKKOS_LAMBDA(int j) {
           if (j >= jstr_v) {
             for (int i = iv0; i <= iv1; ++i) {
               rvfrc(i, j) = rvfrc(i, j) - rhs_vbar(i, j);
@@ -1282,12 +1305,12 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
         range_policy(jv0, jv1 + 1), KOKKOS_LAMBDA(int j) {
           for (int i = iu0; i <= iu1; ++i) {
             rufrc(i, j) = rufrc(i, j) - rhs_ubar(i, j);
-            rhs_ubar(i, j) += 1.5 * rufrc(i, j) - 0.5 * ru(i, j, 0, inew);
+            rhs_ubar(i, j) = rhs_ubar(i, j) + 1.5 * rufrc(i, j) - 0.5 * ru(i, j, 0, inew);
             ru(i, j, 0, istp) = rufrc(i, j);
 #if defined DIAGNOSTICS_UV
             for (int id = 1; id <= M2pgrd; ++id) {
               DiaRUfrc(i, j, 3, id) -= DiaU2rhs(i, j, id);
-              DiaU2rhs(i, j, id) += 1.5 * DiaRUfrc(i, j, 3, id) -
+              DiaU2rhs(i, j, id) = DiaU2rhs(i, j, id) + 1.5 * DiaRUfrc(i, j, 3, id) -
                                     0.5 * DiaRUfrc(i, j, inew, id);
               DiaRUfrc(i, j, istp, id) = DiaRUfrc(i, j, 3, id);
             }
@@ -1301,19 +1324,15 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
             DiaRUfrc(i, j, istp, M2bstr) = DiaRUfrc(i, j, 3, M2bstr);
 #endif
           }
-        });
-
-    Kokkos::parallel_for(
-        range_policy(jv0, jv1 + 1), KOKKOS_LAMBDA(int j) {
           if (j >= jstr_v) {
             for (int i = iv0; i <= iv1; ++i) {
               rvfrc(i, j) = rvfrc(i, j) - rhs_vbar(i, j);
-              rhs_vbar(i, j) += 1.5 * rvfrc(i, j) - 0.5 * rv(i, j, 0, inew);
+              rhs_vbar(i, j) = rhs_vbar(i, j) + 1.5 * rvfrc(i, j) - 0.5 * rv(i, j, 0, inew);
               rv(i, j, 0, istp) = rvfrc(i, j);
 #if defined DIAGNOSTICS_UV
               for (int id = 1; id <= M2pgrd; ++id) {
                 DiaRVfrc(i, j, 3, id) -= DiaV2rhs(i, j, id);
-                DiaV2rhs(i, j, id) += 1.5 * DiaRVfrc(i, j, 3, id) -
+                DiaV2rhs(i, j, id) = DiaV2rhs(i, j, id) + 1.5 * DiaRVfrc(i, j, 3, id) -
                                       0.5 * DiaRVfrc(i, j, inew, id);
                 DiaRVfrc(i, j, istp, id) = DiaRVfrc(i, j, 3, id);
               }
@@ -1345,14 +1364,14 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
         range_policy(jv0, jv1 + 1), KOKKOS_LAMBDA(int j) {
           for (int i = iu0; i <= iu1; ++i) {
             rufrc(i, j) = rufrc(i, j) - rhs_ubar(i, j);
-            rhs_ubar(i, j) += cff1 * rufrc(i, j) -
+            rhs_ubar(i, j) = rhs_ubar(i, j) + cff1 * rufrc(i, j) -
                               cff2 * ru(i, j, 0, inew) +
                               cff3 * ru(i, j, 0, istp);
             ru(i, j, 0, istp) = rufrc(i, j);
 #if defined DIAGNOSTICS_UV
             for (int id = 1; id <= M2pgrd; ++id) {
               DiaRUfrc(i, j, 3, id) -= DiaU2rhs(i, j, id);
-              DiaU2rhs(i, j, id) += cff1 * DiaRUfrc(i, j, 3, id) -
+              DiaU2rhs(i, j, id) = DiaU2rhs(i, j, id) + cff1 * DiaRUfrc(i, j, 3, id) -
                                     cff2 * DiaRUfrc(i, j, inew, id) +
                                     cff3 * DiaRUfrc(i, j, istp, id);
               DiaRUfrc(i, j, istp, id) = DiaRUfrc(i, j, 3, id);
@@ -1369,21 +1388,17 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
             DiaRUfrc(i, j, istp, M2bstr) = DiaRUfrc(i, j, 3, M2bstr);
 #endif
           }
-        });
-
-    Kokkos::parallel_for(
-        range_policy(jv0, jv1 + 1), KOKKOS_LAMBDA(int j) {
           if (j >= jstr_v) {
             for (int i = iv0; i <= iv1; ++i) {
               rvfrc(i, j) = rvfrc(i, j) - rhs_vbar(i, j);
-              rhs_vbar(i, j) += cff1 * rvfrc(i, j) -
+              rhs_vbar(i, j) = rhs_vbar(i, j) + cff1 * rvfrc(i, j) -
                                 cff2 * rv(i, j, 0, inew) +
                                 cff3 * rv(i, j, 0, istp);
               rv(i, j, 0, istp) = rvfrc(i, j);
 #if defined DIAGNOSTICS_UV
               for (int id = 1; id <= M2pgrd; ++id) {
                 DiaRVfrc(i, j, 3, id) -= DiaV2rhs(i, j, id);
-                DiaV2rhs(i, j, id) += cff1 * DiaRVfrc(i, j, 3, id) -
+                DiaV2rhs(i, j, id) = DiaV2rhs(i, j, id) + cff1 * DiaRVfrc(i, j, 3, id) -
                                       cff2 * DiaRVfrc(i, j, inew, id) +
                                       cff3 * DiaRVfrc(i, j, istp, id);
                 DiaRVfrc(i, j, istp, id) = DiaRVfrc(i, j, 3, id);
@@ -1415,10 +1430,6 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
             DiaU2rhs(i, j, M2bstr) = DiaRUfrc(i, j, 3, M2bstr);
 #endif
           }
-        });
-
-    Kokkos::parallel_for(
-        range_policy(jv0, jv1 + 1), KOKKOS_LAMBDA(int j) {
           if (j >= jstr_v) {
             for (int i = iv0; i <= iv1; ++i) {
               rhs_vbar(i, j) += rvfrc(i, j);
@@ -1459,6 +1470,7 @@ void k_step2d_momentum_step(int ng, int tile, int kstp, int knew,
                             int predictor, int first_2d_step, double dtfast,
                             const TileBounds* t) {
   roms::initialize();
+  ROMS_KK_TIMER("step2d momentum_step");
   (void)ng;
   (void)tile;
   (void)predictor;
@@ -1485,43 +1497,48 @@ void k_step2d_momentum_step(int ng, int tile, int kstp, int knew,
   const int j0 = t->JstrV - 1, j1 = t->Jend;
   const int i0 = t->IstrU - 1, i1 = t->Iend;
 
-  Kokkos::parallel_for(
-      range_policy(j0, j1 + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = i0; i <= i1; ++i) {
-          Dstp(i, j) = zeta(i, j, kstp) + h(i, j);
-        }
-      });
-
   const int iu0 = t->IstrU, iu1 = t->Iend;
   const int iv0 = t->Istr,  iv1 = t->Iend;
-  const int jv0 = t->Jstr,  jv1 = t->Jend;
+  const int ju0 = t->Jstr;
   const int jstr_v = t->JstrV;
+
+  /*
+  ** One launch per call.  Each row stores its Dstp over [IstrU-1, Iend]
+  ** and then advances ubar (rows [Jstr, Jend]) and vbar (rows
+  ** [JstrV, Jend]), all inside [JstrV-1, Jend].  The vbar update also
+  ** needs Dstp of row j-1, which another work item owns; it is
+  ** recomputed from the same operands, zeta(kstp) + h, so the sum is the
+  ** identical value rather than a racing read.  Every other input is
+  ** read-only and every output is written at its own point.
+  */
 
   if (first_2d_step) {
     const double cff1 = 0.5 * dtfast;
 
     Kokkos::parallel_for(
-        range_policy(jv0, jv1 + 1), KOKKOS_LAMBDA(int j) {
-          for (int i = iu0; i <= iu1; ++i) {
-            const double cff =
-                (pm(i, j) + pm(i - 1, j)) * (pn(i, j) + pn(i - 1, j));
-            const double div = 1.0 / (Dnew(i, j) + Dnew(i - 1, j));
-            ubar(i, j, knew) =
-                (ubar(i, j, kstp) * (Dstp(i, j) + Dstp(i - 1, j)) +
-                 cff * cff1 * rhs_ubar(i, j)) *
-                div;
+        range_policy(j0, j1 + 1), KOKKOS_LAMBDA(int j) {
+          for (int i = i0; i <= i1; ++i) {
+            Dstp(i, j) = zeta(i, j, kstp) + h(i, j);
           }
-        });
-
-    Kokkos::parallel_for(
-        range_policy(jv0, jv1 + 1), KOKKOS_LAMBDA(int j) {
+          if (j >= ju0) {
+            for (int i = iu0; i <= iu1; ++i) {
+              const double cff =
+                  (pm(i, j) + pm(i - 1, j)) * (pn(i, j) + pn(i - 1, j));
+              const double div = 1.0 / (Dnew(i, j) + Dnew(i - 1, j));
+              ubar(i, j, knew) =
+                  (ubar(i, j, kstp) * (Dstp(i, j) + Dstp(i - 1, j)) +
+                   cff * cff1 * rhs_ubar(i, j)) *
+                  div;
+            }
+          }
           if (j >= jstr_v) {
             for (int i = iv0; i <= iv1; ++i) {
+              const double dstp_s = zeta(i, j - 1, kstp) + h(i, j - 1);
               const double cff =
                   (pm(i, j) + pm(i, j - 1)) * (pn(i, j) + pn(i, j - 1));
               const double div = 1.0 / (Dnew(i, j) + Dnew(i, j - 1));
               vbar(i, j, knew) =
-                  (vbar(i, j, kstp) * (Dstp(i, j) + Dstp(i, j - 1)) +
+                  (vbar(i, j, kstp) * (Dstp(i, j) + dstp_s) +
                    cff * cff1 * rhs_vbar(i, j)) *
                   div;
             }
@@ -1531,27 +1548,29 @@ void k_step2d_momentum_step(int ng, int tile, int kstp, int knew,
     const double cff1 = dtfast;
 
     Kokkos::parallel_for(
-        range_policy(jv0, jv1 + 1), KOKKOS_LAMBDA(int j) {
-          for (int i = iu0; i <= iu1; ++i) {
-            const double cff =
-                (pm(i, j) + pm(i - 1, j)) * (pn(i, j) + pn(i - 1, j));
-            const double div = 1.0 / (Dnew(i, j) + Dnew(i - 1, j));
-            ubar(i, j, knew) =
-                (ubar(i, j, kstp) * (Dstp(i, j) + Dstp(i - 1, j)) +
-                 cff * cff1 * rhs_ubar(i, j)) *
-                div;
+        range_policy(j0, j1 + 1), KOKKOS_LAMBDA(int j) {
+          for (int i = i0; i <= i1; ++i) {
+            Dstp(i, j) = zeta(i, j, kstp) + h(i, j);
           }
-        });
-
-    Kokkos::parallel_for(
-        range_policy(jv0, jv1 + 1), KOKKOS_LAMBDA(int j) {
+          if (j >= ju0) {
+            for (int i = iu0; i <= iu1; ++i) {
+              const double cff =
+                  (pm(i, j) + pm(i - 1, j)) * (pn(i, j) + pn(i - 1, j));
+              const double div = 1.0 / (Dnew(i, j) + Dnew(i - 1, j));
+              ubar(i, j, knew) =
+                  (ubar(i, j, kstp) * (Dstp(i, j) + Dstp(i - 1, j)) +
+                   cff * cff1 * rhs_ubar(i, j)) *
+                  div;
+            }
+          }
           if (j >= jstr_v) {
             for (int i = iv0; i <= iv1; ++i) {
+              const double dstp_s = zeta(i, j - 1, kstp) + h(i, j - 1);
               const double cff =
                   (pm(i, j) + pm(i, j - 1)) * (pn(i, j) + pn(i, j - 1));
               const double div = 1.0 / (Dnew(i, j) + Dnew(i, j - 1));
               vbar(i, j, knew) =
-                  (vbar(i, j, kstp) * (Dstp(i, j) + Dstp(i, j - 1)) +
+                  (vbar(i, j, kstp) * (Dstp(i, j) + dstp_s) +
                    cff * cff1 * rhs_vbar(i, j)) *
                   div;
             }
@@ -1563,33 +1582,141 @@ void k_step2d_momentum_step(int ng, int tile, int kstp, int knew,
     const double cff3 = 0.5 * dtfast * 1.0 / 12.0;
 
     Kokkos::parallel_for(
-        range_policy(jv0, jv1 + 1), KOKKOS_LAMBDA(int j) {
-          for (int i = iu0; i <= iu1; ++i) {
-            const double cff =
-                (pm(i, j) + pm(i - 1, j)) * (pn(i, j) + pn(i - 1, j));
-            const double div = 1.0 / (Dnew(i, j) + Dnew(i - 1, j));
-            ubar(i, j, knew) =
-                (ubar(i, j, kstp) * (Dstp(i, j) + Dstp(i - 1, j)) +
-                 cff * (cff1 * rhs_ubar(i, j) +
-                        cff2 * rubar(i, j, kstp) -
-                        cff3 * rubar(i, j, ptsk))) *
-                div;
+        range_policy(j0, j1 + 1), KOKKOS_LAMBDA(int j) {
+          for (int i = i0; i <= i1; ++i) {
+            Dstp(i, j) = zeta(i, j, kstp) + h(i, j);
           }
-        });
-
-    Kokkos::parallel_for(
-        range_policy(jv0, jv1 + 1), KOKKOS_LAMBDA(int j) {
+          if (j >= ju0) {
+            for (int i = iu0; i <= iu1; ++i) {
+              const double cff =
+                  (pm(i, j) + pm(i - 1, j)) * (pn(i, j) + pn(i - 1, j));
+              const double div = 1.0 / (Dnew(i, j) + Dnew(i - 1, j));
+              ubar(i, j, knew) =
+                  (ubar(i, j, kstp) * (Dstp(i, j) + Dstp(i - 1, j)) +
+                   cff * (cff1 * rhs_ubar(i, j) +
+                          cff2 * rubar(i, j, kstp) -
+                          cff3 * rubar(i, j, ptsk))) *
+                  div;
+            }
+          }
           if (j >= jstr_v) {
             for (int i = iv0; i <= iv1; ++i) {
+              const double dstp_s = zeta(i, j - 1, kstp) + h(i, j - 1);
               const double cff =
                   (pm(i, j) + pm(i, j - 1)) * (pn(i, j) + pn(i, j - 1));
               const double div = 1.0 / (Dnew(i, j) + Dnew(i, j - 1));
               vbar(i, j, knew) =
-                  (vbar(i, j, kstp) * (Dstp(i, j) + Dstp(i, j - 1)) +
+                  (vbar(i, j, kstp) * (Dstp(i, j) + dstp_s) +
                    cff * (cff1 * rhs_vbar(i, j) +
                           cff2 * rvbar(i, j, kstp) -
                           cff3 * rvbar(i, j, ptsk))) *
                   div;
+            }
+          }
+        });
+  }
+}
+
+/*======================================================================
+** Stage 17b -- time-integrated 2-D momentum diagnostics (SOLVE3D).
+** Source: step2d_LF_AM3.h, "Time step 2D momentum diagnostic terms".
+**
+** Corrector steps only.  On the first barotropic step
+**
+**   DiaU2int = cff1*DiaU2rhs
+**   DiaU2wrk = DiaU2int*(pm(i-1,j)+pm(i,j))*fac
+**
+** and on every later one the Adams-Moulton accumulation
+**
+**   DiaU2int = DiaU2int + (cff1*DiaU2rhs + cff2*DiaRUbar(kstp)
+**                                         - cff3*DiaRUbar(ptsk))
+**   DiaU2wrk = DiaU2wrk + DiaU2int*(pm(i-1,j)+pm(i,j))*fac
+**
+** with pn(i,j)+pn(i,j-1) for the V terms.  The caller computes cff1-3
+** and fac exactly as the Fortran block does.  All updates are pointwise
+** in (i, j, idiag), so U and V of a row share one launch.
+**
+** This block makes NDM2d-1 passes over each of U and V per corrector
+** call, reading five fields and writing two.  It was the largest piece
+** of step2d left on the management core.
+**====================================================================*/
+
+void k_step2d_diag_int(int ng, int tile, int kstp, int first_2d_step,
+                       int LBi, int UBi, int LBj, int UBj,
+                       int IminS, int ImaxS, int JminS, int JmaxS,
+                       void* pm_p, void* pn_p,
+                       void* DiaU2rhs_p, void* DiaV2rhs_p,
+                       void* DiaRUbar_p, void* DiaRVbar_p,
+                       void* DiaU2int_p, void* DiaV2int_p,
+                       void* DiaU2wrk_p, void* DiaV2wrk_p,
+                       int NDM2d, double cff1, double cff2, double cff3,
+                       double fac, const TileBounds* t) {
+  roms::initialize();
+  ROMS_KK_TIMER("step2d diag_int");
+  (void)ng;
+  (void)tile;
+
+  const Shape s{LBi, UBi, LBj, UBj, IminS, ImaxS, JminS, JmaxS};
+
+  Array2d<double> pm = grid2d(pm_p, s);
+  Array2d<double> pn = grid2d(pn_p, s);
+
+  /* DiaU2rhs/DiaV2rhs are tile scratch; the other four are full fields. */
+  Array3d<double> DiaU2rhs = priv3d(DiaU2rhs_p, s, 1, NDM2d - 1);
+  Array3d<double> DiaV2rhs = priv3d(DiaV2rhs_p, s, 1, NDM2d - 1);
+  Array4d<double> DiaRUbar = grid4d(DiaRUbar_p, s, 1, 2, 1, NDM2d - 1);
+  Array4d<double> DiaRVbar = grid4d(DiaRVbar_p, s, 1, 2, 1, NDM2d - 1);
+  Array3d<double> DiaU2int = grid3d(DiaU2int_p, s, 1, NDM2d);
+  Array3d<double> DiaV2int = grid3d(DiaV2int_p, s, 1, NDM2d);
+  Array3d<double> DiaU2wrk = grid3d(DiaU2wrk_p, s, 1, NDM2d);
+  Array3d<double> DiaV2wrk = grid3d(DiaV2wrk_p, s, 1, NDM2d);
+
+  const int ptsk  = 3 - kstp;
+  const int nterm = NDM2d - 1;
+  const int iu0 = t->IstrU, iv0 = t->Istr, i1 = t->Iend;
+  const int Jstr = t->Jstr, Jend = t->Jend, JstrV = t->JstrV;
+
+  if (first_2d_step) {
+    Kokkos::parallel_for(
+        range_policy(Jstr, Jend + 1), KOKKOS_LAMBDA(int j) {
+          for (int id = 1; id <= nterm; ++id) {
+            for (int i = iu0; i <= i1; ++i) {
+              const double v = cff1 * DiaU2rhs(i, j, id);
+              DiaU2int(i, j, id) = v;
+              DiaU2wrk(i, j, id) = v * (pm(i - 1, j) + pm(i, j)) * fac;
+            }
+            if (j >= JstrV) {
+              for (int i = iv0; i <= i1; ++i) {
+                const double v = cff1 * DiaV2rhs(i, j, id);
+                DiaV2int(i, j, id) = v;
+                DiaV2wrk(i, j, id) = v * (pn(i, j) + pn(i, j - 1)) * fac;
+              }
+            }
+          }
+        });
+  } else {
+    Kokkos::parallel_for(
+        range_policy(Jstr, Jend + 1), KOKKOS_LAMBDA(int j) {
+          for (int id = 1; id <= nterm; ++id) {
+            for (int i = iu0; i <= i1; ++i) {
+              const double v = DiaU2int(i, j, id) +
+                               (cff1 * DiaU2rhs(i, j, id) +
+                                cff2 * DiaRUbar(i, j, kstp, id) -
+                                cff3 * DiaRUbar(i, j, ptsk, id));
+              DiaU2int(i, j, id) = v;
+              DiaU2wrk(i, j, id) =
+                  DiaU2wrk(i, j, id) + v * (pm(i - 1, j) + pm(i, j)) * fac;
+            }
+            if (j >= JstrV) {
+              for (int i = iv0; i <= i1; ++i) {
+                const double v = DiaV2int(i, j, id) +
+                                 (cff1 * DiaV2rhs(i, j, id) +
+                                  cff2 * DiaRVbar(i, j, kstp, id) -
+                                  cff3 * DiaRVbar(i, j, ptsk, id));
+                DiaV2int(i, j, id) = v;
+                DiaV2wrk(i, j, id) =
+                    DiaV2wrk(i, j, id) + v * (pn(i, j) + pn(i, j - 1)) * fac;
+              }
             }
           }
         });
@@ -1614,6 +1741,7 @@ void k_step2d_store_rhs(int ng, int tile, int krhs,
                         int NDM2d, int M2pgrd,
                         const TileBounds* t) {
   roms::initialize();
+  ROMS_KK_TIMER("step2d store_rhs");
   (void)ng;
   (void)tile;
   (void)NDM2d;
@@ -1648,29 +1776,32 @@ void k_step2d_store_rhs(int ng, int tile, int krhs,
   const int jv0 = t->Jstr,  jv1 = t->Jend;
   const int jstr_v = t->JstrV;
 
+  /* The diagnostic index is the outer loop.  With it innermost the
+  ** vectoriser refuses the whole body ("not enough data-refs"); hoisted,
+  ** every pass is a contiguous copy along i.  U and V share one launch. */
   Kokkos::parallel_for(
       range_policy(jv0, jv1 + 1), KOKKOS_LAMBDA(int j) {
         for (int i = iu0; i <= iu1; ++i) {
           rubar(i, j, krhs) = rhs_ubar(i, j);
+        }
 #if defined DIAGNOSTICS_UV
-          for (int id = 1; id < NDM2d; ++id) {
+        for (int id = 1; id < NDM2d; ++id) {
+          for (int i = iu0; i <= iu1; ++i) {
             DiaRUbar(i, j, krhs, id) = DiaU2rhs(i, j, id);
           }
-#endif
         }
-      });
-
-  Kokkos::parallel_for(
-      range_policy(jv0, jv1 + 1), KOKKOS_LAMBDA(int j) {
+#endif
         if (j >= jstr_v) {
           for (int i = iv0; i <= iv1; ++i) {
             rvbar(i, j, krhs) = rhs_vbar(i, j);
+          }
 #if defined DIAGNOSTICS_UV
-            for (int id = 1; id < NDM2d; ++id) {
+          for (int id = 1; id < NDM2d; ++id) {
+            for (int i = iv0; i <= iv1; ++i) {
               DiaRVbar(i, j, krhs, id) = DiaV2rhs(i, j, id);
             }
-#endif
           }
+#endif
         }
       });
 }
@@ -1719,6 +1850,7 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
                         const EdgeFlags* e,
                         const TileBounds* t) {
   roms::initialize();
+  ROMS_KK_TIMER("step2d rhs_fused");
   (void)ng;
   (void)tile;
   (void)NDM2d;
@@ -1803,6 +1935,10 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
   ** sequence of operations.
   **------------------------------------------------------------------*/
 
+  /* One launch covers both families: the V rows [JstrV, Jend] lie inside
+  ** the U rows [Jstr, Jend], every input is read-only here and every
+  ** output (rhs_ubar/rhs_vbar and their diagnostics) is written only at
+  ** its own point, so the two loops of a row are independent. */
   Kokkos::parallel_for(
       range_policy(Jstr, Jend + 1), KOKKOS_LAMBDA(int j) {
         for (int i = IstrU; i <= Iend; ++i) {
@@ -1898,40 +2034,40 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
           const double dp0p = 0.25 * (Drhs(i, j + 1) + Drhs(i - 1, j + 1) +
                                       Drhs(i, j) + Drhs(i - 1, j));
           const double uR =
-              on_r(i, j) * on_r(i, j) * visc2_r(i, j) * Drhs(i, j) * 0.5 *
+              on_r(i, j) * on_r(i, j) * (visc2_r(i, j) * Drhs(i, j) * 0.5 *
               (pmon_r(i, j) *
                    ((pn(i, j) + pn(i + 1, j)) * ubar(i + 1, j, krhs) -
                     (pn(i - 1, j) + pn(i, j)) * ubar(i, j, krhs)) -
                pnom_r(i, j) *
                    ((pm(i, j) + pm(i, j + 1)) * vbar(i, j + 1, krhs) -
-                    (pm(i, j - 1) + pm(i, j)) * vbar(i, j, krhs)));
+                    (pm(i, j - 1) + pm(i, j)) * vbar(i, j, krhs))));
           const double uRm =
               on_r(i - 1, j) * on_r(i - 1, j) *
-              visc2_r(i - 1, j) * Drhs(i - 1, j) * 0.5 *
+              (visc2_r(i - 1, j) * Drhs(i - 1, j) * 0.5 *
               (pmon_r(i - 1, j) *
                    ((pn(i - 1, j) + pn(i, j)) * ubar(i, j, krhs) -
                     (pn(i - 2, j) + pn(i - 1, j)) * ubar(i - 1, j, krhs)) -
                pnom_r(i - 1, j) *
                    ((pm(i - 1, j) + pm(i - 1, j + 1)) * vbar(i - 1, j + 1, krhs) -
-                    (pm(i - 1, j - 1) + pm(i - 1, j)) * vbar(i - 1, j, krhs)));
+                    (pm(i - 1, j - 1) + pm(i - 1, j)) * vbar(i - 1, j, krhs))));
 
           const double uP =
-              om_p(i, j) * om_p(i, j) * visc2_pp(i, j) * dp00 * 0.5 *
+              om_p(i, j) * om_p(i, j) * (visc2_pp(i, j) * dp00 * 0.5 *
               (pmon_p(i, j) *
                    ((pn(i, j - 1) + pn(i, j)) * vbar(i, j, krhs) -
                     (pn(i - 1, j - 1) + pn(i - 1, j)) * vbar(i - 1, j, krhs)) +
                pnom_p(i, j) *
                    ((pm(i - 1, j) + pm(i, j)) * ubar(i, j, krhs) -
-                    (pm(i - 1, j - 1) + pm(i, j - 1)) * ubar(i, j - 1, krhs)));
+                    (pm(i - 1, j - 1) + pm(i, j - 1)) * ubar(i, j - 1, krhs))));
           const double uPp =
               om_p(i, j + 1) * om_p(i, j + 1) *
-              visc2_pp(i, j + 1) * dp0p * 0.5 *
+              (visc2_pp(i, j + 1) * dp0p * 0.5 *
               (pmon_p(i, j + 1) *
                    ((pn(i, j) + pn(i, j + 1)) * vbar(i, j + 1, krhs) -
                     (pn(i - 1, j) + pn(i - 1, j + 1)) * vbar(i - 1, j + 1, krhs)) +
                pnom_p(i, j + 1) *
                    ((pm(i - 1, j + 1) + pm(i, j + 1)) * ubar(i, j + 1, krhs) -
-                    (pm(i - 1, j) + pm(i, j)) * ubar(i, j, krhs)));
+                    (pm(i - 1, j) + pm(i, j)) * ubar(i, j, krhs))));
 
           const double vx1 = 0.5 * (pn(i - 1, j) + pn(i, j)) * (uR - uRm);
           const double vy1 = 0.5 * (pm(i - 1, j) + pm(i, j)) * (uPp - uP);
@@ -1945,15 +2081,13 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
 
           rhs_ubar(i, j) = acc;
         }
-      });
 
-  /*--------------------------------------------------------------------
-  ** V rows.  i over [Istr, Iend], j over [JstrV, Jend] -- the staged
-  ** rhs_vbar loop.
-  **------------------------------------------------------------------*/
+        /*------------------------------------------------------------------
+        ** V rows.  i over [Istr, Iend], j over [JstrV, Jend] -- the staged
+        ** rhs_vbar loop.
+        **----------------------------------------------------------------*/
 
-  Kokkos::parallel_for(
-      range_policy(JstrV, Jend + 1), KOKKOS_LAMBDA(int j) {
+        if (j < JstrV) return;
         for (int i = Istr; i <= Iend; ++i) {
           /* --- pressure gradient --- */
           const double pg =
@@ -2036,41 +2170,41 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
                                       Drhs(i + 1, j - 1) + Drhs(i, j - 1));
 
           const double vP =
-              on_p(i, j) * on_p(i, j) * visc2_pp(i, j) * dp00 * 0.5 *
+              on_p(i, j) * on_p(i, j) * (visc2_pp(i, j) * dp00 * 0.5 *
               (pmon_p(i, j) *
                    ((pn(i, j - 1) + pn(i, j)) * vbar(i, j, krhs) -
                     (pn(i - 1, j - 1) + pn(i - 1, j)) * vbar(i - 1, j, krhs)) +
                pnom_p(i, j) *
                    ((pm(i - 1, j) + pm(i, j)) * ubar(i, j, krhs) -
-                    (pm(i - 1, j - 1) + pm(i, j - 1)) * ubar(i, j - 1, krhs)));
+                    (pm(i - 1, j - 1) + pm(i, j - 1)) * ubar(i, j - 1, krhs))));
           const double vPp =
               on_p(i + 1, j) * on_p(i + 1, j) *
-              visc2_pp(i + 1, j) * dp10 * 0.5 *
+              (visc2_pp(i + 1, j) * dp10 * 0.5 *
               (pmon_p(i + 1, j) *
                    ((pn(i + 1, j - 1) + pn(i + 1, j)) * vbar(i + 1, j, krhs) -
                     (pn(i, j - 1) + pn(i, j)) * vbar(i, j, krhs)) +
                pnom_p(i + 1, j) *
                    ((pm(i, j) + pm(i + 1, j)) * ubar(i + 1, j, krhs) -
-                    (pm(i, j - 1) + pm(i + 1, j - 1)) * ubar(i + 1, j - 1, krhs)));
+                    (pm(i, j - 1) + pm(i + 1, j - 1)) * ubar(i + 1, j - 1, krhs))));
 
           /* VFe at rho points from visc2_r. */
           const double vR =
-              om_r(i, j) * om_r(i, j) * visc2_r(i, j) * Drhs(i, j) * 0.5 *
+              om_r(i, j) * om_r(i, j) * (visc2_r(i, j) * Drhs(i, j) * 0.5 *
               (pmon_r(i, j) *
                    ((pn(i, j) + pn(i + 1, j)) * ubar(i + 1, j, krhs) -
                     (pn(i - 1, j) + pn(i, j)) * ubar(i, j, krhs)) -
                pnom_r(i, j) *
                    ((pm(i, j) + pm(i, j + 1)) * vbar(i, j + 1, krhs) -
-                    (pm(i, j - 1) + pm(i, j)) * vbar(i, j, krhs)));
+                    (pm(i, j - 1) + pm(i, j)) * vbar(i, j, krhs))));
           const double vRm =
               om_r(i, j - 1) * om_r(i, j - 1) *
-              visc2_r(i, j - 1) * Drhs(i, j - 1) * 0.5 *
+              (visc2_r(i, j - 1) * Drhs(i, j - 1) * 0.5 *
               (pmon_r(i, j - 1) *
                    ((pn(i, j - 1) + pn(i + 1, j - 1)) * ubar(i + 1, j - 1, krhs) -
                     (pn(i - 1, j - 1) + pn(i, j - 1)) * ubar(i, j - 1, krhs)) -
                pnom_r(i, j - 1) *
                    ((pm(i, j - 1) + pm(i, j)) * vbar(i, j, krhs) -
-                    (pm(i, j - 2) + pm(i, j - 1)) * vbar(i, j - 1, krhs)));
+                    (pm(i, j - 2) + pm(i, j - 1)) * vbar(i, j - 1, krhs))));
 
           const double vx1 = 0.5 * (pn(i, j - 1) + pn(i, j)) * (vPp - vP);
           const double vy1 = 0.5 * (pm(i, j - 1) + pm(i, j)) * (vR - vRm);

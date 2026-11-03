@@ -113,6 +113,11 @@
 !
       USE mod_param
       USE mod_scalars
+#if defined ROMS_KOKKOS && defined KK_STAGE_T3DMIX
+      USE, INTRINSIC :: iso_c_binding, ONLY : C_LOC
+      USE kokkos_rhs3d_mod, ONLY : kokkos_tile_bounds, k_t3dmix2_s,     &
+     &                             kk_fill_bounds
+#endif
 !
 !  Imported variable declarations.
 !
@@ -133,20 +138,20 @@
 # ifdef DIFF_3DCOEF
       real(r8), intent(in) :: diff3d_r(LBi:,LBj:,:)
 # else
-      real(r8), intent(in) :: diff2(LBi:,LBj:,:)
+      real(r8), TARGET, intent(in) :: diff2(LBi:,LBj:,:)
 # endif
-      real(r8), intent(in) :: Hz(LBi:,LBj:,:)
-      real(r8), intent(in) :: pmon_u(LBi:,LBj:)
-      real(r8), intent(in) :: pnom_v(LBi:,LBj:)
-      real(r8), intent(in) :: pm(LBi:,LBj:)
-      real(r8), intent(in) :: pn(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: Hz(LBi:,LBj:,:)
+      real(r8), TARGET, intent(in) :: pmon_u(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: pnom_v(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: pm(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: pn(LBi:,LBj:)
 # ifdef TS_MIX_CLIMA
       real(r8), intent(in) :: tclm(LBi:,LBj:,:,:)
 # endif
 # ifdef DIAGNOSTICS_TS
-      real(r8), intent(inout) :: DiaTwrk(LBi:,LBj:,:,:,:)
+      real(r8), TARGET, intent(inout) :: DiaTwrk(LBi:,LBj:,:,:,:)
 # endif
-      real(r8), intent(inout) :: t(LBi:,LBj:,:,:,:)
+      real(r8), TARGET, intent(inout) :: t(LBi:,LBj:,:,:,:)
 #else
 # ifdef MASKING
       real(r8), intent(in) :: umask(LBi:UBi,LBj:UBj)
@@ -159,26 +164,29 @@
 # ifdef DIFF_3DCOEF
       real(r8), intent(in) :: diff3d_r(LBi:UBi,LBj:UBj,N(ng))
 # else
-      real(r8), intent(in) :: diff2(LBi:UBi,LBj:UBj,NT(ng))
+      real(r8), TARGET, intent(in) :: diff2(LBi:UBi,LBj:UBj,NT(ng))
 # endif
-      real(r8), intent(in) :: Hz(LBi:UBi,LBj:UBj,N(ng))
-      real(r8), intent(in) :: pmon_u(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: pnom_v(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: pm(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: pn(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: Hz(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), TARGET, intent(in) :: pmon_u(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: pnom_v(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: pm(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: pn(LBi:UBi,LBj:UBj)
 # ifdef TS_MIX_CLIMA
       real(r8), intent(in) :: tclm(LBi:UBi,LBj:UBj,N(ng),NT(ng))
 # endif
 # ifdef DIAGNOSTICS_TS
-      real(r8), intent(inout) :: DiaTwrk(LBi:UBi,LBj:UBj,N(ng),NT(ng),  &
+      real(r8), TARGET, intent(inout) :: DiaTwrk(LBi:UBi,LBj:UBj,N(ng),NT(ng),  &
      &                                   NDT)
 # endif
-      real(r8), intent(inout) :: t(LBi:UBi,LBj:UBj,N(ng),3,NT(ng))
+      real(r8), TARGET, intent(inout) :: t(LBi:UBi,LBj:UBj,N(ng),3,NT(ng))
 #endif
 !
 !  Local variable declarations.
 !
       integer :: i, itrc, j, k
+#if defined ROMS_KOKKOS && defined KK_STAGE_T3DMIX
+      TYPE(kokkos_tile_bounds) :: KK_TILE
+#endif
 
       real(r8) :: cff, cff1, cff2, cff3
 
@@ -195,6 +203,22 @@
 #endif
 !-----------------------------------------------------------------------
 !
+#if defined ROMS_KOKKOS && defined KK_STAGE_T3DMIX
+!
+!  Kokkos path: the tracer fluxes and the update loops live in
+!  ROMS/Cpp/kokkos_rhs3d.cpp (k_t3dmix2_s).
+!
+      CALL kk_fill_bounds (KK_TILE, ng, tile)
+      CALL k_t3dmix2_s (ng, tile, nrhs, nstp, nnew,                     &
+     &                  LBi, UBi, LBj, UBj,                             &
+     &                  IminS, ImaxS, JminS, JmaxS,                     &
+     &                  C_LOC(diff2), C_LOC(Hz),                        &
+     &                  C_LOC(pmon_u), C_LOC(pnom_v),                   &
+     &                  C_LOC(pm), C_LOC(pn),                           &
+     &                  C_LOC(DiaTwrk), C_LOC(t),                       &
+     &                  N(ng), NT(ng), NDT,                             &
+     &                  iTxdif, iTydif, iThdif, dt(ng), KK_TILE)
+#else
       DO itrc=1,NT(ng)
         DO k=1,N(ng)
 !
@@ -299,6 +323,7 @@
           END DO
         END DO
       END DO
+#endif /* ROMS_KOKKOS && KK_STAGE_T3DMIX */
 !
       RETURN
       END SUBROUTINE t3dmix2_s_tile

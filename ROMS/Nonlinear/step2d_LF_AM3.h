@@ -280,6 +280,7 @@
      &                              k_step2d_hvisc2,                     &
      &                              k_step2d_coupling,                   &
      &                              k_step2d_momentum_step,              &
+     &                              k_step2d_diag_int,                   &
      &                              k_step2d_store_rhs
       USE iso_c_binding,     ONLY : C_LOC
 #endif
@@ -1148,13 +1149,19 @@
 #endif /* !ROMS_KOKKOS */
 !
 !  If predictor step, load right-side-term into shared array.
+#ifdef ROMS_KOKKOS
+!  Kokkos path: k_step2d_zeta_step already stored rzeta(:,:,krhs);
+!  only the halo exchange is left here.
+#endif
 !
       IF (PREDICTOR_2D_STEP(ng)) THEN
+#ifndef ROMS_KOKKOS
         DO j=Jstr,Jend
           DO i=Istr,Iend
             rzeta(i,j,krhs)=rhs_zeta(i,j)
           END DO
         END DO
+#endif
         IF (EWperiodic(ng).or.NSperiodic(ng)) THEN
           CALL exchange_r2d_tile (ng, tile,                             &
      &                            LBi, UBi, LBj, UBj,                   &
@@ -2436,7 +2443,12 @@
         END DO
       END DO
 #else
-# ifdef DIAGNOSTICS_UV
+!
+!  On the Kokkos path the fill below is a dead store: every branch of
+!  k_step2d_coupling assigns DiaU2rhs/DiaV2rhs(:,:,M2bstr) over the same
+!  points before anything reads them.
+!
+# if defined DIAGNOSTICS_UV && !(defined ROMS_KOKKOS && defined KK_STAGE_COUP)
 !
 !  Initialize the stress term if no bottom friction is defined.
 !
@@ -3030,6 +3042,34 @@
 !  units (m3 s-1) for coupling with the 3D diagnostic terms.
 !
       fac=weight(1,iif(ng),ng)
+#  if defined ROMS_KOKKOS && defined KK_STAGE_DIAG
+!
+!  Kokkos path: the integration loops live in ROMS/Cpp/kokkos_step2d.cpp
+!  (k_step2d_diag_int).  The coefficients are computed here, as below.
+!
+      IF (CORRECTOR_2D_STEP) THEN
+        IF (FIRST_2D_STEP) THEN
+          cff1=0.5_r8*dtfast(ng)
+          cff2=0.0_r8
+          cff3=0.0_r8
+        ELSE
+          cff1=0.5_r8*dtfast(ng)*5.0_r8/12.0_r8
+          cff2=0.5_r8*dtfast(ng)*8.0_r8/12.0_r8
+          cff3=0.5_r8*dtfast(ng)*1.0_r8/12.0_r8
+        END IF
+        kk_kstp=kstp
+        CALL k_step2d_diag_int (ng, tile, kk_kstp,                      &
+     &                          MERGE(1,0,FIRST_2D_STEP),               &
+     &                          LBi, UBi, LBj, UBj,                     &
+     &                          IminS, ImaxS, JminS, JmaxS,             &
+     &                          C_LOC(pm), C_LOC(pn),                   &
+     &                          C_LOC(DiaU2rhs), C_LOC(DiaV2rhs),       &
+     &                          C_LOC(DiaRUbar), C_LOC(DiaRVbar),       &
+     &                          C_LOC(DiaU2int), C_LOC(DiaV2int),       &
+     &                          C_LOC(DiaU2wrk), C_LOC(DiaV2wrk),       &
+     &                          NDM2d, cff1, cff2, cff3, fac, KK_TILE)
+      END IF
+#  else
       IF (FIRST_2D_STEP.and.CORRECTOR_2D_STEP) THEN
         cff1=0.5_r8*dtfast(ng)
         DO idiag=1,NDM2d-1
@@ -3077,6 +3117,7 @@
           END DO
         END DO
       END IF
+#  endif /* ROMS_KOKKOS && KK_STAGE_DIAG */
 # else
 !
 !  Time-step the diagnostic terms.

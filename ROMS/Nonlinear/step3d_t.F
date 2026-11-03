@@ -502,13 +502,17 @@
 #  endif
           END IF
         END DO
-        CALL k_step3d_t (kk_config, kk_schemes, C_LOC(pm), C_LOC(pn),  &
+        CALL k_step3d_t_chunks (kk_config, kk_schemes, C_LOC(pm),     &
+     &                   C_LOC(pn),                                     &
      &                   C_LOC(Hz), C_LOC(Huon), C_LOC(Hvom),          &
      &                   C_LOC(W), C_LOC(z_r), C_LOC(Akt),            &
      &                   C_LOC(t), C_LOC(DiaTwrk))
         kk_fast_calls=kk_fast_calls+1
-        WRITE (*,'(a,i0,a,i0)') 'step3d_t accelerated calls=', &
-     &                         kk_fast_calls, ' tile=', tile
+!  Report the path once; a line per step would flood long-run logs.
+        IF (kk_fast_calls.eq.1) THEN
+          WRITE (*,'(a,i0)') 'step3d_t accelerated (first call) tile=', &
+     &                       tile
+        END IF
       ELSE
         kk_fallback_calls=kk_fallback_calls+1
         IF (kk_fallback_calls.eq.1) THEN

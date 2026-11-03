@@ -19,15 +19,14 @@
 **     first index varies fastest (column-major), so the linear offset
 **     is  (i-lb_i) + (j-lb_j)*ni + (k-lb_k)*ni*nj.
 **
-**   * Execution space.  The kernels run on Kokkos::Serial.  ROMS is
-**     already threaded over tiles (see ROMS/Drivers/nl_roms.h, the
-**     "!$OMP PARALLEL" around main3d with per-thread first_tile /
-**     last_tile), so a threaded Kokkos backend would either nest
-**     inside that region or oversubscribe.  The Serial backend's
-**     parallel_for expands to a plain loop (see
-**     core/src/Serial/Kokkos_Serial_Parallel_Range.hpp) and holds no
-**     shared mutable state, so it is safe to call concurrently from
-**     several OpenMP threads.
+**   * Execution space.  Chosen at build time (exec_space below):
+**     Serial, OpenMP or SW64.  ROMS is already threaded over tiles
+**     (see ROMS/Drivers/nl_roms.h, the "!$OMP PARALLEL" around main3d
+**     with per-thread first_tile / last_tile), so with ROMS OpenMP
+**     only the Serial backend is safe: its parallel_for expands to a
+**     plain loop (core/src/Serial/Kokkos_Serial_Parallel_Range.hpp)
+**     and holds no shared mutable state.  SW64 runs one host thread
+**     per MPI rank and dispatches each launch to the 64 CPEs.
 **
 **   * No parallel_reduce.  Kokkos::Serial::ParallelReduce touches the
 **     singleton's pool_reduce_local() scratch, which is not safe under
@@ -250,7 +249,8 @@ struct TileBounds {
 
   /* Trailing extents that the assumed-shape declarations do not carry. */
 
-  int UBk;   /* vertical extent of ubar/vbar/zeta, i.e. N(ng) */
+  int UBk;   /* N(ng): top level of the 3-D arrays (ru/rv are 0:UBk).
+              ** Not the time-level extent of ubar/vbar/zeta, which is 3. */
 };
 
 /*
@@ -330,6 +330,45 @@ using exec_space = Kokkos::Serial;
 void initialize();
 void finalize();
 bool is_initialized();
+
+/*
+** Optional per-kernel wall time.  Set ROMS_KK_TIMING=1 in the job's
+** environment; finalize() then prints calls, seconds and microseconds
+** per call for every timed entry point.  Every launch used here returns
+** only after its work is done (Serial runs the loop inline, SW64 joins
+** the core group inside parallel_for), so the interval between entry and
+** return is the kernel's own cost.  When disabled a timer costs one test
+** of a cached flag.
+*/
+
+#if !defined(__sw_slave__)
+int    timer_slot(const char* name);
+void   timer_add(int slot, double seconds);
+bool   timer_enabled();
+double wall_seconds();
+
+class ScopedTimer {
+ public:
+  explicit ScopedTimer(int slot)
+      : slot_(timer_enabled() ? slot : -1),
+        t0_(slot_ >= 0 ? wall_seconds() : 0.0) {}
+  ~ScopedTimer() {
+    if (slot_ >= 0) timer_add(slot_, wall_seconds() - t0_);
+  }
+  ScopedTimer(const ScopedTimer&) = delete;
+  ScopedTimer& operator=(const ScopedTimer&) = delete;
+
+ private:
+  int    slot_;
+  double t0_;
+};
+
+#  define ROMS_KK_TIMER(name)                                         \
+     static const int roms_kk_slot_ = ::roms::timer_slot(name);       \
+     ::roms::ScopedTimer roms_kk_timer_(roms_kk_slot_)
+#else
+#  define ROMS_KK_TIMER(name)
+#endif
 
 }  // namespace roms
 

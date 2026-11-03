@@ -139,6 +139,11 @@
 !
       USE mod_param
       USE mod_scalars
+#if defined ROMS_KOKKOS && defined KK_STAGE_UV3DMIX
+      USE, INTRINSIC :: iso_c_binding, ONLY : C_LOC
+      USE kokkos_rhs3d_mod, ONLY : kokkos_tile_bounds, k_uv3dmix2_s,    &
+     &                             kk_fill_bounds
+#endif
 !
 !  Imported variable declarations.
 !
@@ -154,33 +159,33 @@
 # ifdef WET_DRY
       real(r8), intent(in) :: pmask_wet(LBi:,LBj:)
 # endif
-      real(r8), intent(in) :: Hz(LBi:,LBj:,:)
-      real(r8), intent(in) :: om_p(LBi:,LBj:)
-      real(r8), intent(in) :: om_r(LBi:,LBj:)
-      real(r8), intent(in) :: on_p(LBi:,LBj:)
-      real(r8), intent(in) :: on_r(LBi:,LBj:)
-      real(r8), intent(in) :: pm(LBi:,LBj:)
-      real(r8), intent(in) :: pmon_p(LBi:,LBj:)
-      real(r8), intent(in) :: pmon_r(LBi:,LBj:)
-      real(r8), intent(in) :: pn(LBi:,LBj:)
-      real(r8), intent(in) :: pnom_p(LBi:,LBj:)
-      real(r8), intent(in) :: pnom_r(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: Hz(LBi:,LBj:,:)
+      real(r8), TARGET, intent(in) :: om_p(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: om_r(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: on_p(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: on_r(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: pm(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: pmon_p(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: pmon_r(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: pn(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: pnom_p(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: pnom_r(LBi:,LBj:)
 # ifdef VISC_3DCOEF
       real(r8), intent(in) :: visc3d_r(LBi:,LBj:,:)
 # else
-      real(r8), intent(in) :: visc2_p(LBi:,LBj:)
-      real(r8), intent(in) :: visc2_r(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: visc2_p(LBi:,LBj:)
+      real(r8), TARGET, intent(in) :: visc2_r(LBi:,LBj:)
 # endif
 # ifdef DIAGNOSTICS_UV
-      real(r8), intent(inout) :: DiaRUfrc(LBi:,LBj:,:,:)
-      real(r8), intent(inout) :: DiaRVfrc(LBi:,LBj:,:,:)
-      real(r8), intent(inout) :: DiaU3wrk(LBi:,LBj:,:,:)
-      real(r8), intent(inout) :: DiaV3wrk(LBi:,LBj:,:,:)
+      real(r8), TARGET, intent(inout) :: DiaRUfrc(LBi:,LBj:,:,:)
+      real(r8), TARGET, intent(inout) :: DiaRVfrc(LBi:,LBj:,:,:)
+      real(r8), TARGET, intent(inout) :: DiaU3wrk(LBi:,LBj:,:,:)
+      real(r8), TARGET, intent(inout) :: DiaV3wrk(LBi:,LBj:,:,:)
 # endif
-      real(r8), intent(inout) :: rufrc(LBi:,LBj:)
-      real(r8), intent(inout) :: rvfrc(LBi:,LBj:)
-      real(r8), intent(inout) :: u(LBi:,LBj:,:,:)
-      real(r8), intent(inout) :: v(LBi:,LBj:,:,:)
+      real(r8), TARGET, intent(inout) :: rufrc(LBi:,LBj:)
+      real(r8), TARGET, intent(inout) :: rvfrc(LBi:,LBj:)
+      real(r8), TARGET, intent(inout) :: u(LBi:,LBj:,:,:)
+      real(r8), TARGET, intent(inout) :: v(LBi:,LBj:,:,:)
 #else
 # ifdef MASKING
       real(r8), intent(in) :: pmask(LBi:UBi,LBj:UBj)
@@ -188,38 +193,41 @@
 # ifdef WET_DRY
       real(r8), intent(in) :: pmask_wet(LBi:UBi,LBj:UBj)
 # endif
-      real(r8), intent(in) :: Hz(LBi:UBi,LBj:UBj,N(ng))
-      real(r8), intent(in) :: om_p(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: om_r(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: on_p(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: on_r(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: pm(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: pmon_p(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: pmon_r(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: pn(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: pnom_p(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: pnom_r(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: Hz(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), TARGET, intent(in) :: om_p(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: om_r(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: on_p(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: on_r(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: pm(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: pmon_p(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: pmon_r(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: pn(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: pnom_p(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: pnom_r(LBi:UBi,LBj:UBj)
 # ifdef VISC_3DCOEF
       real(r8), intent(in) :: visc3d_r(LBi:UBi,LBj:UBj,N(ng))
 # else
-      real(r8), intent(in) :: visc2_p(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: visc2_r(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: visc2_p(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in) :: visc2_r(LBi:UBi,LBj:UBj)
 # endif
 # ifdef DIAGNOSTICS_UV
-      real(r8), intent(inout) :: DiaRUfrc(LBi:UBi,LBj:UBj,3,NDM2d-1)
-      real(r8), intent(inout) :: DiaRVfrc(LBi:UBi,LBj:UBj,3,NDM2d-1)
-      real(r8), intent(inout) :: DiaU3wrk(LBi:UBi,LBj:UBj,N(ng),NDM3d)
-      real(r8), intent(inout) :: DiaV3wrk(LBi:UBi,LBj:UBj,N(ng),NDM3d)
+      real(r8), TARGET, intent(inout) :: DiaRUfrc(LBi:UBi,LBj:UBj,3,NDM2d-1)
+      real(r8), TARGET, intent(inout) :: DiaRVfrc(LBi:UBi,LBj:UBj,3,NDM2d-1)
+      real(r8), TARGET, intent(inout) :: DiaU3wrk(LBi:UBi,LBj:UBj,N(ng),NDM3d)
+      real(r8), TARGET, intent(inout) :: DiaV3wrk(LBi:UBi,LBj:UBj,N(ng),NDM3d)
 # endif
-      real(r8), intent(inout) :: rufrc(LBi:UBi,LBj:UBj)
-      real(r8), intent(inout) :: rvfrc(LBi:UBi,LBj:UBj)
-      real(r8), intent(inout) :: u(LBi:UBi,LBj:UBj,N(ng),2)
-      real(r8), intent(inout) :: v(LBi:UBi,LBj:UBj,N(ng),2)
+      real(r8), TARGET, intent(inout) :: rufrc(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(inout) :: rvfrc(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(inout) :: u(LBi:UBi,LBj:UBj,N(ng),2)
+      real(r8), TARGET, intent(inout) :: v(LBi:UBi,LBj:UBj,N(ng),2)
 #endif
 !
 !  Local variable declarations.
 !
       integer :: i, j, k
+#if defined ROMS_KOKKOS && defined KK_STAGE_UV3DMIX
+      TYPE(kokkos_tile_bounds) :: KK_TILE
+#endif
 
       real(r8) :: cff, cff1, cff2, cff3
 #ifdef VISC_3DCOEF
@@ -236,6 +244,30 @@
 !  Compute horizontal harmonic viscosity along constant S-surfaces.
 !-----------------------------------------------------------------------
 !
+#if defined ROMS_KOKKOS && defined KK_STAGE_UV3DMIX
+!
+!  Kokkos path: the stress-tensor fluxes and the update loops live in
+!  ROMS/Cpp/kokkos_rhs3d.cpp (k_uv3dmix2_s).
+!
+      CALL kk_fill_bounds (KK_TILE, ng, tile)
+      CALL k_uv3dmix2_s (ng, tile, nrhs, nnew,                         &
+     &                   LBi, UBi, LBj, UBj,                           &
+     &                   IminS, ImaxS, JminS, JmaxS,                   &
+     &                   C_LOC(Hz),                                    &
+     &                   C_LOC(om_p), C_LOC(om_r),                     &
+     &                   C_LOC(on_p), C_LOC(on_r),                     &
+     &                   C_LOC(pm), C_LOC(pmon_p), C_LOC(pmon_r),      &
+     &                   C_LOC(pn), C_LOC(pnom_p), C_LOC(pnom_r),      &
+     &                   C_LOC(visc2_p), C_LOC(visc2_r),               &
+     &                   C_LOC(DiaRUfrc), C_LOC(DiaRVfrc),             &
+     &                   C_LOC(DiaU3wrk), C_LOC(DiaV3wrk),             &
+     &                   C_LOC(rufrc), C_LOC(rvfrc),                   &
+     &                   C_LOC(u), C_LOC(v),                           &
+     &                   N(ng), NDM2d, NDM3d,                          &
+     &                   M2hvis, M2xvis, M2yvis,                       &
+     &                   M3hvis, M3xvis, M3yvis,                       &
+     &                   dt(ng), KK_TILE)
+#else
       K_LOOP : DO k=1,N(ng)
 !
 !  Compute flux-components of the horizontal divergence of the stress
@@ -328,6 +360,7 @@
           END DO
         END DO
       END DO K_LOOP
+#endif /* ROMS_KOKKOS && KK_STAGE_UV3DMIX */
 !
       RETURN
       END SUBROUTINE uv3dmix2_s_tile

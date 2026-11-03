@@ -116,6 +116,11 @@
 !
       USE mod_param
       USE mod_scalars
+#if defined ROMS_KOKKOS && defined KK_STAGE_OMEGA
+      USE, INTRINSIC :: iso_c_binding, ONLY : C_LOC
+      USE kokkos_rhs3d_mod, ONLY : kokkos_tile_bounds, k_omega3d,       &
+     &                             kk_fill_bounds
+#endif
       USE mod_sources
 !
       USE bc_3d_mod, ONLY : bc_w3d_tile
@@ -137,20 +142,20 @@
       real(r8), intent(in) :: omn(LBi:,LBj:)
       real(r8), intent(in) :: bed_thick(LBi:,LBj:,:)
 #  endif
-      real(r8), intent(in) :: Huon(LBi:,LBj:,:)
-      real(r8), intent(in) :: Hvom(LBi:,LBj:,:)
+      real(r8), TARGET, intent(in) :: Huon(LBi:,LBj:,:)
+      real(r8), TARGET, intent(in) :: Hvom(LBi:,LBj:,:)
 #  ifdef OMEGA_IMPLICIT
       real(r8), intent(in) :: pm(LBi:,LBj:)
       real(r8), intent(in) :: pn(LBi:,LBj:)
 #  endif
-      real(r8), intent(in) :: z_w(LBi:,LBj:,0:)
+      real(r8), TARGET, intent(in) :: z_w(LBi:,LBj:,0:)
 #  if defined WEC_VF
       real(r8), intent(in) :: W_stokes(LBi:,LBj:,0:)
 #  endif
 #  ifdef OMEGA_IMPLICIT
       real(r8), intent(out) :: Wi(LBi:,LBj:,0:)
 #  endif
-      real(r8), intent(out) :: W(LBi:,LBj:,0:)
+      real(r8), TARGET, intent(out) :: W(LBi:,LBj:,0:)
 
 # else
 
@@ -158,25 +163,28 @@
       real(r8), intent(in) :: omn(LBi:UBi,LBj:UBj)
       real(r8), intent(in) :: bed_thick(LBi:UBi,LBj:UBj,3)
 #  endif
-      real(r8), intent(in) :: Huon(LBi:UBi,LBj:UBj,N(ng))
-      real(r8), intent(in) :: Hvom(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), TARGET, intent(in) :: Huon(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), TARGET, intent(in) :: Hvom(LBi:UBi,LBj:UBj,N(ng))
 #  ifdef OMEGA_IMPLICIT
       real(r8), intent(in) :: pm(LBi:UBi,LBj:UBj)
       real(r8), intent(in) :: pn(LBi:UBi,LBj:UBj)
 #  endif
-      real(r8), intent(in) :: z_w(LBi:UBi,LBj:UBj,0:N(ng))
+      real(r8), TARGET, intent(in) :: z_w(LBi:UBi,LBj:UBj,0:N(ng))
 #  if defined WEC_VF
       real(r8), intent(in) :: W_stokes(LBi:UBi,LBj:UBj,0:N(ng))
 #  endif
 #  ifdef OMEGA_IMPLICIT
       real(r8), intent(out) :: Wi(LBi:UBi,LBj:UBj,0:N(ng))
 #  endif
-      real(r8), intent(out) :: W(LBi:UBi,LBj:UBj,0:N(ng))
+      real(r8), TARGET, intent(out) :: W(LBi:UBi,LBj:UBj,0:N(ng))
 # endif
 !
 !  Local variable declarations.
 !
       integer :: i, ii, is, j, jj, k
+#if defined ROMS_KOKKOS && defined KK_STAGE_OMEGA
+      TYPE(kokkos_tile_bounds) :: KK_TILE
+#endif
 # if defined SEDIMENT && defined SED_MORPH
       real(r8) :: cff1
 # endif
@@ -212,6 +220,21 @@
       cff1=1.0_r8/(dt(ng)*N(ng))
 !
 # endif
+#if defined ROMS_KOKKOS && defined KK_STAGE_OMEGA
+!
+!  Kokkos path: the column integration lives in
+!  ROMS/Cpp/kokkos_rhs3d.cpp (k_omega3d).  Point sources need the
+!  per-row reaccumulation below, so they keep the Fortran block.
+!
+      IF (.not.LwSrc(ng)) THEN
+        CALL kk_fill_bounds (KK_TILE, ng, tile)
+        CALL k_omega3d (ng, tile,                                       &
+     &                  LBi, UBi, LBj, UBj,                             &
+     &                  IminS, ImaxS, JminS, JmaxS,                     &
+     &                  C_LOC(Huon), C_LOC(Hvom),                       &
+     &                  C_LOC(z_w), C_LOC(W), N(ng), KK_TILE)
+      ELSE
+#endif
       DO j=Jstr,Jend
         DO i=Istr,Iend
           W(i,j,0)=0.0_r8
@@ -347,6 +370,9 @@
           W(i,j,N(ng))=0.0_r8
         END DO
       END DO
+#if defined ROMS_KOKKOS && defined KK_STAGE_OMEGA
+      END IF
+#endif
 !
 !  Set lateral boundary conditions.
 !
@@ -398,12 +424,12 @@
 # ifdef ASSUMED_SHAPE
       real(r8), intent(in) :: pm(LBi:,LBj:)
       real(r8), intent(in) :: pn(LBi:,LBj:)
-      real(r8), intent(in) :: W(LBi:,LBj:,LBk:)
+      real(r8), TARGET, intent(in) :: W(LBi:,LBj:,LBk:)
       real(r8), intent(out) :: Wscl(LBi:,LBj:,LBk:)
 # else
       real(r8), intent(in) :: pm(LBi:UBi,LBj:UBj)
       real(r8), intent(in) :: pn(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: W(LBi:UBi,LBj:UBj,LBk:UBk)
+      real(r8), TARGET, intent(in) :: W(LBi:UBi,LBj:UBj,LBk:UBk)
       real(r8), intent(out) :: Wscl(LBi:UBi,LBj:UBj,LBk:UBk)
 # endif
 !

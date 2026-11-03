@@ -37,6 +37,12 @@
       USE uv_var_change_mod, ONLY : uv_C2A_grid
       USE u3dbc_mod,         ONLY : u3dbc_tile
       USE v3dbc_mod,         ONLY : v3dbc_tile
+# if defined ROMS_KOKKOS && defined KK_STAGE_STEP3DUV
+      USE, INTRINSIC :: iso_c_binding, ONLY : C_LOC
+      USE kokkos_step3d_mod, ONLY : kokkos_uv3d_config,                 &
+     &                              k_step3d_uv_solve,                  &
+     &                              k_step3d_uv_couple
+# endif
 !
       implicit none
 !
@@ -191,22 +197,22 @@
       real(r8), intent(in) :: umask_wet(LBi:,LBj:)
       real(r8), intent(in) :: vmask_wet(LBi:,LBj:)
 #  endif
-      real(r8), intent(in) :: om_v(LBi:,LBj:)
-      real(r8), intent(in) :: on_u(LBi:,LBj:)
+      real(r8), intent(in), TARGET :: om_v(LBi:,LBj:)
+      real(r8), intent(in), TARGET :: on_u(LBi:,LBj:)
 #  ifdef OMEGA_IMPLICIT
       real(r8), intent(in) :: om_u(LBi:,LBj:)
       real(r8), intent(in) :: on_v(LBi:,LBj:)
 #  endif
-      real(r8), intent(in) :: pm(LBi:,LBj:)
-      real(r8), intent(in) :: pn(LBi:,LBj:)
-      real(r8), intent(in) :: Hz(LBi:,LBj:,:)
-      real(r8), intent(in) :: z_r(LBi:,LBj:,:)
+      real(r8), intent(in), TARGET :: pm(LBi:,LBj:)
+      real(r8), intent(in), TARGET :: pn(LBi:,LBj:)
+      real(r8), intent(in), TARGET :: Hz(LBi:,LBj:,:)
+      real(r8), intent(in), TARGET :: z_r(LBi:,LBj:,:)
       real(r8), intent(in) :: z_w(LBi:,LBj:,0:)
-      real(r8), intent(in) :: Akv(LBi:,LBj:,0:)
-      real(r8), intent(in) :: DU_avg1(LBi:,LBj:)
-      real(r8), intent(in) :: DV_avg1(LBi:,LBj:)
-      real(r8), intent(in) :: DU_avg2(LBi:,LBj:)
-      real(r8), intent(in) :: DV_avg2(LBi:,LBj:)
+      real(r8), intent(in), TARGET :: Akv(LBi:,LBj:,0:)
+      real(r8), intent(in), TARGET :: DU_avg1(LBi:,LBj:)
+      real(r8), intent(in), TARGET :: DV_avg1(LBi:,LBj:)
+      real(r8), intent(in), TARGET :: DU_avg2(LBi:,LBj:)
+      real(r8), intent(in), TARGET :: DV_avg2(LBi:,LBj:)
 #  ifdef WEC
       real(r8), intent(in) :: ubar_stokes(LBi:,LBj:)
       real(r8), intent(in) :: vbar_stokes(LBi:,LBj:)
@@ -214,28 +220,28 @@
 #  ifdef OMEGA_IMPLICIT
       real(r8), intent(in) :: Wi(LBi:,LBj:,0:)
 #  endif
-      real(r8), intent(inout) :: ru(LBi:,LBj:,0:,:)
-      real(r8), intent(inout) :: rv(LBi:,LBj:,0:,:)
+      real(r8), intent(inout), TARGET :: ru(LBi:,LBj:,0:,:)
+      real(r8), intent(inout), TARGET :: rv(LBi:,LBj:,0:,:)
 #  ifdef DIAGNOSTICS_UV
-      real(r8), intent(inout) :: DiaU2wrk(LBi:,LBj:,:)
-      real(r8), intent(inout) :: DiaV2wrk(LBi:,LBj:,:)
-      real(r8), intent(inout) :: DiaU2int(LBi:,LBj:,:)
-      real(r8), intent(inout) :: DiaV2int(LBi:,LBj:,:)
-      real(r8), intent(inout) :: DiaU3wrk(LBi:,LBj:,:,:)
-      real(r8), intent(inout) :: DiaV3wrk(LBi:,LBj:,:,:)
-      real(r8), intent(inout) :: DiaRU(LBi:,LBj:,:,:,:)
-      real(r8), intent(inout) :: DiaRV(LBi:,LBj:,:,:,:)
+      real(r8), intent(inout), TARGET :: DiaU2wrk(LBi:,LBj:,:)
+      real(r8), intent(inout), TARGET :: DiaV2wrk(LBi:,LBj:,:)
+      real(r8), intent(inout), TARGET :: DiaU2int(LBi:,LBj:,:)
+      real(r8), intent(inout), TARGET :: DiaV2int(LBi:,LBj:,:)
+      real(r8), intent(inout), TARGET :: DiaU3wrk(LBi:,LBj:,:,:)
+      real(r8), intent(inout), TARGET :: DiaV3wrk(LBi:,LBj:,:,:)
+      real(r8), intent(inout), TARGET :: DiaRU(LBi:,LBj:,:,:,:)
+      real(r8), intent(inout), TARGET :: DiaRV(LBi:,LBj:,:,:,:)
 #  endif
-      real(r8), intent(inout) :: u(LBi:,LBj:,:,:)
-      real(r8), intent(inout) :: v(LBi:,LBj:,:,:)
+      real(r8), intent(inout), TARGET :: u(LBi:,LBj:,:,:)
+      real(r8), intent(inout), TARGET :: v(LBi:,LBj:,:,:)
 #  ifdef WEC
       real(r8), intent(inout) :: u_stokes(LBi:,LBj:,:)
       real(r8), intent(inout) :: v_stokes(LBi:,LBj:,:)
 #  endif
-      real(r8), intent(out) :: ubar(LBi:,LBj:,:)
-      real(r8), intent(out) :: vbar(LBi:,LBj:,:)
-      real(r8), intent(out) :: Huon(LBi:,LBj:,:)
-      real(r8), intent(out) :: Hvom(LBi:,LBj:,:)
+      real(r8), intent(out), TARGET :: ubar(LBi:,LBj:,:)
+      real(r8), intent(out), TARGET :: vbar(LBi:,LBj:,:)
+      real(r8), intent(out), TARGET :: Huon(LBi:,LBj:,:)
+      real(r8), intent(out), TARGET :: Hvom(LBi:,LBj:,:)
 
 # else
 
@@ -247,22 +253,22 @@
       real(r8), intent(in) :: umask_wet(LBi:UBi,LBj:UBj)
       real(r8), intent(in) :: vmask_wet(LBi:UBi,LBj:UBj)
 #  endif
-      real(r8), intent(in) :: om_v(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: on_u(LBi:UBi,LBj:UBj)
+      real(r8), intent(in), TARGET :: om_v(LBi:UBi,LBj:UBj)
+      real(r8), intent(in), TARGET :: on_u(LBi:UBi,LBj:UBj)
 #  ifdef OMEGA_IMPLICIT
       real(r8), intent(in) :: om_u(LBi:UBi,LBj:UBj)
       real(r8), intent(in) :: on_v(LBi:UBi,LBj:UBj)
 #  endif
-      real(r8), intent(in) :: pm(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: pn(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: Hz(LBi:UBi,LBj:UBj,N(ng))
-      real(r8), intent(in) :: z_r(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), intent(in), TARGET :: pm(LBi:UBi,LBj:UBj)
+      real(r8), intent(in), TARGET :: pn(LBi:UBi,LBj:UBj)
+      real(r8), intent(in), TARGET :: Hz(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), intent(in), TARGET :: z_r(LBi:UBi,LBj:UBj,N(ng))
       real(r8), intent(in) :: z_w(LBi:UBi,LBj:UBj,0:N(ng))
-      real(r8), intent(in) :: Akv(LBi:UBi,LBj:UBj,0:N(ng))
-      real(r8), intent(in) :: DU_avg1(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: DV_avg1(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: DU_avg2(LBi:UBi,LBj:UBj)
-      real(r8), intent(in) :: DV_avg2(LBi:UBi,LBj:UBj)
+      real(r8), intent(in), TARGET :: Akv(LBi:UBi,LBj:UBj,0:N(ng))
+      real(r8), intent(in), TARGET :: DU_avg1(LBi:UBi,LBj:UBj)
+      real(r8), intent(in), TARGET :: DV_avg1(LBi:UBi,LBj:UBj)
+      real(r8), intent(in), TARGET :: DU_avg2(LBi:UBi,LBj:UBj)
+      real(r8), intent(in), TARGET :: DV_avg2(LBi:UBi,LBj:UBj)
 #  ifdef WEC
       real(r8), intent(in) :: ubar_stokes(LBi:UBi,LBj:UBj)
       real(r8), intent(in) :: vbar_stokes(LBi:UBi,LBj:UBj)
@@ -270,28 +276,28 @@
 #  ifdef OMEGA_IMPLICIT
       real(r8), intent(in) :: Wi(LBi:UBi,LBj:UBj,0:N(ng))
 #  endif
-      real(r8), intent(inout) :: ru(LBi:UBi,LBj:UBj,0:N(ng),2)
-      real(r8), intent(inout) :: rv(LBi:UBi,LBj:UBj,0:N(ng),2)
+      real(r8), intent(inout), TARGET :: ru(LBi:UBi,LBj:UBj,0:N(ng),2)
+      real(r8), intent(inout), TARGET :: rv(LBi:UBi,LBj:UBj,0:N(ng),2)
 #  ifdef DIAGNOSTICS_UV
-      real(r8), intent(inout) :: DiaU2wrk(LBi:UBi,LBj:UBj,NDM2d)
-      real(r8), intent(inout) :: DiaV2wrk(LBi:UBi,LBj:UBj,NDM2d)
-      real(r8), intent(inout) :: DiaU2int(LBi:UBi,LBj:UBj,NDM2d)
-      real(r8), intent(inout) :: DiaV2int(LBi:UBi,LBj:UBj,NDM2d)
-      real(r8), intent(inout) :: DiaU3wrk(LBi:UBi,LBj:UBj,N(ng),NDM3d)
-      real(r8), intent(inout) :: DiaV3wrk(LBi:UBi,LBj:UBj,N(ng),NDM3d)
-      real(r8), intent(inout) :: DiaRU(LBi:UBi,LBj:UBj,N(ng),2,NDrhs)
-      real(r8), intent(inout) :: DiaRV(LBi:UBi,LBj:UBj,N(ng),2,NDrhs)
+      real(r8), intent(inout), TARGET :: DiaU2wrk(LBi:UBi,LBj:UBj,NDM2d)
+      real(r8), intent(inout), TARGET :: DiaV2wrk(LBi:UBi,LBj:UBj,NDM2d)
+      real(r8), intent(inout), TARGET :: DiaU2int(LBi:UBi,LBj:UBj,NDM2d)
+      real(r8), intent(inout), TARGET :: DiaV2int(LBi:UBi,LBj:UBj,NDM2d)
+      real(r8), intent(inout), TARGET :: DiaU3wrk(LBi:UBi,LBj:UBj,N(ng),NDM3d)
+      real(r8), intent(inout), TARGET :: DiaV3wrk(LBi:UBi,LBj:UBj,N(ng),NDM3d)
+      real(r8), intent(inout), TARGET :: DiaRU(LBi:UBi,LBj:UBj,N(ng),2,NDrhs)
+      real(r8), intent(inout), TARGET :: DiaRV(LBi:UBi,LBj:UBj,N(ng),2,NDrhs)
 #  endif
-      real(r8), intent(inout) :: u(LBi:UBi,LBj:UBj,N(ng),2)
-      real(r8), intent(inout) :: v(LBi:UBi,LBj:UBj,N(ng),2)
+      real(r8), intent(inout), TARGET :: u(LBi:UBi,LBj:UBj,N(ng),2)
+      real(r8), intent(inout), TARGET :: v(LBi:UBi,LBj:UBj,N(ng),2)
 #  ifdef WEC
       real(r8), intent(inout) :: u_stokes(LBi:UBi,LBj:UBj,N(ng))
       real(r8), intent(inout) :: v_stokes(LBi:UBi,LBj:UBj,N(ng))
 #  endif
-      real(r8), intent(out) :: ubar(LBi:UBi,LBj:UBj,:)
-      real(r8), intent(out) :: vbar(LBi:UBi,LBj:UBj,:)
-      real(r8), intent(out) :: Huon(LBi:UBi,LBj:UBj,N(ng))
-      real(r8), intent(out) :: Hvom(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), intent(out), TARGET :: ubar(LBi:UBi,LBj:UBj,:)
+      real(r8), intent(out), TARGET :: vbar(LBi:UBi,LBj:UBj,:)
+      real(r8), intent(out), TARGET :: Huon(LBi:UBi,LBj:UBj,N(ng))
+      real(r8), intent(out), TARGET :: Hvom(LBi:UBi,LBj:UBj,N(ng))
 # endif
 !
 !  Local variable declarations.
@@ -320,8 +326,141 @@
       real(r8), dimension(IminS:ImaxS,0:N(ng)) :: wrk
       real(r8), dimension(IminS:ImaxS,1:NDM2d-1) :: Dwrk
 # endif
+# if defined ROMS_KOKKOS && defined KK_STAGE_STEP3DUV
+      TYPE(kokkos_uv3d_config) :: kk_cfg
+      integer :: ic
+# endif
 
 # include "set_bounds.h"
+# if defined ROMS_KOKKOS && defined KK_STAGE_STEP3DUV
+!
+!  Kokkos path: the two row loops of this routine (time step plus
+!  implicit vertical viscosity, and the 2D/3D coupling with the mass
+!  fluxes) live in ROMS/Cpp/kokkos_step3d.cpp.  The lateral boundary
+!  conditions, point sources and exchanges between and after them stay
+!  here.
+!
+      kk_cfg%LBi=LBi
+      kk_cfg%UBi=UBi
+      kk_cfg%LBj=LBj
+      kk_cfg%UBj=UBj
+      kk_cfg%Istr=Istr
+      kk_cfg%Iend=Iend
+      kk_cfg%Jstr=Jstr
+      kk_cfg%Jend=Jend
+      kk_cfg%IstrU=IstrU
+      kk_cfg%JstrV=JstrV
+      kk_cfg%IstrP=IstrP
+      kk_cfg%IstrT=IstrT
+      kk_cfg%IendT=IendT
+      kk_cfg%JstrT=JstrT
+      kk_cfg%JendT=JendT
+      kk_cfg%Mm=Mm(ng)
+      kk_cfg%N=N(ng)
+      kk_cfg%nrhs=nrhs
+      kk_cfg%nnew=nnew
+      IF (iic(ng).eq.ntfirst(ng)) THEN
+        kk_cfg%step=0
+      ELSE IF (iic(ng).eq.(ntfirst(ng)+1)) THEN
+        kk_cfg%step=1
+      ELSE
+        kk_cfg%step=2
+      END IF
+      kk_cfg%NDM2d=0
+      kk_cfg%NDM3d=0
+      kk_cfg%NDrhs=0
+      kk_cfg%M2pgrd=0
+      kk_cfg%M2bstr=0
+      kk_cfg%M2sstr=0
+      kk_cfg%M2rate=0
+      kk_cfg%M3pgrd=0
+      kk_cfg%M3vvis=0
+      kk_cfg%M3rate=0
+      kk_cfg%M3xvis=0
+      kk_cfg%M3yvis=0
+      kk_cfg%M3hvis=0
+      kk_cfg%m2=0
+      kk_cfg%m3=0
+      ic=0
+#  ifdef DIAGNOSTICS_UV
+      kk_cfg%NDM2d=NDM2d
+      kk_cfg%NDM3d=NDM3d
+      kk_cfg%NDrhs=NDrhs
+      kk_cfg%M2pgrd=M2pgrd
+      kk_cfg%M2bstr=M2bstr
+      kk_cfg%M2sstr=M2sstr
+      kk_cfg%M2rate=M2rate
+      kk_cfg%M3pgrd=M3pgrd
+      kk_cfg%M3vvis=M3vvis
+      kk_cfg%M3rate=M3rate
+!
+!  Terms integrated over the column for the interior mean replacement,
+!  as (2-D index, 3-D index) pairs.
+!
+      ic=ic+1
+      kk_cfg%m2(ic)=M2pgrd
+      kk_cfg%m3(ic)=M3pgrd
+      ic=ic+1
+      kk_cfg%m2(ic)=M2bstr
+      kk_cfg%m3(ic)=M3vvis
+#   ifdef UV_COR
+      ic=ic+1
+      kk_cfg%m2(ic)=M2fcor
+      kk_cfg%m3(ic)=M3fcor
+#   endif
+#   if defined UV_VIS2 || defined UV_VIS4
+      kk_cfg%M3xvis=M3xvis
+      kk_cfg%M3yvis=M3yvis
+      kk_cfg%M3hvis=M3hvis
+      ic=ic+1
+      kk_cfg%m2(ic)=M2xvis
+      kk_cfg%m3(ic)=M3xvis
+      ic=ic+1
+      kk_cfg%m2(ic)=M2yvis
+      kk_cfg%m3(ic)=M3yvis
+      ic=ic+1
+      kk_cfg%m2(ic)=M2hvis
+      kk_cfg%m3(ic)=M3hvis
+#   endif
+#   ifdef UV_ADV
+      ic=ic+1
+      kk_cfg%m2(ic)=M2xadv
+      kk_cfg%m3(ic)=M3xadv
+      ic=ic+1
+      kk_cfg%m2(ic)=M2yadv
+      kk_cfg%m3(ic)=M3yadv
+      ic=ic+1
+      kk_cfg%m2(ic)=M2hadv
+      kk_cfg%m3(ic)=M3hadv
+#   endif
+#  endif
+      kk_cfg%npairs=ic
+      kk_cfg%rep_w=MERGE(1,0,                                           &
+     &  (.not.(CompositeGrid(iwest ,ng).or.EWperiodic(ng))).and.        &
+     &  DOMAIN(ng)%Western_Edge(tile))
+      kk_cfg%rep_e=MERGE(1,0,                                           &
+     &  (.not.(CompositeGrid(ieast ,ng).or.EWperiodic(ng))).and.        &
+     &  DOMAIN(ng)%Eastern_Edge(tile))
+      kk_cfg%rep_s=MERGE(1,0,                                           &
+     &  .not.(CompositeGrid(isouth,ng).or.NSperiodic(ng)))
+      kk_cfg%rep_n=MERGE(1,0,                                           &
+     &  .not.(CompositeGrid(inorth,ng).or.NSperiodic(ng)))
+      kk_cfg%dt=dt(ng)
+      kk_cfg%lambda=lambda
+      CALL k_step3d_uv_solve (kk_cfg, C_LOC(pm), C_LOC(pn),             &
+     &                        C_LOC(on_u), C_LOC(om_v),                 &
+     &                        C_LOC(Hz), C_LOC(z_r), C_LOC(Akv),        &
+     &                        C_LOC(DU_avg1), C_LOC(DV_avg1),           &
+     &                        C_LOC(ru), C_LOC(rv), C_LOC(u), C_LOC(v), &
+#  ifdef DIAGNOSTICS_UV
+     &                        C_LOC(DiaU2wrk), C_LOC(DiaV2wrk),         &
+     &                        C_LOC(DiaU3wrk), C_LOC(DiaV3wrk),         &
+     &                        C_LOC(DiaRU), C_LOC(DiaRV))
+#  else
+     &                        C_LOC(u), C_LOC(v), C_LOC(u), C_LOC(v),   &
+     &                        C_LOC(u), C_LOC(v))
+#  endif
+# else
 !
 !-----------------------------------------------------------------------
 !  Time step momentum equation in the XI-direction.
@@ -1258,6 +1397,7 @@
 # endif
         END IF
       END DO
+# endif /* ROMS_KOKKOS && KK_STAGE_STEP3DUV */
 !
 !-----------------------------------------------------------------------
 !  Set lateral boundary conditions.
@@ -1309,6 +1449,23 @@
 !
 !  Couple velocity component in the XI-direction.
 !
+# if defined ROMS_KOKKOS && defined KK_STAGE_STEP3DUV
+      CALL k_step3d_uv_couple (kk_cfg, C_LOC(on_u), C_LOC(om_v),        &
+     &                         C_LOC(Hz),                               &
+     &                         C_LOC(DU_avg1), C_LOC(DU_avg2),          &
+     &                         C_LOC(DV_avg1), C_LOC(DV_avg2),          &
+     &                         C_LOC(u), C_LOC(v),                      &
+     &                         C_LOC(ubar), C_LOC(vbar),                &
+     &                         C_LOC(Huon), C_LOC(Hvom),                &
+#  ifdef DIAGNOSTICS_UV
+     &                         C_LOC(DiaU2wrk), C_LOC(DiaV2wrk),        &
+     &                         C_LOC(DiaU2int), C_LOC(DiaV2int),        &
+     &                         C_LOC(DiaU3wrk), C_LOC(DiaV3wrk))
+#  else
+     &                         C_LOC(u), C_LOC(v), C_LOC(u), C_LOC(v),  &
+     &                         C_LOC(u), C_LOC(v))
+#  endif
+# else
       DO j=JstrT,JendT
         DO i=IstrP,IendT
           DC(i,0)=0.0_r8
@@ -1754,6 +1911,7 @@
           END DO
         END IF
       END DO
+# endif /* ROMS_KOKKOS && KK_STAGE_STEP3DUV */
 !
 !-----------------------------------------------------------------------
 !  Exchange boundary data.
