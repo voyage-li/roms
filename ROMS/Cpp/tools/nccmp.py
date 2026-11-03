@@ -106,6 +106,9 @@ def main():
     parser.add_argument("ref")
     parser.add_argument("test")
     parser.add_argument("--vars", default="")
+    parser.add_argument("--all-time", action="store_true",
+                        help="compare every variable whose first dimension is "
+                             "ocean_time, as listed in the reference file")
     parser.add_argument("--tol", type=float, default=0.0)
     parser.add_argument("--rtol", type=float, default=0.0)
     parser.add_argument("--zero-tol", type=float, default=0.0,
@@ -119,8 +122,17 @@ def main():
         if "ocean_time" in a.variables or "ocean_time" in b.variables:
             if a.read("ocean_time") != b.read("ocean_time"):
                 raise ValueError("record times differ")
-        names = [s.strip() for s in args.vars.split(",") if s.strip()] if args.vars else [
-            s for s in DEFAULT_VARS if s in a.variables or s in b.variables]
+        if args.all_time:
+            names = [n for n, d in a.variables.items()
+                     if d and d[0] == "ocean_time" and n != "ocean_time"]
+            extra = [n for n, d in b.variables.items()
+                     if d and d[0] == "ocean_time" and n not in a.variables]
+            if extra:
+                raise ValueError("only in test file: " + ",".join(extra))
+        elif args.vars:
+            names = [s.strip() for s in args.vars.split(",") if s.strip()]
+        else:
+            names = [s for s in DEFAULT_VARS if s in a.variables or s in b.variables]
         if not names:
             raise ValueError("no variables selected")
         failed = []

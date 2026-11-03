@@ -10,7 +10,8 @@
 # official myroms/roms_test case directory to use those headers instead.
 # The extra flags cover what the existing kernels require but the stock
 # application header does not define; the same set goes to all three builds
-# so the comparison is like for like.
+# so the comparison is like for like.  TAG_SUFFIX (e.g. -r2) builds into
+# build/<APP>-<backend><TAG_SUFFIX> and leaves earlier binaries in place.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../../../.." && pwd)
 APP=${1:?application name, uppercase header stem}
@@ -25,7 +26,9 @@ export NETCDF=${NETCDF:-$HOME/ftao/local-saca}
 export NETCDF_INCDIR=${NETCDF_INCDIR:-$HOME/ftao/local-saca/include}
 BASE="OUT_DOUBLE;VAR_RHO_2D;DIAGNOSTICS_UV;DIAGNOSTICS_TS"
 [[ -n "$EXTRA" ]] && BASE="$BASE;$EXTRA"
-STAGES=";KK_STAGE_FUSED;KK_STAGE_TAVG;KK_STAGE_COUP;KK_STAGE_MOMT;KK_STAGE_DIAG;KK_STAGE_STOR;KK_STAGE_UV3DMIX;KK_STAGE_T3DMIX;KK_STAGE_PRSGRD;KK_STAGE_OMEGA;KK_STAGE_SETZETA"
+# KK_STAGES replaces the stage list.  bl_test needs PRE3D removed: it
+# defines SOLAR_SOURCE and LMD_NONLOCAL, which the pre_step3d kernel rejects.
+STAGES=";${KK_STAGES:-KK_STAGE_FUSED;KK_STAGE_TAVG;KK_STAGE_COUP;KK_STAGE_MOMT;KK_STAGE_DIAG;KK_STAGE_STOR;KK_STAGE_UV3DMIX;KK_STAGE_T3DMIX;KK_STAGE_PRSGRD;KK_STAGE_OMEGA;KK_STAGE_SETZETA;KK_STAGE_PRE3D;KK_STAGE_STEP3DUV}"
 MPI=${MPI:-OFF}
 SUFFIX=""
 [[ "$MPI" == ON ]] && SUFFIX="-mpi"
@@ -39,7 +42,7 @@ for backend in ${BACKENDS:-reference serial sw64}; do
     TRACER=ON
     FLAGS="$BASE$STAGES"
   fi
-  tag="${APP}-${backend}${SUFFIX}"
+  tag="${APP}-${backend}${SUFFIX}${TAG_SUFFIX:-}"
   echo "=== configuring $tag"
   cmake -S "$ROOT" -B "$ROOT/build/$tag" \
     -DCMAKE_TOOLCHAIN_FILE="$ROOT/Compilers/toolchain_SW64.cmake" \
