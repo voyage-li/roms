@@ -1582,15 +1582,17 @@
 !    lmd_r1        Fraction of total radiance for wavelength band 1 as
 !                    a function of the Jerlov water type.
 !
-        real(r8), dimension(9) :: lmd_mu1 =                             &
+!    TARGET permits zero-copy access by the shortwave row kernel.
+!
+        real(r8), target, dimension(9) :: lmd_mu1 =                     &
      &            (/ 0.35_r8, 0.6_r8,  1.0_r8,  1.5_r8, 1.4_r8,         &
      &               0.42_r8, 0.37_r8, 0.33_r8, 0.00468592_r8 /)
 
-        real(r8), dimension(9) :: lmd_mu2 =                             &
+        real(r8), target, dimension(9) :: lmd_mu2 =                     &
      &            (/ 23.0_r8,  20.0_r8,  17.0_r8,  14.0_r8, 7.9_r8,     &
      &                5.13_r8,  3.54_r8,  2.34_r8,  1.51_r8 /)
 
-        real(r8), dimension(9) :: lmd_r1 =                              &
+        real(r8), target, dimension(9) :: lmd_r1 =                      &
      &            (/ 0.58_r8, 0.62_r8, 0.67_r8, 0.77_r8, 0.78_r8,       &
      &               0.57_r8, 0.57_r8, 0.57_r8, 0.55_r8 /)
 #endif

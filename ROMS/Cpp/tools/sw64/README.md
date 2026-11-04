@@ -19,7 +19,12 @@ submodule and target NetCDF from `$HOME/ftao/local-saca` (`NF_CONFIG` and
 this fork's GCC 7.1 toolchain even for the Serial control; only the SW64
 build enables `Kokkos_ENABLE_SW64` and hybrid kernel compilation.
 
-`MPI=OFF` is the default. The Fortran link still uses `mpif90`, because
+`MPI=OFF` is the default. For the opt-in remaining-compute ports and the
+four-application numerical/performance matrix, see [REMAINDER.md](REMAINDER.md).
+Those builds use matched `ROMS_WALL_PROFILE` clocks; do not compare their
+module-wall regions directly with legacy CPU-time profiles.
+
+The Fortran link still uses `mpif90`, because
 the available NetCDF/HDF5 archives require the MPI runtime. This does not
 turn on distributed ROMS or offload the Serial build. All compared builds
 use double output and `ROMS_FAST_MATH=OFF`. The mixed Fortran/C++ link also supplies host/slave C++ runtimes after
@@ -30,9 +35,11 @@ kernels are enabled directly by `ROMS_KOKKOS`. The tested physics is the
 diagnostic 3-D upwelling combination. Unsupported physics fails
 compilation.  `KK_STAGES='KK_STAGE_FUSED;...'` replaces the stage list,
 for example to build a binary with only the step2d stages whose Serial
-output can be compared bit for bit with `build/reference`.  PRE3D and
-STEP3DUV are only in `build.sh`: bl_test defines SOLAR_SOURCE and
-LMD_MIXING, which the pre_step3d kernel rejects.
+output can be compared bit for bit with `build/reference`. The old PRE3D
+kernel cannot handle SOLAR_SOURCE, so remove KK_STAGE_PRE3D from the stage
+list for official bl_test. That official header does not enable LMD_MIXING;
+the older in-tree bl_test header does. The new remainder stage covers the
+original solar predictor path without modifying the old kernel.
 
 `BUILD_TAG=sw64-opt bash ROMS/Cpp/tools/sw64/build.sh sw64` builds into
 `build/sw64-opt` instead of `build/sw64`, so a candidate never replaces the

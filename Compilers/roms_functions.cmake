@@ -108,15 +108,39 @@ function(preprocess_fortran)
 
        # Preprocess the thing.
 
-       add_custom_command(OUTPUT "${of}"
-         COMMAND ${CPP_EXECUTABLE} ${CPPFLAGS} ${defflags} ${fdefflags} ${incflags} "${f}" > "${of}"
-         COMMAND ${CPP_CLEAN} "${of}"
-         IMPLICIT_DEPENDS Fortran "${f}"
-         COMMENT "Preprocessing ${f}"
-         COMMAND_EXPAND_LISTS
-         VERBATIM
-       )
-       list(APPEND fsrcs "${of}")
+       # Optional row lowering uses the already selected physics and keeps
+       # the original Fortran as the sole source of arithmetic expressions.
+       set(row_files rhs3d set_depth set_massflux rho_eos bulk_flux
+                     t3dmix uv_var_change pre_step3d step3d_t diag
+                     wvelocity set_vbc analytical set_avg set_diags lmd_swfrac)
+       if(ROMS_KOKKOS AND "KK_STAGE_REMAINDER" IN_LIST MY_CPP_FLAGS
+          AND n IN_LIST row_files)
+         find_package(Python3 REQUIRED COMPONENTS Interpreter)
+         set(raw "${of}.raw")
+         set(oc "${CMAKE_CURRENT_BINARY_DIR}/f90/${n}_rows.cpp")
+         set(gen "${CMAKE_CURRENT_SOURCE_DIR}/ROMS/Cpp/tools/row_codegen.py")
+         set(row_field_deps)
+         foreach(owner grid ocean mixing forces diags average param scalars ncparam eoscoef)
+           list(APPEND row_field_deps "${CMAKE_CURRENT_SOURCE_DIR}/ROMS/Modules/mod_${owner}.F")
+         endforeach()
+         add_custom_command(OUTPUT "${of}" "${oc}"
+           COMMAND ${CPP_EXECUTABLE} ${CPPFLAGS} ${defflags} ${fdefflags} ${incflags} "${f}" > "${raw}"
+           COMMAND ${CPP_CLEAN} "${raw}"
+           COMMAND ${Python3_EXECUTABLE} "${gen}" "${raw}" "${of}" "${oc}"
+           DEPENDS "${gen}" ${row_field_deps}
+           IMPLICIT_DEPENDS Fortran "${f}"
+           COMMENT "Preprocessing and lowering rows in ${f}"
+           COMMAND_EXPAND_LISTS VERBATIM)
+         list(APPEND fsrcs "${of}" "${oc}")
+       else()
+         add_custom_command(OUTPUT "${of}"
+           COMMAND ${CPP_EXECUTABLE} ${CPPFLAGS} ${defflags} ${fdefflags} ${incflags} "${f}" > "${of}"
+           COMMAND ${CPP_CLEAN} "${of}"
+           IMPLICIT_DEPENDS Fortran "${f}"
+           COMMENT "Preprocessing ${f}"
+           COMMAND_EXPAND_LISTS VERBATIM)
+         list(APPEND fsrcs "${of}")
+       endif()
      else()
        list(APPEND fsrcs "${f}")
      endif()

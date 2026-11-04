@@ -36,6 +36,13 @@ for key, value in values.items():
                       lambda m: m[1] + str(value), text)
     if n != 1:
         raise SystemExit(f"expected one {key} setting, found {n}")
+# Stations/floats have independent output intervals. In particular BL_TEST
+# enables STATIONS, so disabling only history/averages/diagnostics still
+# writes NetCDF during a purported no-output timing run.
+if a.no_output:
+    for key in ("NSTA", "NFLT"):
+        text = re.sub(r'(?m)^(\s*' + key + r'\s*==\s*)\S+',
+                      lambda m: m[1] + "0", text)
 # Optional NTSAVG/NTSDIA start the averages at the first step.
 for key in ("NTSAVG", "NTSDIA"):
     text = re.sub(r'(?m)^(\s*' + key + r'\s*==\s*)\S+',

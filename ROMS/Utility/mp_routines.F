@@ -160,11 +160,17 @@
 #ifdef CRAYX1
       integer :: count, count_rate, count_max
 #endif
+#ifdef ROMS_WALL_PROFILE
+      integer(kind=8) :: wall_count, wall_rate
+#endif
 !
 !  Get the elapsed wall time (seconds) since an arbitrary time in the
 !  past.
 !
-#if defined _OPENMP
+#if defined ROMS_WALL_PROFILE
+      CALL system_clock (wall_count, wall_rate)
+      my_wtime=REAL(wall_count,r8)/REAL(wall_rate,r8)
+#elif defined _OPENMP
       my_wtime=omp_get_wtime()
 #elif defined CRAYX1
       CALL system_clock (count, count_rate, count_max)
