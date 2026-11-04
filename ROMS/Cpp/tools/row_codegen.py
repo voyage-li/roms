@@ -32,6 +32,8 @@ TARGETS = {
     'lmd_vmix': ['lmd_vmix_tile', 'lmd_finish_tile'],
     'lmd_skpp': ['lmd_skpp_tile'],
     'lmd_bkpp': ['lmd_bkpp_tile'],
+    'gls_prestep': ['gls_prestep_tile'],
+    'gls_corstep': ['gls_corstep_tile'],
     'analytical': ['ana_vmix_tile', 'ana_smflux_tile', 'ana_stflux_tile',
                    'ana_btflux_tile', 'ana_srflux_tile', 'ana_bsflux_tile',
                    'ana_ssflux_tile', 'ana_winds_tile', 'ana_tair_tile',
@@ -39,8 +41,10 @@ TARGETS = {
                    'ana_rain_tile'],
 }
 HOST_ARRAYS = set(('n nt lm mm dt hc iic ntfirst r0 s0 t0 tcoef scoef tdays el xl '
-                   'akt_bak akv_bak blk_zq blk_zt blk_zw ewperiodic nsperiodic '
-                   'tnudg').split())
+                   'akt_bak akv_bak akk_bak akp_bak blk_zq blk_zt blk_zw ewperiodic nsperiodic '
+                   'tnudg gls_m gls_n gls_p gls_sigk gls_sigp gls_cmu0 gls_cmupr '
+                   'gls_c1 gls_c2 gls_c3m gls_c3p gls_kmin gls_pmin zos zob '
+                   'crgban_cw').split())
 FIELD_ARRAYS = {'scalars': {'sc_r','sc_w','cs_r','cs_w'},
                 'clima': {'m3nudgcof','uclm','vclm','tnudgcof','tclm'}}
 FIELD_MODULES={name:'mod_'+name for name in ('grid','ocean','mixing','forces','diags')}
@@ -48,6 +52,10 @@ FIELD_MODULES['average']='mod_average'
 FIELD_CACHE={}
 GLOBAL_TYPES=None
 GLOBAL_ARRAYS={'lmd_mu1','lmd_mu2','lmd_r1'}
+# Grid-indexed parameter arrays still indexed by a tracer loop variable.
+TRACER_ARRAYS={'akt_bak'}
+# Constants such as itemp remain plain host-evaluated scalar arguments.
+HOST_ARRAYS.add('akt_bak')
 INTRINSICS = {'sqrt':'std::sqrt', 'abs':'std::abs', 'exp':'std::exp',
               'log':'std::log', 'log10':'std::log10', 'atan':'std::atan',
               'tanh':'std::tanh', 'sin':'std::sin', 'cos':'std::cos',
@@ -222,6 +230,14 @@ class Kernel:
                 out += INTRINSICS[n]+'('+','.join(self.expr(x) for x in vals)+')'
             elif n in ('bulk_psiu','bulk_psit'):
                 out += n+'('+','.join(self.expr(x) for x in split(args))+')'
+            elif n in TRACER_ARRAYS and split(args)[0] in self.assigned:
+                vals=split(args)
+                syn='kk_tracer_'+n
+                if syn not in self.declarations:
+                    self.declarations[syn]=dict(type='double',dims=['nt(ng)'],dummy=True,
+                                                logical=False,tracer_expr=n+'('+args+')',
+                                                tracer_var=vals[0])
+                out += self.array(syn)+'('+self.expr(vals[0])+')'
             elif n in HOST_ARRAYS and not any(re.search(r'\b'+v+r'\b',args) for v in self.assigned):
                 out += self.scalar(n+'('+args+')',n in ('ewperiodic','nsperiodic'))
             else:
@@ -421,6 +437,13 @@ def emit_kernel(k, body):
             cpp += [f'auto {n}=base_{n};', f'{n}.p+=count{slot}*({axis}-int({low}));']
     for n,t in sorted(k.locals.items()):
         if n!=axis: cpp += [t+' '+n+('='+seeds[n] if n in seeds else '')+';']
+    # A grid-indexed parameter array indexed by a tracer local is materialized
+    # once per routine call as a small TARGET vector, so the row kernel does
+    # not need a two-index host pointer with a wrong second stride.
+    for n,d in k.arrays.items():
+        if 'tracer_expr' in d:
+            src=re.sub(r'\b'+d['tracer_var']+r'\b','kk_it',d['tracer_expr'],count=1)
+            f[-1:-1]=['      DO kk_it=1,NT(ng)',f'        {n}(kk_it)=REAL({src},C_DOUBLE)','      END DO']
     cpp += [body, '});', '}']
     if len(k.arrays)>128 or any(len(d['dims'])>5 for d in k.arrays.values()):
         raise ValueError('array metadata exceeds ABI capacity')
@@ -583,9 +606,10 @@ def process(text, stem):
         firstdecl=next(x for x in stmts if re.match(r'(integer|real\(r8\)|logical|character)\b',x[0]))
         interface=['      TYPE(kk_loop_args) :: kk_a']
         flags={n for k in kernels for n,d in k.arrays.items() if 'flag_expr' in d}
-        if flags:
+        tracers={n for k in kernels for n,d in k.arrays.items() if 'tracer_expr' in d}
+        if flags or tracers:
             synthetic=['      integer :: kk_it']
-            synthetic += ['      real(C_DOUBLE), TARGET :: '+n+'(NT(ng))' for n in sorted(flags)]
+            synthetic += ['      real(C_DOUBLE), TARGET :: '+n+'(NT(ng))' for n in sorted(flags|tracers)]
             lastdecl=max(x[2] for x in stmts if '::' in x[0] and
                          re.match(r'(integer|real\(|logical|type\b|character)',x[0]))
             replacements.append((lastdecl,lastdecl,'\n'.join(synthetic)+'\n'))

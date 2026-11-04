@@ -108,6 +108,20 @@ class LoweringTests(unittest.TestCase):
         self.assertEqual(gen.power_expr('a(i+1,j)**(-2)'),
                          'roms_loops::power(a(i+1,j),(-2))')
 
+    def test_tracer_indexed_parameter_array_is_materialized(self):
+        k,f,cpp=kernel('DO j=1,3\n DO itrc=1,2\n a(1,j,itrc)='
+                       'akt_bak(itrc,ng)+1.0_r8\n END DO\nEND DO',
+                       'real(r8), intent(out) :: a(:,:,:)')
+        self.assertIn('kk_tracer_akt_bak',k.arrays)
+        self.assertIn('kk_tracer_akt_bak(kk_it)=REAL(akt_bak(kk_it,ng),C_DOUBLE)',f)
+        self.assertIn('kk_tracer_akt_bak(itrc)',cpp)
+
+    def test_constant_tracer_index_remains_a_host_scalar(self):
+        k,f,cpp=kernel('DO j=1,3\n a(1,j)=akt_bak(itemp,ng)\nEND DO',
+                       'real(r8), intent(out) :: a(:,:)')
+        self.assertNotIn('kk_tracer_akt_bak',k.arrays)
+        self.assertIn('akt_bak(itemp,ng)',f)
+
     def test_optional_array_is_not_private(self):
         k,f,_=kernel('DO j=1,3\n IF (vadvection(itrc,ng)%mpdata) THEN\n'
                      ' a(1,j)=t(1,j)\n END IF\nEND DO',

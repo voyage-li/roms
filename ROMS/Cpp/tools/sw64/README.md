@@ -22,9 +22,9 @@ build enables `Kokkos_ENABLE_SW64` and hybrid kernel compilation.
 `MPI=OFF` is the default. For the opt-in remaining-compute ports and the
 four-application numerical/performance matrix, see [REMAINDER.md](REMAINDER.md).
 Those builds use matched `ROMS_WALL_PROFILE` clocks; do not compare their
-module-wall regions directly with legacy CPU-time profiles. The separate
-iteration-time LMD/KPP candidate and full-state validation recipe are in
-[KPP.md](KPP.md); it does not change the default physics or initialization.
+module-wall regions directly with legacy CPU-time profiles. The separate iteration-time LMD/KPP candidate and full-state validation
+recipe are in [KPP.md](KPP.md); the GLS closure port is in [GLS.md](GLS.md).
+Neither changes the default physics or initialization.
 
 The Fortran link still uses `mpif90`, because
 the available NetCDF/HDF5 archives require the MPI runtime. This does not
