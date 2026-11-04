@@ -97,6 +97,9 @@ class Matrix:
                        cwd=str(ROOT),env=env,check=True)
         return {b:c['app']+'-'+b+('-mpi' if mpi else '')+suffix for b in backends.split()}
 
+    def prepare_input(self,inp,perf):
+        """Optional validation-only output settings; default physics is unchanged."""
+
     def run(self,name,tag,label,perf=False,rep=0,ranks=1):
         c=CASES[name]
         d=self.out/name/('perf' if perf else 'mpi-val' if ranks>1 else 'val')/(label+'-'+str(rep))
@@ -106,6 +109,7 @@ class Matrix:
         if perf:
             cmd+=['--no-output']
             if name=='canyon': cmd+=['--dt','30']
+        if 'dt' in c: cmd+=['--dt',str(c['dt'])]
         subprocess.run(cmd,cwd=str(ROOT),check=True)
         inp=d/Path(c['source']).name
         if ranks>1:
@@ -113,6 +117,7 @@ class Matrix:
             text,n=re.subn(r'(?m)^(\s*NtileI\s*==\s*)\S+',lambda m:m[1]+str(ranks),text)
             if n!=1: raise RuntimeError('MPI NtileI not found')
             inp.write_text(text)
+        self.prepare_input(inp,perf)
         exe=ROOT/'build'/tag/('romsM' if ranks>1 else 'romsS')
         digest=sha(exe)
         self.status('run '+name+' '+label+' '+('MPI' if ranks>1 else 'perf' if perf else 'validation')+' '+str(rep))
@@ -143,14 +148,14 @@ class Matrix:
         if sha(exe)!=digest: raise RuntimeError('executable changed during run: '+str(exe))
         return d,dict(metrics(d/'run.log'),executable=str(exe),sha256=digest)
 
-    def compare(self,name,ref,test,label,exact=False,enforce=True):
+    def compare(self,name,ref,test,label,exact=False,enforce=True,include_restart=False):
         env=dict(os.environ)
         x86=Path('/usr/sw/yyzlib/local_x86')
         env['PATH']=str(x86/'bin')+os.pathsep+env.get('PATH','')
         env['LD_LIBRARY_PATH']=str(x86/'lib')+os.pathsep+env.get('LD_LIBRARY_PATH','')
         results=[]
         for f in sorted(ref.glob('roms_*.nc')):
-            if f.name=='roms_rst.nc': continue
+            if f.name=='roms_rst.nc' and not include_restart: continue
             cmd=['python3',str(ROOT/'ROMS/Cpp/tools/nccmp.py'),str(f),str(test/f.name),'--all-time']
             if not exact: cmd+=['--rtol','1e-10','--zero-tol','1e-20']
             result=subprocess.run(cmd,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,universal_newlines=True)

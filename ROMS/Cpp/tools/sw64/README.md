@@ -22,13 +22,21 @@ build enables `Kokkos_ENABLE_SW64` and hybrid kernel compilation.
 `MPI=OFF` is the default. For the opt-in remaining-compute ports and the
 four-application numerical/performance matrix, see [REMAINDER.md](REMAINDER.md).
 Those builds use matched `ROMS_WALL_PROFILE` clocks; do not compare their
-module-wall regions directly with legacy CPU-time profiles.
+module-wall regions directly with legacy CPU-time profiles. The separate
+iteration-time LMD/KPP candidate and full-state validation recipe are in
+[KPP.md](KPP.md); it does not change the default physics or initialization.
 
 The Fortran link still uses `mpif90`, because
 the available NetCDF/HDF5 archives require the MPI runtime. This does not
 turn on distributed ROMS or offload the Serial build. All compared builds
-use double output and `ROMS_FAST_MATH=OFF`. The mixed Fortran/C++ link also supplies host/slave C++ runtimes after
-the Kokkos archives. Both Kokkos builds explicitly
+use double output and `ROMS_FAST_MATH=OFF`. On SW64, conservative mode
+also disables automatic SIMD vectorization inside ROMS C++ kernels
+(`-fno-tree-vectorize`), without disabling CPE offload. swgcc-1473 otherwise
+introduces one-ULP seeds which KPP amplifies beyond the field tolerance;
+see [KPP.md](KPP.md) for the exact-input reproducer and validation.
+Previously recorded vectorized timings are historical, not corrected-policy
+performance results. The mixed Fortran/C++ link supplies host/slave C++
+runtimes after the Kokkos archives. Both Kokkos builds explicitly
 enable FUSED, TAVG, COUP, MOMT, DIAG, STOR, UV3DMIX, T3DMIX,
 PRSGRD, OMEGA, SETZETA, PRE3D and STEP3DUV; depth/flux and free-surface
 kernels are enabled directly by `ROMS_KOKKOS`. The tested physics is the

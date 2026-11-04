@@ -155,6 +155,80 @@ class LoweringTests(unittest.TestCase):
         self.assertLess(f.index('integer, intent(in) :: ng'),
                         f.index('real(C_DOUBLE), TARGET :: kk_flag_'))
 
+    def test_grid_extent_capture_is_integer_not_logical(self):
+        k,f,_=kernel('DO j=MAX(1,jstr-1),MIN(jend+1,mm(ng))\n'
+                     ' DO i=1,lm(ng)\n a(i,j)=1.0_r8\n END DO\nEND DO',
+                     'integer :: i,j,ng,jstr,jend\nreal(r8),intent(out) :: a(:,:)')
+        self.assertFalse(k.scalars['lm(ng)'][1])
+        self.assertFalse(k.scalars['mm(ng)'][1])
+        self.assertEqual(k.scalar_types['lm(ng)'],'int')
+        self.assertNotIn('MERGE(1,0,lm(ng))',f)
+
+    def test_integer_layer_arrays_preserve_storage_and_division(self):
+        k,_,cpp=kernel('DO j=-1,2\n DO i=-2,3\n'
+                       ' layers(i,j)=i+7*j\n a(i,j)=layers(i,j)/2\n'
+                       ' END DO\nEND DO',
+                       'integer :: i,j\ninteger,intent(out) :: layers(-2:3,-1:2)\n'
+                       'real(r8),intent(out) :: a(-2:3,-1:2)')
+        self.assertIn('Array<2,int> layers',cpp)
+        main=['int main(){ KkLoopArgs args{}; int layers[26]{}; double a[24]{};',
+              'layers[0]=1234567;layers[25]=-1234567;']
+        for slot,name in enumerate(k.arrays):
+            ptr='layers+1' if name=='layers' else 'a'
+            main += [f'args.p[{slot}]={ptr};',
+                     f'args.b[{10*slot}]=-2;args.b[{10*slot+1}]=3;',
+                     f'args.b[{10*slot+2}]=-1;args.b[{10*slot+3}]=2;']
+        main += ['kk_test_0(&args);',
+                 'std::printf("%d %d\\n",layers[0],layers[25]);',
+                 'for(int n=0;n<24;++n)std::printf("%d %.0f\\n",layers[n+1],a[n]);}']
+        expected=[(i+7*j,int((i+7*j)/2)) for j in range(-1,3) for i in range(-2,4)]
+        for reverse,parallel in ((False,False),(True,False),(False,True)):
+            got=self.compile_run(cpp,'\n'.join(main),reverse,parallel).splitlines()
+            self.assertEqual(got[0],'1234567 -1234567')
+            self.assertEqual([tuple(map(int,x.split())) for x in got[1:]],expected)
+
+    def test_integer_layer_dummy_gets_target(self):
+        source='''SUBROUTINE lmd_skpp_tile(layers)
+          integer,intent(out) :: layers(2,3)
+          integer :: i,j
+          DO j=1,3
+            DO i=1,2
+              layers(i,j)=i+j
+            END DO
+          END DO
+          END SUBROUTINE lmd_skpp_tile'''
+        f,_=gen.process(source,'lmd_skpp')
+        self.assertIn('integer,intent(out) , TARGET :: layers',f)
+        self.assertIn('kk_row_contiguous(layers)',f)
+
+    def test_logical_arrays_do_not_use_integer_abi(self):
+        with self.assertRaisesRegex(ValueError,'logical arrays'):
+            kernel('DO j=1,3\n flags(1,j)=.true.\nEND DO',
+                   'logical,intent(out) :: flags(1,3)')
+
+    def test_unguarded_integer_ranks_fail_closed(self):
+        with self.assertRaisesRegex(ValueError,'integer arrays currently require rank two'):
+            kernel('DO j=1,3\n indices(j)=j\nEND DO',
+                   'integer,intent(out) :: indices(3)')
+
+    def test_lmd_finish_retains_lateral_boundary_loops(self):
+        source='''SUBROUTINE lmd_finish_tile(a)
+          real(r8),intent(inout) :: a(0:2,3)
+          integer :: i,j
+          DO j=1,3
+            DO i=1,2
+              a(i,j)=2.0_r8*a(i,j)
+            END DO
+          END DO
+          DO j=1,3
+            a(0,j)=a(1,j)
+          END DO
+          END SUBROUTINE lmd_finish_tile'''
+        f,c=gen.process(source,'lmd_vmix')
+        self.assertEqual(c.count('extern "C" void'),1)
+        self.assertNotIn('a(0,j)',c)
+        self.assertIn('a(0,j)=a(1,j)',f)
+
     def test_integer_intrinsics_preserve_integer_results(self):
         output=self.compile_run('', '''int main(){
           std::printf("%d %d %d",roms_loops::fmax(1,3,2)/2,

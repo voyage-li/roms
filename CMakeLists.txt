@@ -411,7 +411,9 @@ if( ROMS_KOKKOS )
   option( ROMS_KOKKOS_TESTS "Build direct step2d regression tests" OFF )
   if( ROMS_KOKKOS_TESTS )
     add_executable( test_step2d_kokkos ROMS/Cpp/test_step2d_kokkos.cpp
+      ROMS/Cpp/test_step2d_reference.f90
       ROMS/Cpp/kokkos_config.cpp ROMS/Cpp/kokkos_step2d.cpp )
+    set_target_properties( test_step2d_kokkos PROPERTIES LINKER_LANGUAGE Fortran )
     target_link_libraries( test_step2d_kokkos Kokkos::kokkos )
     if( ROMS_KOKKOS_STEP3D_T )
       preprocess_fortran( ROMS/Cpp/test_step3d_t_reference.F )
@@ -473,9 +475,26 @@ if( ROMS_KOKKOS )
 
     if( _kk_backend STREQUAL "sw64" )
       target_compile_options( test_step2d_kokkos PRIVATE
-        -mhybrid-coding -fpermissive
-        --param vect-max-version-for-alias-checks=64 )
+        "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive;--param;vect-max-version-for-alias-checks=64>" )
     endif()
+  endif()
+
+  # swgcc-1473 changes rounding in auto-vectorized CPE arithmetic even
+  # without fast-math (an identical-input momentum replay differs by one
+  # ULP; its scalar CPE form is exact). KPP amplifies such seeds through
+  # density cancellation and convective mixing. Conservative math must
+  # therefore also retain scalar evaluation within each CPE. This does
+  # not disable Kokkos/CPE parallelism or change the Fortran reference.
+  # Apply the same policy to production and direct tests/benchmarks.
+  if( _kk_backend STREQUAL "sw64" AND NOT ROMS_FAST_MATH )
+    foreach( kk_target Objects test_step2d_kokkos test_step3d_t_kokkos
+             bench_step3d_t_kokkos bench_step3d_t_team_kokkos
+             bench_step2d_team_kokkos bench_step2d_team_ldm_kokkos )
+      if( TARGET ${kk_target} )
+        target_compile_options( ${kk_target} PRIVATE
+          "$<$<COMPILE_LANGUAGE:CXX>:-fno-tree-vectorize>" )
+      endif()
+    endforeach()
   endif()
 endif()
 

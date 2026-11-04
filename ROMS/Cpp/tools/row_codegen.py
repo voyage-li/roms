@@ -29,13 +29,16 @@ TARGETS = {
     'set_avg': ['set_avg_tile'],
     'set_diags': ['set_diags_tile'],
     'lmd_swfrac': ['lmd_swfrac_tile'],
+    'lmd_vmix': ['lmd_vmix_tile', 'lmd_finish_tile'],
+    'lmd_skpp': ['lmd_skpp_tile'],
+    'lmd_bkpp': ['lmd_bkpp_tile'],
     'analytical': ['ana_vmix_tile', 'ana_smflux_tile', 'ana_stflux_tile',
                    'ana_btflux_tile', 'ana_srflux_tile', 'ana_bsflux_tile',
                    'ana_ssflux_tile', 'ana_winds_tile', 'ana_tair_tile',
                    'ana_humid_tile', 'ana_pair_tile', 'ana_cloud_tile',
                    'ana_rain_tile'],
 }
-HOST_ARRAYS = set(('n nt dt hc iic ntfirst r0 s0 t0 tcoef scoef tdays el xl '
+HOST_ARRAYS = set(('n nt lm mm dt hc iic ntfirst r0 s0 t0 tcoef scoef tdays el xl '
                    'akt_bak akv_bak blk_zq blk_zt blk_zw ewperiodic nsperiodic '
                    'tnudg').split())
 FIELD_ARRAYS = {'scalars': {'sc_r','sc_w','cs_r','cs_w'},
@@ -161,6 +164,10 @@ class Kernel:
             if dec.get('parameter',False):
                 raise ValueError('parameter arrays need an explicit interface: '+name)
             if not dec['dims']: raise ValueError('scalar used as array '+name)
+            if dec.get('logical',False):
+                raise ValueError('logical arrays need an explicit ABI: '+name)
+            if dec['type']=='int' and dec['dummy'] and len(dec['dims'])!=2:
+                raise ValueError('shared integer arrays currently require rank two: '+name)
             # Row-only automatic scratch has no j axis. It must not be
             # shared between CPEs. Full tile scratch remains shared across
             # synchronous launches, just as in the original Fortran.
@@ -216,7 +223,7 @@ class Kernel:
             elif n in ('bulk_psiu','bulk_psit'):
                 out += n+'('+','.join(self.expr(x) for x in split(args))+')'
             elif n in HOST_ARRAYS and not any(re.search(r'\b'+v+r'\b',args) for v in self.assigned):
-                out += self.scalar(n+'('+args+')',n.startswith(('l','ewperiodic','nsperiodic')))
+                out += self.scalar(n+'('+args+')',n in ('ewperiodic','nsperiodic'))
             else:
                 raise ValueError('unsupported call: '+n+'('+args+')')
             pos=b+1
@@ -379,14 +386,15 @@ def emit_kernel(k, body):
         if 'flag_expr' in d:
             flag=re.sub(r'\bitrc\b','kk_it',d['flag_expr'])
             f += ['      DO kk_it=1,NT(ng)',f'      {n}(kk_it)=REAL(MERGE(1,0,{flag}),C_DOUBLE)','      END DO']
-        if d['type']!='double': raise ValueError('non-real array '+n)
+        dtype=d['type']
+        if dtype not in ('double','int'): raise ValueError('unsupported array kind '+n)
         if d.get('allocatable',False): f += [f'      IF (ALLOCATED({original})) THEN']
         for q in range(rank):
             f += [f'      kk_a%b({10*slot+2*q+1})=LBOUND({original},{q+1})',f'      kk_a%b({10*slot+2*q+2})=UBOUND({original},{q+1})']
         if d['private']:
             cpp += [f'std::size_t count{slot}=1;']
             for q in range(rank): cpp += [f'count{slot}*=args.b[{10*slot+2*q+1}]-args.b[{10*slot+2*q}]+1;']
-            cpp += ['double* buffer'+str(slot)+'=nullptr;', '#ifndef __sw_slave__', f'static thread_local std::vector<double> scratch{slot};',f'scratch{slot}.resize(count{slot} * (int({high})-int({low})+1));',f'buffer{slot}=scratch{slot}.data();','#endif']
+            cpp += [dtype+'* buffer'+str(slot)+'=nullptr;', '#ifndef __sw_slave__', f'static thread_local std::vector<{dtype}> scratch{slot};',f'scratch{slot}.resize(count{slot} * (int({high})-int({low})+1));',f'buffer{slot}=scratch{slot}.data();','#endif']
         else:
             f += [f'      kk_a%p({slot+1})=C_LOC({original})']
         if d.get('allocatable',False): f += ['      END IF']
@@ -406,7 +414,7 @@ def emit_kernel(k, body):
     for slot,(n,d) in enumerate(k.arrays.items()):
         ptr=f'buffer{slot}' if d['private'] else f'args.p[{slot}]'
         view='base_'+n if d['private'] else n
-        cpp += [f'roms_loops::Array<{len(d["dims"])}> {view}({ptr},args.b+{10*slot});']
+        cpp += [f'roms_loops::Array<{len(d["dims"])},{d["type"]}> {view}({ptr},args.b+{10*slot});']
     cpp += ['using policy=Kokkos::RangePolicy<roms::exec_space,Kokkos::IndexType<int>>;', f'Kokkos::parallel_for("{k.name}",policy(int({low}),int({high})+1),KOKKOS_LAMBDA(int {axis}) {{']
     for slot,(n,d) in enumerate(k.arrays.items()):
         if d['private']:
@@ -537,6 +545,8 @@ def process(text, stem):
         for i,(s,a,b) in enumerate(stmts):
             if i<pos or not re.match(r'(?:\w+\s*:\s*)?do\s+j\s*=',s): continue
             if stem=='diag' and kernels: continue
+            # Keep the finish routine's lateral boundary fills on the host.
+            if routine=='lmd_finish_tile' and kernels: continue
             depth=1; finish=i
             for z in range(i+1,len(stmts)):
                 ss=stmts[z][0]
@@ -588,7 +598,7 @@ def process(text, stem):
         # passes contiguous ROMS arrays; no temporary is introduced here.
         used={n for k in kernels for n,d in k.arrays.items() if not d['private']}
         for s,a,b in stmts:
-            if '::' not in s or not s.startswith('real(r8)'): continue
+            if '::' not in s or not s.startswith(('real(r8)','integer')): continue
             if any(re.search(r'\b'+n+r'\b',s.split('::',1)[1]) for n in used):
                 raw=text[a:b]
                 attrs=s.split('::',1)[0]

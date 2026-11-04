@@ -113,8 +113,10 @@ function(preprocess_fortran)
        set(row_files rhs3d set_depth set_massflux rho_eos bulk_flux
                      t3dmix uv_var_change pre_step3d step3d_t diag
                      wvelocity set_vbc analytical set_avg set_diags lmd_swfrac)
-       if(ROMS_KOKKOS AND "KK_STAGE_REMAINDER" IN_LIST MY_CPP_FLAGS
-          AND n IN_LIST row_files)
+       set(lmd_files lmd_vmix lmd_skpp lmd_bkpp)
+       if(ROMS_KOKKOS AND
+          (("KK_STAGE_REMAINDER" IN_LIST MY_CPP_FLAGS AND n IN_LIST row_files)
+           OR ("KK_STAGE_LMD" IN_LIST MY_CPP_FLAGS AND n IN_LIST lmd_files)))
          find_package(Python3 REQUIRED COMPONENTS Interpreter)
          set(raw "${of}.raw")
          set(oc "${CMAKE_CURRENT_BINARY_DIR}/f90/${n}_rows.cpp")

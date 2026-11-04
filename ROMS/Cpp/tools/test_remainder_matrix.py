@@ -14,7 +14,7 @@ spec.loader.exec_module(module)
 
 
 class AcceptanceTests(unittest.TestCase):
-    def compare(self,filename,results,exact=False,enforce=True):
+    def compare(self,filename,results,exact=False,enforce=True,include_restart=False):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
             ref=root/'ref'; test=root/'test'
@@ -22,7 +22,7 @@ class AcceptanceTests(unittest.TestCase):
             (ref/filename).touch();(test/filename).touch()
             matrix=object.__new__(module.Matrix);matrix.out=root
             with patch.object(module.subprocess,'run',side_effect=results):
-                return matrix.compare('canyon',ref,test,'check',exact,enforce)
+                return matrix.compare('canyon',ref,test,'check',exact,enforce,include_restart)
 
     def failed(self):
         return subprocess.CompletedProcess([],1,
@@ -54,6 +54,15 @@ class AcceptanceTests(unittest.TestCase):
     def test_large_diagnostic_error_stops_matrix(self):
         with self.assertRaisesRegex(RuntimeError,'exceeds absolute cross-check'):
             self.compare('roms_dia.nc',[self.failed(),self.failed()])
+
+    def test_restart_is_compared_when_requested(self):
+        result=self.compare('roms_rst.nc',[self.passed()],exact=True,include_restart=True)
+        self.assertTrue(result[0]['strict_pass'])
+        self.assertEqual(result[0]['file'],'roms_rst.nc')
+
+    def test_restart_physical_fields_keep_strict_tolerance(self):
+        with self.assertRaisesRegex(RuntimeError,'strict field comparison failed'):
+            self.compare('roms_rst.nc',[self.failed()],include_restart=True)
 
     def test_no_reference_outputs_is_failure(self):
         with tempfile.TemporaryDirectory() as directory:

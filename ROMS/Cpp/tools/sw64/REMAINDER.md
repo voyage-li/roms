@@ -1,9 +1,14 @@
-# Remaining compute ports — work in progress, 2026-11-04
+# Remaining compute ports — four-case matrix completed, 2026-11-04
 
-This is an **opt-in candidate**, not the production default. Completed
-per-application measurements are reported below; applications and MPI checks
-still in progress are not counted as validated. The previous `*-r2` controls
-and their evidence are preserved.
+This remains **opt-in**, not the production default. The four-case single-rank
+performance and two-rank correctness matrix below is complete, with the
+explicit diagnostic-roundoff exceptions retained. The previous `*-r2`
+controls and their evidence are preserved.
+
+**Compilation provenance:** these measurements predate the conservative
+SW64 arithmetic correction described in [KPP.md](KPP.md). They remain valid
+records of those vectorized executables, not measurements of the current
+`ROMS_FAST_MATH=OFF` policy. Re-measure before claiming current-code speedups.
 
 ## Scope
 
@@ -141,9 +146,11 @@ never cancels other account jobs. No automatic commit or push.
 - Target descriptor-guard executable: **14/14 passed** (`8940125`), covering
   contiguous/strided rank 1--5 arrays, padded columns, singleton axes and
   rank-one empty sections (`ROMS/Cpp/test_row_guards.f90`).
-- Complete target validation/performance matrix: **pending**. Active
-  artifacts: `runs/remainder-20261104T040106-63596/STATUS.json`. No new
-  performance ratios are claimed until actual samples are collected.
+- Complete target validation/performance matrix: **finished**, state
+  `complete_with_reference_roundoff`, 76 queue jobs. Artifacts:
+  `runs/remainder-20261104T040106-63596/STATUS.json`. All four applications
+  completed single-rank validation/performance and two-rank validation;
+  diagnostic exceptions are retained rather than relabeled as strict passes.
 
 ## Measured results so far
 
@@ -179,8 +186,8 @@ The sole strict diagnostic exception is temp_vdiff: maxabs 8.88178420e-18,
 normrel 1.04154332e-09 in new Serial/SW64; the old controls also have this
 single strict diagnostic exception. It passes the separately reported absolute cross-check, not
 the strict normalized check.
-Kelvin, upwelling and all MPI checks are still pending; the completed
-single-rank results do not imply that the complete matrix has finished.
+All four single-rank application measurements and all four two-rank MPI
+checks are complete. Strict diagnostic exceptions remain explicit below.
 
 ### Official bl_test
 
@@ -230,6 +237,71 @@ these eight is 6.92354663e-18 (salt_yadv); maximum normalized error is
 cross-check; they remain strict normalized failures. Current validation
 jobs: Fortran 8940224, Serial 8940225, SW64 8940226, SW64 control 8940228,
 Serial control 8940230. Every performance job ID is in STATUS.json.
+
+### Kelvin and upwelling
+
+Both use 256 x 256 horizontal grids, two computed steps and no output;
+Kelvin has 10 vertical levels and upwelling 16. Three samples except Serial:
+
+| application / build | stepping wall samples (s) | median (s) |
+|---|---|---:|
+| Kelvin original Fortran | 60.152516, 60.182928, 60.138423 | 60.152516 |
+| Kelvin previous-kernel SW64 | 5.461132, 5.449526, 5.454499 | 5.454499 |
+| Kelvin candidate Serial | 77.612823 | 77.612823 |
+| Kelvin candidate SW64 | 2.977157, 2.979352, 2.978964 | 2.978964 |
+| upwelling original Fortran | 24.734134, 24.744572, 24.750453 | 24.744572 |
+| upwelling previous-kernel SW64 | 3.496467, 3.500505, 3.495436 | 3.496467 |
+| upwelling candidate Serial | 25.213140 | 25.213140 |
+| upwelling candidate SW64 | 2.109929, 2.102295, 2.107798 | 2.107798 |
+
+Kelvin: **20.19x versus original Fortran**, **1.83x incremental versus
+previous-kernel SW64**. New/old Serial: 62/62 fields exact. Serial meets the
+normalized original-Fortran gate for all 62 fields. New SW64 history passes
+8/8; diagnostics pass 50/54 strictly. The exceptions are temp_hdiff,
+temp_xdiff, temp_ydiff and temp_vdiff. Their maximum absolute errors range
+from 1.59883573e-21 to 3.94745964e-18, while normalized errors reach 2/3 for
+these near-zero reference budgets. The absolute diagnostic cross-check
+passes, but these are not strict normalized passes.
+
+Upwelling: **11.74x versus original Fortran**, **1.66x incremental versus
+previous-kernel SW64**. New/old Serial: 101/101 fields exact. Both Serial
+and SW64 meet the normalized original-Fortran gate for all 101 fields:
+28 averages, 63 diagnostics and 10 history fields.
+
+Across the four single-rank cases, new Serial is exact against matched
+pre-port Serial in all 322 compared fields over all records. SW64 passes
+the strict physical-field gate in all 93 history/average/station fields.
+There are 13 explicitly retained normalized diagnostic exceptions among
+229 diagnostic fields (1 Canyon, 8 BL, 4 Kelvin), all passing the separate
+absolute cross-check. Two-rank MPI results are separate below.
+
+### Two-rank MPI validation
+
+All four applications completed four-step runs with NtileI=2/NtileJ=1,
+`-n 2 -np 2 -cgsp 64`: two MPEs and 128 CPEs. Each is compared against
+its own two-rank Fortran and matched two-rank pre-port Serial reference.
+New/old Serial are **322/322 exact**. SW64 history/average/station fields
+pass **93/93** at the strict physical-field gate.
+
+Strict SW64 diagnostic outcomes against two-rank Fortran:
+
+| application | strict diagnostic fields | retained exceptions |
+|---|---:|---|
+| Canyon | 54/55 | temp_vdiff, maxabs 8.88178420e-18 |
+| BL | 51/57 | vbar_prsgrd, u_yadv, v_yadv, v_prsgrd, temp_yadv, salt_yadv; maxabs 4.13085485e-18 |
+| Kelvin | 50/54 | temp_hdiff, temp_xdiff, temp_ydiff, temp_vdiff; maxabs 3.94745964e-18 |
+| upwelling | 63/63 | none |
+
+These 11 exceptions pass the separate absolute diagnostic cross-check, not
+the strict diagnostic check. BL's listed two-rank reference budgets are
+identically zero, so they fail the original 1e-20 zero-reference absolute
+threshold rather than a normalized nonzero-reference threshold. No MPI
+performance speedup is inferred from these correctness runs.
+
+The complete matrix finished with state `complete_with_reference_roundoff`;
+all exact comparison failures and diagnostic cross-checks remain in STATUS.json
+and their individual logs. The pinned dependency and old kernel implementations
+were not tuned.
 
 ## Reproduce
 

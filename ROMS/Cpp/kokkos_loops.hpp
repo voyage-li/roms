@@ -20,18 +20,18 @@ struct KkLoopArgs {
   double s[256];
 };
 namespace roms_loops {
-template<int Rank> struct Array {
-  double* p;
+template<int Rank, class T=double> struct Array {
+  T* p;
   int lo[Rank];
   std::ptrdiff_t stride[Rank];
-  KOKKOS_INLINE_FUNCTION Array(void* ptr, const int* bounds) : p(static_cast<double*>(ptr)) {
+  KOKKOS_INLINE_FUNCTION Array(void* ptr, const int* bounds) : p(static_cast<T*>(ptr)) {
     std::ptrdiff_t n = 1;
     for (int d=0; d<Rank; ++d) {
       lo[d]=bounds[2*d]; stride[d]=n;
       n*=bounds[2*d+1]-bounds[2*d]+1;
     }
   }
-  template<class... I> KOKKOS_INLINE_FUNCTION double& operator()(I... indices) const {
+  template<class... I> KOKKOS_INLINE_FUNCTION T& operator()(I... indices) const {
     static_assert(sizeof...(I)==Rank,"Fortran array rank mismatch");
     const int ii[Rank]={static_cast<int>(indices)...};
     std::ptrdiff_t n=0;

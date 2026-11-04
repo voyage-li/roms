@@ -7,6 +7,11 @@
 #include <cstdio>
 #include <vector>
 
+extern "C" void reference_step2d_momentum(
+    int,int,int,int,int,int,int,int,int,int,int,int,int,int,double,
+    const double*,const double*,const double*,const double*,const double*,
+    const double*,const double*,const double*,const double*,double*,double*);
+
 namespace {
 constexpr int lo = -4, hi = 16, n = hi - lo + 1, cells = n * n;
 constexpr int nd = 11, pgrd = 8;
@@ -167,6 +172,48 @@ bool coupling(int step, int first, int predictor, int istp) {
       check(eudh, udh, "diagnostic history U") & check(evdh, vdh, "diagnostic history V");
 }
 
+// Exact, not the looser stencil tolerance: these one-ULP seeds can be
+// amplified by KPP. Include the actual first-step rounding counterexamples,
+// nonuniform fields, all LF/AM3 branches, both old slots and untouched halos.
+bool momentum(int mode,int kstp,int fixture) {
+  roms::TileBounds t{};
+  t.Istr=t.Jstr=1; t.Iend=13; t.Jend=8; t.IstrU=2; t.JstrV=1;
+  const int knew=3;
+  auto h=field(1,10),pm=field(1,0.001),pn=field(1,0.0008);
+  auto z=field(3,0.001),u=field(3,0.02),v=field(3,0.03);
+  auto ru=field(2,0.1),rv=field(2,0.2);
+  auto rhsu=field(1,0.758),rhsv=field(1,169.5),dn=field(1,10.4);
+  if(fixture<2) {
+    const double p=fixture==0?0.002106722106722107:0.0024242424242424242;
+    const double d=fixture==0?20.81054889196482:15.597233823054959;
+    std::fill(pm.begin(),pm.end(),0.5*p);
+    std::fill(pn.begin(),pn.end(),0.0008);
+    std::fill(h.begin(),h.end(),0.5*d);
+    std::fill(dn.begin(),dn.end(),0.5*d);
+    std::fill(z.begin(),z.end(),0.0);
+    std::fill(u.begin(),u.end(),0.0); std::fill(v.begin(),v.end(),0.0);
+    std::fill(rhsu.begin(),rhsu.end(),0.7586775314472525);
+    std::fill(rhsv.begin(),rhsv.end(),169.5796069252924);
+  }
+  auto eu=u,ev=v; Field ds(cells,-999);
+  const int first=mode==0,predictor=mode!=2;
+  reference_step2d_momentum(lo,hi,lo,hi,t.Istr,t.Iend,t.Jstr,t.Jend,
+      t.IstrU,t.JstrV,kstp,knew,predictor,first,5.0,z.data(),h.data(),
+      pm.data(),pn.data(),ru.data(),rv.data(),rhsu.data(),rhsv.data(),
+      dn.data(),eu.data(),ev.data());
+  k_step2d_momentum_step(1,0,kstp,knew,lo,hi,lo,hi,lo,hi,lo,hi,
+      z.data(),h.data(),u.data(),v.data(),ru.data(),rv.data(),pm.data(),
+      pn.data(),rhsu.data(),rhsv.data(),ds.data(),dn.data(),predictor,first,5.0,&t);
+  int bad=0;double error=0;
+  for(std::size_t k=0;k<u.size();++k) {
+    if(!std::isfinite(u[k])||!std::isfinite(v[k])||u[k]!=eu[k]||v[k]!=ev[k])++bad;
+    error=std::max(error,std::max(std::abs(u[k]-eu[k]),std::abs(v[k]-ev[k])));
+  }
+  std::printf("momentum mode=%d kstp=%d fixture=%d exact-differences=%d maxabs=%.17g %s\n",
+      mode,kstp,fixture,bad,error,bad?"FAIL":"PASS");
+  return bad==0;
+}
+
 }  // namespace
 
 int main() {
@@ -191,6 +238,9 @@ int main() {
     std::printf("execution-space probe: %s\n", ok ? "PASS" : "FAIL");
     for (int periodic = 0; periodic <= 1; ++periodic)
       for (int krhs = 1; krhs <= 3; ++krhs) ok &= stencils(periodic, krhs);
+    for(int old=1;old<=2;++old)
+      for(int mode=0;mode<3;++mode)
+        for(int fixture=0;fixture<3;++fixture) ok &= momentum(mode,old,fixture);
     for (int istp = 1; istp <= 2; ++istp) {
       for (int step = 1; step <= 3; ++step) ok &= coupling(step, 1, 1, istp);
       ok &= coupling(3, 0, 1, istp);
