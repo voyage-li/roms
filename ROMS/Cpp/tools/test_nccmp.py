@@ -2,6 +2,7 @@
 """Parser and failure-mode regressions; no NetCDF Python package needed."""
 import contextlib
 import io
+import sys
 import unittest
 from unittest.mock import patch
 import nccmp
@@ -70,6 +71,32 @@ class ComparisonTests(unittest.TestCase):
                                  'zeta(ocean_time, xi_rho, eta_rho)')
         with self.assertRaises(ValueError):
             self.compare(*self.datasets(test_header=changed))
+
+    def run_main(self, *argv):
+        with patch.object(sys, 'argv', ['nccmp.py', 'ref', 'test', *argv]), \
+                contextlib.redirect_stdout(io.StringIO()) as out, \
+                contextlib.redirect_stderr(io.StringIO()):
+            return nccmp.main(), out.getvalue()
+
+    def test_all_time_covers_every_time_dependent_field(self):
+        header = HEADER.replace('}', '  double temp(ocean_time, eta_rho, xi_rho) ;\n}')
+        values = {'ref': header, 'test': header}
+        def dump(path, *args):
+            if args == ('-h',):
+                return values[path]
+            name = args[-1]
+            data = '0, 300' if name == 'ocean_time' else '1, 2, 3, 4'
+            return 'netcdf test {\ndata:\n ' + name + ' = ' + data + ';\n}'
+        with patch.object(nccmp, 'dump', side_effect=dump):
+            status, out = self.run_main('--all-time')
+        self.assertEqual(status, 0)
+        self.assertIn('2/2 variables', out)
+
+    def test_vars_and_all_time_are_exclusive(self):
+        # --vars used to be dropped silently when --all-time was also given.
+        with self.assertRaises(SystemExit) as raised:
+            self.run_main('--all-time', '--vars', 'zeta')
+        self.assertEqual(raised.exception.code, 2)
 
 
 if __name__ == '__main__':

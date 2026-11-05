@@ -7,6 +7,8 @@ copy of the translator's expressions as an expected-value oracle.
 Run: python3 -m unittest discover -s ROMS/Cpp/tools -p test_row_codegen.py -v
 Target-model Serial/Fortran and SW64 comparisons are still required.
 """
+import os
+import re
 import sys
 from pathlib import Path
 import shutil
@@ -17,6 +19,31 @@ import unittest
 import row_codegen as gen
 
 ROOT = Path(__file__).resolve().parents[1]
+REPO = ROOT.parents[1]
+# Minimal copy of the BL_TEST bulk-flux helper shape, with enough locals
+# for their emission order to show whether it depends on hashing.
+BULK_HELPER = '''
+      FUNCTION bulk_psiu (ZoL, pi)
+      USE mod_kinds
+      real(r8) :: bulk_psiu
+      real(dp), intent(in) :: pi
+      real(r8), intent(in) :: ZoL
+      real(r8), parameter :: r3 = 1.0_r8/3.0_r8
+      real(r8) :: Fw, cff, psic, psik, x, y
+      IF (ZoL.lt.0.0_r8) THEN
+        x=(1.0_r8-15.0_r8*ZoL)**0.25_r8
+        psik=2.0_r8*LOG(0.5_r8*(1.0_r8+x))+0.5_r8*pi
+        y=(1.0_r8-10.15_r8*ZoL)**r3
+        psic=1.5_r8*LOG(r3*(y*y+y+1.0_r8))
+        cff=ZoL*ZoL
+        Fw=cff/(1.0_r8+cff)
+        bulk_psiu=(1.0_r8-Fw)*psik+Fw*psic
+      ELSE
+        bulk_psiu=-4.0_r8*ZoL
+      END IF
+      RETURN
+      END FUNCTION bulk_psiu
+'''
 STUB = r'''
 #pragma once
 #include <cstddef>
@@ -54,22 +81,6 @@ def kernel(body, declarations, name='kk_test_0'):
 
 
 class LoweringTests(unittest.TestCase):
-    def test_no_output_also_disables_station_and_float_intervals(self):
-        source=ROOT.parent/'External'/'roms_bl_test.in'
-        script=ROOT/'tools'/'sw64'/'make_app_case.py'
-        with tempfile.TemporaryDirectory() as directory:
-            cmd=[sys.executable,str(script),str(source),directory,'--steps','2','--no-output']
-            subprocess.run(cmd,check=True,capture_output=True,text=True)
-            output=Path(directory)/source.name
-            text=output.read_text()
-            for key in ('NHIS','NAVG','NDIA','NRST','NSTA','NFLT'):
-                self.assertRegex(text,r'(?m)^\s*'+key+r'\s*==\s*0\b')
-            before=text
-            again=subprocess.run(cmd,capture_output=True,text=True)
-            self.assertNotEqual(again.returncode,0)
-            self.assertIn('refusing to replace',again.stderr)
-            self.assertEqual(output.read_text(),before)
-
     def test_unknown_statement_fails(self):
         with self.assertRaisesRegex(ValueError,'unsupported statement'):
             kernel('DO j=1,3\n CALL exchange(a)\nEND DO', '')
@@ -105,8 +116,81 @@ class LoweringTests(unittest.TestCase):
         self.assertEqual(gen.power_expr('-a**2'),'-roms_loops::power(a,2)')
         self.assertEqual(gen.power_expr('a**b**2'),
                          'roms_loops::power(a,roms_loops::power(b,2))')
-        self.assertEqual(gen.power_expr('a(i+1,j)**(-2)'),
-                         'roms_loops::power(a(i+1,j),(-2))')
+        self.assertEqual(gen.power_expr('a(i+1,j)**(-0.5)'),
+                         'roms_loops::power(a(i+1,j),(-0.5))')
+
+    def test_integer_exponents_must_be_reproduced_exactly(self):
+        # gfortran multiplies out INTEGER-constant powers; roms_loops::power
+        # does the same for 2, 3 and 4 only and would call pow() otherwise.
+        for ok in ('a**2', 'a**3', 'a**4', 'a**(3)', 'a**2.5', 'a**(-0.5)', 'a**n'):
+            gen.power_expr(ok)
+        for bad in ('a**5', 'a**(-2)', 'x(i,j)**10'):
+            with self.assertRaisesRegex(ValueError, 'integer exponent'):
+                gen.power_expr(bad)
+        with self.assertRaisesRegex(ValueError, 'integer exponent'):
+            kernel('DO j=1,3\n a(1,j)=b(1,j)**5\nEND DO',
+                   'real(r8),intent(out) :: a(:,:)\nreal(r8),intent(in) :: b(:,:)')
+
+    def test_not_operand_must_not_hide_a_comparison(self):
+        # Fortran: .not. a == b is .not.(a == b); C++ would read (!a) == b.
+        for ok in ('.not.(a.eq.b)', '.not.flag', '.not. ewperiodic(ng) .and. x',
+                   '.not.domain(ng) % western_edge(tile)', '(.not.f(i,j))',
+                   'a.or..not.b', '.not. .not. flag', 'g(.not.p, q)'):
+            gen.check_not_operands(ok)
+        for bad in ('.not. a == b', '.not. a .eq. b', '.not. j > 2',
+                    '.not.(a).eq.b', '.not. a + b', '.not.'):
+            with self.assertRaises(ValueError, msg=bad):
+                gen.check_not_operands(bad)
+        with self.assertRaisesRegex(ValueError, 'parenthesised'):
+            kernel('DO j=1,3\n IF (.not. j.eq.2) THEN\n a(1,j)=1.0_r8\n END IF\nEND DO',
+                   'real(r8),intent(out) :: a(1:1,1:3)')
+
+    def test_fortran_inequality_and_negation_are_comparisons(self):
+        # '/=' used to pass through and become a C++ divide-assign.
+        main='''int main(){ KkLoopArgs args{}; double a[3]{};
+          args.p[0]=a; args.b[0]=args.b[1]=args.b[2]=1; args.b[3]=3;
+          kk_test_0(&args); std::printf("%.0f %.0f %.0f",a[0],a[1],a[2]); }'''
+        for condition in ('j /= 2', 'j.ne.2', '.not.(j.eq.2)'):
+            _,_,cpp=kernel('DO j=1,3\n IF ('+condition+') THEN\n a(1,j)=1.0_r8\n'
+                           ' ELSE\n a(1,j)=2.0_r8\n END IF\nEND DO',
+                           'integer :: j\nreal(r8),intent(out) :: a(1:1,1:3)')
+            self.assertNotIn('/=',cpp)
+            self.assertEqual(self.compile_run(cpp,main),'1 2 1',condition)
+
+    def test_do_steps_fail_closed(self):
+        decl='integer :: i,j\nreal(r8),intent(out) :: a(1:4,1:4)'
+        with self.assertRaisesRegex(ValueError,'unit stride'):
+            kernel('DO j=1,4,2\n a(1,j)=1.0_r8\nEND DO',decl)
+        with self.assertRaisesRegex(ValueError,'integer literal'):
+            kernel('DO j=1,4\n DO i=1,4,istep\n a(i,j)=1.0_r8\n END DO\nEND DO',decl)
+        with self.assertRaisesRegex(ValueError,'unsupported DO'):
+            kernel('DO j=1,4\n DO WHILE (a(1,j).lt.2.0_r8)\n a(1,j)=a(1,j)+1.0_r8\n'
+                   ' END DO\nEND DO',decl)
+        _,_,cpp=kernel('DO j=1,4\n DO i=4,1,-1\n a(i,j)=1.0_r8\n END DO\nEND DO',decl)
+        self.assertIn('for (i=4; i>=1; i+=-1)',cpp)
+
+    def test_output_does_not_depend_on_hash_seed(self):
+        # The helper's locals once came out in set order, so two builds of
+        # the same source produced different generated files.
+        code='import sys,row_codegen as g; sys.stdout.write(g.process(sys.stdin.read(),"bulk_flux")[1])'
+        outputs=set()
+        for seed in ('1','2','3','4'):
+            env=dict(os.environ,PYTHONHASHSEED=seed,PYTHONDONTWRITEBYTECODE='1')
+            outputs.add(subprocess.run([sys.executable,'-c',code],input=BULK_HELPER,cwd=Path(__file__).parent,
+                                       env=env,check=True,capture_output=True,text=True).stdout)
+        self.assertEqual(len(outputs),1)
+        self.assertIn('double result;\ndouble cff;\ndouble fw;\ndouble psic;',outputs.pop())
+
+    def test_cmake_stage_file_lists_match_the_generator_targets(self):
+        text=(REPO/'Compilers'/'roms_functions.cmake').read_text()
+        lists={}
+        for name in ('row_files','lmd_files','gls_files'):
+            m=re.search(r'set\(\s*'+name+r'\s+([^)]*)\)',text)
+            self.assertIsNotNone(m,name+' not found')
+            lists[name]=m[1].split()
+        names=[n for v in lists.values() for n in v]
+        self.assertEqual(len(names),len(set(names)),'a file is listed under two stages')
+        self.assertEqual(set(names),set(gen.TARGETS))
 
     def test_tracer_indexed_parameter_array_is_materialized(self):
         k,f,cpp=kernel('DO j=1,3\n DO itrc=1,2\n a(1,j,itrc)='

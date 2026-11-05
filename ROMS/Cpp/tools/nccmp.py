@@ -105,10 +105,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("ref")
     parser.add_argument("test")
-    parser.add_argument("--vars", default="")
-    parser.add_argument("--all-time", action="store_true",
-                        help="compare every variable whose first dimension is "
-                             "ocean_time, as listed in the reference file")
+    which = parser.add_mutually_exclusive_group()
+    which.add_argument("--vars", default="",
+                       help="comma-separated variables (default: a momentum-budget list)")
+    which.add_argument("--all-time", action="store_true",
+                       help="compare every variable whose first dimension is "
+                            "ocean_time, as listed in the reference file")
     parser.add_argument("--tol", type=float, default=0.0)
     parser.add_argument("--rtol", type=float, default=0.0)
     parser.add_argument("--zero-tol", type=float, default=0.0,

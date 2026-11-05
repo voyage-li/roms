@@ -35,10 +35,9 @@ TARGETS = {
     'gls_prestep': ['gls_prestep_tile'],
     'gls_corstep': ['gls_corstep_tile'],
     'analytical': ['ana_vmix_tile', 'ana_smflux_tile', 'ana_stflux_tile',
-                   'ana_btflux_tile', 'ana_srflux_tile', 'ana_bsflux_tile',
-                   'ana_ssflux_tile', 'ana_winds_tile', 'ana_tair_tile',
-                   'ana_humid_tile', 'ana_pair_tile', 'ana_cloud_tile',
-                   'ana_rain_tile'],
+                   'ana_btflux_tile', 'ana_srflux_tile', 'ana_winds_tile',
+                   'ana_tair_tile', 'ana_humid_tile', 'ana_pair_tile',
+                   'ana_cloud_tile', 'ana_rain_tile'],
 }
 HOST_ARRAYS = set(('n nt lm mm dt hc iic ntfirst r0 s0 t0 tcoef scoef tdays el xl '
                    'akt_bak akv_bak akk_bak akp_bak blk_zq blk_zt blk_zw ewperiodic nsperiodic '
@@ -52,10 +51,14 @@ FIELD_MODULES['average']='mod_average'
 FIELD_CACHE={}
 GLOBAL_TYPES=None
 GLOBAL_ARRAYS={'lmd_mu1','lmd_mu2','lmd_r1'}
-# Grid-indexed parameter arrays still indexed by a tracer loop variable.
+# Parameter arrays that a tracer loop variable indexes inside a row. With a
+# constant index (itemp, isalt) they stay host-evaluated scalars (HOST_ARRAYS).
 TRACER_ARRAYS={'akt_bak'}
-# Constants such as itemp remain plain host-evaluated scalar arguments.
-HOST_ARRAYS.add('akt_bak')
+# Fortran operators with a C++ spelling. '.not.' and '/=' need the care taken
+# in check_not_operands(); '==', '<=', '>=', '<', '>' are the same in both.
+OPERATORS = {'.true.': 'true', '.false.': 'false', '.not.': '!', '.and.': '&&',
+             '.or.': '||', '.eq.': '==', '.ne.': '!=', '.gt.': '>', '.ge.': '>=',
+             '.lt.': '<', '.le.': '<=', '/=': '!='}
 INTRINSICS = {'sqrt':'std::sqrt', 'abs':'std::abs', 'exp':'std::exp',
               'log':'std::log', 'log10':'std::log10', 'atan':'std::atan',
               'tanh':'std::tanh', 'sin':'std::sin', 'cos':'std::cos',
@@ -131,8 +134,43 @@ def power_expr(s):
             if not m: raise ValueError('power exponent: '+s[p:])
             r += len(m[0])
             if r < len(s) and s[r] == '(': r = paren_end(s,r)+1
-        s = s[:l]+'roms_loops::power('+s[l:p].strip()+','+s[p+2:r].strip()+')'+s[r:]
+        base, exponent = s[l:p].strip(), s[p+2:r].strip()
+        # gfortran expands an INTEGER-constant exponent into multiplications;
+        # roms_loops::power reproduces that only for 2, 3 and 4 (the others
+        # would fall back to pow(), which rounds differently).
+        literal = re.fullmatch(r'\(?\s*([+-]?\d+)\s*\)?', exponent)
+        if literal and int(literal[1]) not in (2, 3, 4):
+            raise ValueError('integer exponent '+literal[1]+' is not reproduced exactly: '+s)
+        s = s[:l]+'roms_loops::power('+base+','+exponent+')'+s[r:]
     return s
+
+
+def check_not_operands(s):
+    """Fortran ranks .NOT. below the relational operators, C++ ranks ! above
+    them, so `.not. a == b` would silently become `(!a) == b`.  Only a single
+    operand (name, call, component or parenthesised group) that is followed by
+    .AND., .OR., ')' , ',' or the end keeps its meaning when written as `!`.
+    """
+    for m in re.finditer(r'\.not\.', s):
+        i = m.end()
+        while True:
+            while s[i:i+1].isspace(): i += 1
+            if not s.startswith('.not.', i): break
+            i += 5
+        if s[i:i+1] == '(':
+            i = paren_end(s, i)+1
+        else:
+            name = re.match(r'[a-z_]\w*|\.(?:true|false)\.', s[i:])
+            if not name: raise ValueError('.not. needs a logical operand: '+s)
+            i += name.end()
+            while True:
+                part = re.match(r'\s*%\s*\w+', s[i:])
+                if part: i += part.end(); continue
+                if re.match(r'\s*\(', s[i:]):
+                    i = paren_end(s, s.index('(', i))+1; continue
+                break
+        if not re.match(r'\s*(?:$|[),]|\.(?:and|or)\.)', s[i:]):
+            raise ValueError('.not. operand must be parenthesised before an operator: '+s)
 
 
 class Kernel:
@@ -185,6 +223,7 @@ class Kernel:
 
     def expr(self, s):
         s = s.strip()
+        check_not_operands(s)
         s = re.sub(r'\b(\d+(?:\.\d*)?(?:[ed][+-]?\d+)?)_r8\b',r'\1',s)
         s = re.sub(r'(?<=\d)d(?=[+-]?\d)', 'e', s)
         # Scalar derived-type fields (advection and domain flags) are
@@ -244,7 +283,7 @@ class Kernel:
                 raise ValueError('unsupported call: '+n+'('+args+')')
             pos=b+1
         s=out
-        for f,c in {'.true.':'true','.false.':'false','.not.':'!', '.and.':'&&','.or.':'||', '.eq.':'==','.ne.':'!=','.gt.':'>','.ge.':'>=','.lt.':'<','.le.':'<='}.items():
+        for f,c in OPERATORS.items():
             s=s.replace(f,c)
         # Token replacement does not inspect generated names/functions.
         def token(m):
@@ -258,8 +297,6 @@ class Kernel:
                 return n
             return self.scalar(n, self.declarations.get(n,{}).get('logical',False) or n.startswith(('ewperiodic','nsperiodic')))
         s=re.sub(r'\b[a-z_]\w*\b',token,s)
-        for f,c in {'.true.':'true','.false.':'false','.not.':'!', '.and.':'&&','.or.':'||', '.eq.':'==','.ne.':'!=','.gt.':'>','.ge.':'>=','.lt.':'<','.le.':'<='}.items():
-            s=s.replace(f,c)
         return power_expr(s)
 
     def translate(self):
@@ -267,14 +304,23 @@ class Kernel:
             stmt=re.sub(r'^\w+\s*:\s*(?=(?:do|if)\b)','',stmt)
             d=re.match(r'do\s+(\w+)\s*=\s*(.*)',stmt)
             if d:
-                n=d[1]; terms=split(d[2]); low,high=terms[:2]; step=terms[2] if len(terms)>2 else '1'
+                n=d[1]; terms=split(d[2])
+                if len(terms) not in (2,3): raise ValueError('malformed DO: '+stmt)
+                low,high=terms[:2]; step=re.sub(r'\s+','',terms[2]) if len(terms)>2 else '1'
                 if n==self.parallel:
-                    # The selected outer loop is represented by the policy.
+                    # The selected outer loop is represented by the policy,
+                    # which walks it with unit stride.
+                    if step!='1': raise ValueError('parallel loop needs unit stride: '+stmt)
                     self.code.append('/* independent '+n+' */ {')
                 else:
-                    cmp='>=' if step.strip().startswith('-') else '<='
-                    self.code.append('for ('+n+'='+self.expr(low)+'; '+n+cmp+self.expr(high)+'; '+n+'+='+self.expr(step)+') {')
+                    # The sign of a literal step picks the comparison.
+                    if not re.fullmatch(r'[+-]?[1-9]\d*',step):
+                        raise ValueError('DO step must be a nonzero integer literal: '+stmt)
+                    cmp='>=' if step.startswith('-') else '<='
+                    self.code.append('for ('+n+'='+self.expr(low)+'; '+n+cmp+self.expr(high)+'; '+n+'+='+step+') {')
                 self.seen_write.add(n); self.loop_stack.append(n)
+            elif re.match(r'do\b',stmt):
+                raise ValueError('unsupported DO construct: '+stmt)
             elif stmt.startswith('end do') or stmt=='enddo':
                 self.loop_stack.pop(); self.code.append('}')
             elif stmt.startswith('else if') or stmt.startswith('elseif'):
@@ -415,7 +461,8 @@ def emit_kernel(k, body):
             f += [f'      kk_a%p({slot+1})=C_LOC({original})']
         if d.get('allocatable',False): f += ['      END IF']
     # Expression translation above may add bound scalars.
-    seeds={n:k.scalar(n) for n in sorted(k.local_init)}
+    if k.local_init:
+        raise ValueError('row bounds use row-local scalar(s): '+', '.join(sorted(k.local_init)))
     for i,(value,logical) in enumerate(k.scalars.values()):
         value=f'MERGE(1,0,{value})' if logical else value
         f += [wrap_fline(f'      kk_a%s({i+1})=REAL({value},C_DOUBLE)')]
@@ -436,7 +483,7 @@ def emit_kernel(k, body):
         if d['private']:
             cpp += [f'auto {n}=base_{n};', f'{n}.p+=count{slot}*({axis}-int({low}));']
     for n,t in sorted(k.locals.items()):
-        if n!=axis: cpp += [t+' '+n+('='+seeds[n] if n in seeds else '')+';']
+        if n!=axis: cpp += [t+' '+n+';']
     # A grid-indexed parameter array indexed by a tracer local is materialized
     # once per routine call as a small TARGET vector, so the row kernel does
     # not need a two-index host pointer with a wrong second stride.
@@ -476,7 +523,6 @@ def prepare_diag(text):
     text=text[:st[row][2]]+initial+text[st[row][2]:]
     # Automatic array bounds use imported scratch bounds, not the tile
     # locals which are only assigned later by set_bounds.h.
-    p=st[a][2]
     # Declaration must follow the USE statements, so attach to ke2d.
     needle=re.search(r'^\s*real\(r8\).*:: ke2d\b.*$',text,re.M|re.I)
     text=text[:needle.start()]+'\n      real(r8), TARGET :: kk_diag(9,JminS:JmaxS)\n'+text[needle.start():]
@@ -491,7 +537,7 @@ def prune_sources(block):
     out=[]; guards=[]; i=0
     while i<len(block):
         s=block[i][0]
-        m=re.fullmatch(r'if\s*\(\s*(l[uw]src\(ng\))\s*\)\s*then',s)
+        m=re.fullmatch(r'if\s*\(\s*(lwsrc\(ng\))\s*\)\s*then',s)
         if not m: out.append(block[i]); i+=1; continue
         guards.append('.not.'+m[1]); depth=1; i+=1
         while i<len(block):
@@ -549,7 +595,7 @@ def process(text, stem):
             k.seen_write.update(('zol','pi','r3'))
             code=k.translate()
             if k.scalars: raise ValueError('uncaptured helper constant '+str(k.scalars))
-            decl='\n'.join(t+' '+n+';' for n,t in k.locals.items() if n not in ('zol','pi','r3'))
+            decl='\n'.join(t+' '+n+';' for n,t in sorted(k.locals.items()) if n not in ('zol','pi','r3'))
             parameter=next(re.search(r'\br3\s*=\s*(.*)',x[0])[1] for x in h
                            if 'parameter' in x[0] and re.search(r'\br3\s*=',x[0]))
             r3=k.expr(parameter)
