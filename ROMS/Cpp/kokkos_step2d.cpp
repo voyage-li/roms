@@ -191,6 +191,55 @@ double ddy2(const roms::Array2d<double>& a, int i, int j,
   return a(i, j - 1) - 2.0 * a(i, j) + a(i, j + 1);
 }
 
+/*
+** The rho-point viscosity flux of the ubar row at (i,j) and the psi-point
+** viscosity flux of the vbar row at (i,j).  They are separate functions
+** because the working item of row j evaluates them at i-1 and i+1 as
+** well, and the neighbouring evaluation is the same expression: the
+** caller carries it across the loop instead of evaluating it twice.
+** The expressions are the Fortran ones, term by term.
+*/
+
+KOKKOS_INLINE_FUNCTION
+double u_rho_flux(const Array2d<double>& on_r,
+                  const Array2d<double>& visc2_r,
+                  const Array2d<double>& Drhs,
+                  const Array2d<double>& pmon_r,
+                  const Array2d<double>& pnom_r,
+                  const Array2d<double>& pm,
+                  const Array2d<double>& pn,
+                  const Array3d<double>& ubar,
+                  const Array3d<double>& vbar,
+                  int k, int i, int j) {
+  return on_r(i, j) * on_r(i, j) * (visc2_r(i, j) * Drhs(i, j) * 0.5 *
+      (pmon_r(i, j) *
+           ((pn(i, j) + pn(i + 1, j)) * ubar(i + 1, j, k) -
+            (pn(i - 1, j) + pn(i, j)) * ubar(i, j, k)) -
+       pnom_r(i, j) *
+           ((pm(i, j) + pm(i, j + 1)) * vbar(i, j + 1, k) -
+            (pm(i, j - 1) + pm(i, j)) * vbar(i, j, k))));
+}
+
+KOKKOS_INLINE_FUNCTION
+double v_psi_flux(const Array2d<double>& on_p,
+                  const Array2d<double>& visc2_pp,
+                  double dp,
+                  const Array2d<double>& pmon_p,
+                  const Array2d<double>& pnom_p,
+                  const Array2d<double>& pm,
+                  const Array2d<double>& pn,
+                  const Array3d<double>& ubar,
+                  const Array3d<double>& vbar,
+                  int k, int i, int j) {
+  return on_p(i, j) * on_p(i, j) * (visc2_pp(i, j) * dp * 0.5 *
+      (pmon_p(i, j) *
+           ((pn(i, j - 1) + pn(i, j)) * vbar(i, j, k) -
+            (pn(i - 1, j - 1) + pn(i - 1, j)) * vbar(i - 1, j, k)) +
+       pnom_p(i, j) *
+           ((pm(i - 1, j) + pm(i, j)) * ubar(i, j, k) -
+            (pm(i - 1, j - 1) + pm(i, j - 1)) * ubar(i, j - 1, k))));
+}
+
 
 }  // namespace
 
@@ -1214,6 +1263,15 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
   ** its own point, so the two loops of a row are independent. */
   Kokkos::parallel_for(
       range_policy(Jstr, Jend + 1), KOKKOS_LAMBDA(int j) {
+        /* The xi second differences and the rho-point viscosity flux at
+        ** i-1 are what this cell needs as its "m" values, so they are
+        ** carried across iterations instead of being evaluated twice. */
+        double gxm = ddx(ubar, krhs, IstrU - 1, j, fw, fe, Istr, Iend + 1);
+        double gx0 = ddx(ubar, krhs, IstrU,     j, fw, fe, Istr, Iend + 1);
+        double dxm = ddx2(DUon, IstrU - 1, j, fw, fe, Istr, Iend + 1);
+        double dx0 = ddx2(DUon,     IstrU, j, fw, fe, Istr, Iend + 1);
+        double uRm = u_rho_flux(on_r, visc2_r, Drhs, pmon_r, pnom_r, pm, pn,
+                                ubar, vbar, krhs, IstrU - 1, j);
         for (int i = IstrU; i <= Iend; ++i) {
           /* --- pressure gradient --- */
           const double pg =
@@ -1232,17 +1290,13 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
           ** In the Fortran these live in UFx/UFe with grad holding
           ** the xi and then the eta second differences of ubar, and
           ** Dgrad the matching differences of DUon/DVom. */
-          const double gx0 = ddx(ubar, krhs, i, j, fw, fe, Istr, Iend + 1);
           const double gx1 = ddx(ubar, krhs, i + 1, j, fw, fe, Istr, Iend + 1);
-          const double dx0 = ddx2(DUon, i, j, fw, fe, Istr, Iend + 1);
           const double dx1 = ddx2(DUon, i + 1, j, fw, fe, Istr, Iend + 1);
           const double ufx =
               0.25 * (ubar(i, j, krhs) + ubar(i + 1, j, krhs) -
                       c6 * (gx0 + gx1)) *
               (DUon(i, j) + DUon(i + 1, j) - c6 * (dx0 + dx1));
 
-          const double gxm = ddx(ubar, krhs, i - 1, j, fw, fe, Istr, Iend + 1);
-          const double dxm = ddx2(DUon, i - 1, j, fw, fe, Istr, Iend + 1);
           const double ufxm =
               0.25 * (ubar(i - 1, j, krhs) + ubar(i, j, krhs) -
                       c6 * (gxm + gx0)) *
@@ -1298,23 +1352,8 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
                                       Drhs(i, j - 1) + Drhs(i - 1, j - 1));
           const double dp0p = 0.25 * (Drhs(i, j + 1) + Drhs(i - 1, j + 1) +
                                       Drhs(i, j) + Drhs(i - 1, j));
-          const double uR =
-              on_r(i, j) * on_r(i, j) * (visc2_r(i, j) * Drhs(i, j) * 0.5 *
-              (pmon_r(i, j) *
-                   ((pn(i, j) + pn(i + 1, j)) * ubar(i + 1, j, krhs) -
-                    (pn(i - 1, j) + pn(i, j)) * ubar(i, j, krhs)) -
-               pnom_r(i, j) *
-                   ((pm(i, j) + pm(i, j + 1)) * vbar(i, j + 1, krhs) -
-                    (pm(i, j - 1) + pm(i, j)) * vbar(i, j, krhs))));
-          const double uRm =
-              on_r(i - 1, j) * on_r(i - 1, j) *
-              (visc2_r(i - 1, j) * Drhs(i - 1, j) * 0.5 *
-              (pmon_r(i - 1, j) *
-                   ((pn(i - 1, j) + pn(i, j)) * ubar(i, j, krhs) -
-                    (pn(i - 2, j) + pn(i - 1, j)) * ubar(i - 1, j, krhs)) -
-               pnom_r(i - 1, j) *
-                   ((pm(i - 1, j) + pm(i - 1, j + 1)) * vbar(i - 1, j + 1, krhs) -
-                    (pm(i - 1, j - 1) + pm(i - 1, j)) * vbar(i - 1, j, krhs))));
+          const double uR = u_rho_flux(on_r, visc2_r, Drhs, pmon_r, pnom_r,
+                                       pm, pn, ubar, vbar, krhs, i, j);
 
           const double uP =
               om_p(i, j) * om_p(i, j) * (visc2_pp(i, j) * dp00 * 0.5 *
@@ -1343,6 +1382,11 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
           DiaU2rhs(i, j, M2yvis) = vy1;
 
           rhs_ubar(i, j) = acc;
+
+          /* This cell's centre values are the next cell's "m" values. */
+          gxm = gx0; gx0 = gx1;
+          dxm = dx0; dx0 = dx1;
+          uRm = uR;
         }
 
         /*------------------------------------------------------------------
@@ -1351,6 +1395,17 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
         **----------------------------------------------------------------*/
 
         if (j < JstrV) return;
+        /* Same carry as the ubar row: the xi second difference, the eta
+        ** second difference of DUon and the psi-point viscosity flux at
+        ** i-1 / i+1 are the next cell's centre values. */
+        double vgxm = ddx(vbar, krhs, Istr - 1, j, fw, fe, Istr - 1, Iend + 1);
+        double vgx0 = ddx(vbar, krhs, Istr,     j, fw, fe, Istr - 1, Iend + 1);
+        double vdxm = ddy2(DUon, Istr, j - 1, 0, 0, 0, 0);
+        double vdx0 = ddy2(DUon, Istr, j,     0, 0, 0, 0);
+        double vPm = v_psi_flux(on_p, visc2_pp,
+                                0.25 * (Drhs(Istr, j) + Drhs(Istr - 1, j) +
+                                        Drhs(Istr, j - 1) + Drhs(Istr - 1, j - 1)),
+                                pmon_p, pnom_p, pm, pn, ubar, vbar, krhs, Istr, j);
         for (int i = Istr; i <= Iend; ++i) {
           /* --- pressure gradient --- */
           const double pg =
@@ -1368,21 +1423,17 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
           ** VFx block: grad over xi at V points folds at Istr-1 /
           ** Iend+1; Dgrad holds DUon second differences along eta over
           ** [JstrV-1, Jend] with no fold. */
-          const double gx0 = ddx(vbar, krhs, i, j, fw, fe, Istr - 1, Iend + 1);
-          const double gxm = ddx(vbar, krhs, i - 1, j, fw, fe, Istr - 1, Iend + 1);
-          const double dx0 = ddy2(DUon, i, j, 0, 0, 0, 0);
-          const double dxm = ddy2(DUon, i, j - 1, 0, 0, 0, 0);
           const double vfx =
               0.25 * (vbar(i, j, krhs) + vbar(i - 1, j, krhs) -
-                      c6 * (gx0 + gxm)) *
-              (DUon(i, j) + DUon(i, j - 1) - c6 * (dx0 + dxm));
+                      c6 * (vgx0 + vgxm)) *
+              (DUon(i, j) + DUon(i, j - 1) - c6 * (vdx0 + vdxm));
 
           const double gx1 = ddx(vbar, krhs, i + 1, j, fw, fe, Istr - 1, Iend + 1);
           const double dx1 = ddy2(DUon, i + 1, j, 0, 0, 0, 0);
           const double dx1m = ddy2(DUon, i + 1, j - 1, 0, 0, 0, 0);
           const double vfx1 =
               0.25 * (vbar(i + 1, j, krhs) + vbar(i, j, krhs) -
-                      c6 * (gx1 + gx0)) *
+                      c6 * (gx1 + vgx0)) *
               (DUon(i + 1, j) + DUon(i + 1, j - 1) - c6 * (dx1 + dx1m));
 
           /* VFe block: grad over eta at V points folds at Jstr /
@@ -1421,28 +1472,11 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
           DiaV2rhs(i, j, M2fcor) = -fcor;
 
           /* --- harmonic viscosity --- */
-          const double dp00 = 0.25 * (Drhs(i, j) + Drhs(i - 1, j) +
-                                      Drhs(i, j - 1) + Drhs(i - 1, j - 1));
           const double dp10 = 0.25 * (Drhs(i + 1, j) + Drhs(i, j) +
                                       Drhs(i + 1, j - 1) + Drhs(i, j - 1));
 
-          const double vP =
-              on_p(i, j) * on_p(i, j) * (visc2_pp(i, j) * dp00 * 0.5 *
-              (pmon_p(i, j) *
-                   ((pn(i, j - 1) + pn(i, j)) * vbar(i, j, krhs) -
-                    (pn(i - 1, j - 1) + pn(i - 1, j)) * vbar(i - 1, j, krhs)) +
-               pnom_p(i, j) *
-                   ((pm(i - 1, j) + pm(i, j)) * ubar(i, j, krhs) -
-                    (pm(i - 1, j - 1) + pm(i, j - 1)) * ubar(i, j - 1, krhs))));
-          const double vPp =
-              on_p(i + 1, j) * on_p(i + 1, j) *
-              (visc2_pp(i + 1, j) * dp10 * 0.5 *
-              (pmon_p(i + 1, j) *
-                   ((pn(i + 1, j - 1) + pn(i + 1, j)) * vbar(i + 1, j, krhs) -
-                    (pn(i, j - 1) + pn(i, j)) * vbar(i, j, krhs)) +
-               pnom_p(i + 1, j) *
-                   ((pm(i, j) + pm(i + 1, j)) * ubar(i + 1, j, krhs) -
-                    (pm(i, j - 1) + pm(i + 1, j - 1)) * ubar(i + 1, j - 1, krhs))));
+          const double vPp = v_psi_flux(on_p, visc2_pp, dp10, pmon_p, pnom_p,
+                                        pm, pn, ubar, vbar, krhs, i + 1, j);
 
           /* VFe at rho points from visc2_r. */
           const double vR =
@@ -1463,7 +1497,7 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
                    ((pm(i, j - 1) + pm(i, j)) * vbar(i, j, krhs) -
                     (pm(i, j - 2) + pm(i, j - 1)) * vbar(i, j - 1, krhs))));
 
-          const double vx1 = 0.5 * (pn(i, j - 1) + pn(i, j)) * (vPp - vP);
+          const double vx1 = 0.5 * (pn(i, j - 1) + pn(i, j)) * (vPp - vPm);
           const double vy1 = 0.5 * (pm(i, j - 1) + pm(i, j)) * (vR - vRm);
           const double hv  = vx1 - vy1;
           acc += hv;
@@ -1472,6 +1506,11 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
           DiaV2rhs(i, j, M2yvis) = -vy1;
 
           rhs_vbar(i, j) = acc;
+
+          /* This cell's centre values are the next cell's "m" values. */
+          vgxm = vgx0; vgx0 = gx1;
+          vdxm = dx1m; vdx0 = dx1;
+          vPm = vPp;
         }
       });
 }
