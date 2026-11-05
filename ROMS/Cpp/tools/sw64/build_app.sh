@@ -1,23 +1,40 @@
 #!/usr/bin/env bash
-# Build one ROMS application three ways with an identical physics option set:
-# pure Fortran (reference), Kokkos Serial and Kokkos SW64.  Used to validate
-# the kernels on applications other than upwelling.
+# Build one ROMS application with an identical physics option set as pure
+# Fortran (reference), Kokkos Serial and Kokkos SW64.
 #
 #   build_app.sh APP [EXTRA_CPP_FLAGS] [HEADER_DIR]
 #
 # APP is the uppercase header stem (BL_TEST -> <HEADER_DIR>/bl_test.h).
-# HEADER_DIR defaults to ROMS/Include; point it at a checkout of the
-# official myroms/roms_test case directory to use those headers instead.
-# The extra flags cover what the existing kernels require but the stock
-# application header does not define; the same set goes to all three builds
-# so the comparison is like for like.  TAG_SUFFIX (e.g. -r2) builds into
-# build/<APP>-<backend><TAG_SUFFIX> and leaves earlier binaries in place.
+# HEADER_DIR defaults to ROMS/Include of the checkout this script belongs to;
+# point it at a checkout of the official myroms/roms_test case directory to use
+# those headers instead (a relative path is looked up from the current
+# directory, then from the checkout).
+# EXTRA_CPP_FLAGS cover what the kernels need but the stock application
+# header does not define; every build gets the same set, so comparisons are
+# like for like.
+#
+# Environment, all optional:
+#   BACKENDS    builds to make                                (reference serial sw64)
+#   MPI         ON builds romsM, OFF builds romsS             (OFF)
+#   TAG_SUFFIX  appended to the build directory build/<APP>-<backend>[-mpi],
+#               e.g. -r2, so earlier binaries stay in place
+#   KK_STAGES   replaces the stage list of the Kokkos builds.  The default is
+#               the validated set (2-D and 3-D kernels, GLS, PRE3D, REMAINDER).
+#               BL_TEST has to drop KK_STAGE_PRE3D: it defines SOLAR_SOURCE,
+#               which the pre_step3d kernel rejects.
+#   STEP3D_T    ON enables the tracer chunk kernel in Kokkos builds (ON)
+#   TESTS       ON also builds the direct kernel tests (OFF)
+#   BUILD_JOBS  parallel build jobs (6)
+# ROMS_WALL_PROFILE is always defined, so the region timings use the wall
+# clock, as in the benchmark builds.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../../../.." && pwd)
 APP=${1:?application name, uppercase header stem}
 EXTRA=${2:-}
 HEADER_DIR=${3:-$ROOT/ROMS/Include}
-HEADER_DIR=$(cd "$HEADER_DIR" && pwd)
+[[ -d $HEADER_DIR ]] || HEADER_DIR=$ROOT/$HEADER_DIR
+HEADER_DIR=$(cd "$HEADER_DIR" 2>/dev/null && pwd) || {
+  printf 'No such header directory: %s\n' "${3:-$ROOT/ROMS/Include}" >&2; exit 2; }
 cd "$ROOT"
 if ! type module >/dev/null 2>&1; then source /etc/profile.d/modules.sh; fi
 module load swgcc/1473 mpi/swuc
@@ -26,9 +43,11 @@ export NETCDF=${NETCDF:-$HOME/ftao/local-saca}
 export NETCDF_INCDIR=${NETCDF_INCDIR:-$HOME/ftao/local-saca/include}
 BASE="OUT_DOUBLE;VAR_RHO_2D;DIAGNOSTICS_UV;DIAGNOSTICS_TS"
 [[ -n "$EXTRA" ]] && BASE="$BASE;$EXTRA"
-# KK_STAGES replaces the stage list.  bl_test needs PRE3D removed: it
-# defines SOLAR_SOURCE and LMD_NONLOCAL, which the pre_step3d kernel rejects.
-STAGES=";${KK_STAGES:-KK_STAGE_FUSED;KK_STAGE_TAVG;KK_STAGE_COUP;KK_STAGE_MOMT;KK_STAGE_DIAG;KK_STAGE_STOR;KK_STAGE_UV3DMIX;KK_STAGE_T3DMIX;KK_STAGE_PRSGRD;KK_STAGE_OMEGA;KK_STAGE_SETZETA;KK_STAGE_PRE3D;KK_STAGE_STEP3DUV}"
+[[ ";$BASE;" == *";ROMS_WALL_PROFILE;"* ]] || BASE="$BASE;ROMS_WALL_PROFILE"
+DEFAULT_STAGES="KK_STAGE_FUSED;KK_STAGE_TAVG;KK_STAGE_COUP;KK_STAGE_MOMT;KK_STAGE_DIAG;KK_STAGE_STOR;"
+DEFAULT_STAGES+="KK_STAGE_UV3DMIX;KK_STAGE_T3DMIX;KK_STAGE_PRSGRD;KK_STAGE_OMEGA;KK_STAGE_SETZETA;"
+DEFAULT_STAGES+="KK_STAGE_STEP3DUV;KK_STAGE_GLS;KK_STAGE_PRE3D;KK_STAGE_REMAINDER"
+STAGES=${KK_STAGES:-$DEFAULT_STAGES}
 MPI=${MPI:-OFF}
 SUFFIX=""
 [[ "$MPI" == ON ]] && SUFFIX="-mpi"
@@ -39,17 +58,17 @@ for backend in ${BACKENDS:-reference serial sw64}; do
   FLAGS="$BASE"
   if [[ "$backend" != reference ]]; then
     KOKKOS=ON
-    TRACER=ON
-    FLAGS="$BASE$STAGES"
+    TRACER=${STEP3D_T:-ON}
+    FLAGS="$BASE;$STAGES"
   fi
   tag="${APP}-${backend}${SUFFIX}${TAG_SUFFIX:-}"
   echo "=== configuring $tag"
+  # The toolchain file selects mpif90 and swucxx.
   cmake -S "$ROOT" -B "$ROOT/build/$tag" \
     -DCMAKE_TOOLCHAIN_FILE="$ROOT/Compilers/toolchain_SW64.cmake" \
-    -DCMAKE_Fortran_COMPILER="$(command -v mpif90)" \
-    -DCMAKE_CXX_COMPILER="$(command -v swucxx)" \
-    -DROMS_KOKKOS_STEP3D_T="$TRACER" -DROMS_TRACER_TIMING=ON \
-    -DCMAKE_BUILD_TYPE=Release -DROMS_FAST_MATH=OFF -DROMS_KOKKOS_TESTS=OFF \
+    -DROMS_KOKKOS_STEP3D_T="$TRACER" \
+    -DCMAKE_BUILD_TYPE=Release -DROMS_FAST_MATH=OFF \
+    -DROMS_KOKKOS_TESTS="${TESTS:-OFF}" \
     -DROMS_APP="$APP" -DMY_HEADER_DIR="$HEADER_DIR" \
     -DROMS_KOKKOS="$KOKKOS" -DROMS_KOKKOS_BACKEND="$backend" \
     -DMPI="$MPI" -DLIBTYPE=STATIC -DMY_CPP_FLAGS="$FLAGS" \

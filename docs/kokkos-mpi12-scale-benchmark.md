@@ -10,7 +10,8 @@ not a new field-validation result.
 ## Configuration
 
 - 12 MPI ranks on two nodes, 6 ranks per node (`bsub -n 12 -np 6 -cgsp 64`).
-- Domain decomposition `NtileI=6`, `NtileJ=2` (two tiles per rank).
+- Domain decomposition `NtileI=6`, `NtileJ=2`: 12 tiles on 12 ranks, one tile
+  per rank.
 - Two computed steps per run; initialization, build time and queue time are
   excluded from the per-step metric.
 - All history, average, diagnostic, restart and station output disabled.
@@ -32,14 +33,17 @@ Build policy:
   `KK_STAGE_DIAG;KK_STAGE_STOR;KK_STAGE_UV3DMIX;KK_STAGE_T3DMIX;`
   `KK_STAGE_PRSGRD;KK_STAGE_OMEGA;KK_STAGE_SETZETA;`
   `KK_STAGE_STEP3DUV;KK_STAGE_GLS`.
-  The coarse `KK_STAGE_PRE3D` path was **not** enabled in this matrix; see
-  "Remaining Fortran time" below.
+  Neither `KK_STAGE_PRE3D` nor `KK_STAGE_REMAINDER` was enabled in these
+  (r8) binaries; "Stage 2" below adds both.
 
 All runs were checked for:
 
 - exactly 12 rank-specific stepping walls and agreement between ranks;
 - `ROMS: DONE` and no `ERROR STOP`, abnormal termination or blow-up;
-- no whole-tile Fortran fallback in an accepted run;
+- no whole-tile Fortran fallback in an accepted run (this can only occur
+  where the `step3d_t` hook is compiled, i.e. UPWELLING and BL_TEST, which
+  define `SPLINES_VDIFF`; KELVIN, CANYON and CHANNEL run their tracer work as
+  generated rows and have no such hook);
 - candidate execution space `SW64` and a kernel timing table on every rank;
 - no NetCDF output written;
 - executable SHA256 unchanged before and after the run.
@@ -49,7 +53,7 @@ All runs were checked for:
 Five applications with five grid sizes each; every largest grid takes at
 least 60 s per step in the pure-Fortran reference.
 
-| application | grids `(Lm, Mm)` | DT | largest reference (s/step) | calibration job |
+| application | grids `(Lm, Mm)` | DT | calibration, largest grid, one step (s/step) | calibration job |
 |---|---|---:|---:|---|
 | UPWELLING | 360x176, 720x352, 1440x704, 2160x1056, 2880x1408 | 300 (input) | 67.251 | 8949042 |
 | KELVIN | 256x128, 512x256, 1024x512, 1536x768, 2048x1024 | 900 (input) | 64.676 | 8949221 |
@@ -59,7 +63,9 @@ least 60 s per step in the pure-Fortran reference.
 
 `CANYON`, `BL_TEST` and `CHANNEL` non-default `DT` values were selected from
 separate one-step calibration runs because the stock values were unstable at
-the large target grids.
+the large target grids. The calibration column is that single-step value; the
+campaign medians in the tables below differ from it (for example KELVIN
+64.676 s calibration against 72.726 s median at the largest grid).
 
 ## Results
 
@@ -137,6 +143,12 @@ output on UPWELLING:
   Serial vs Fortran: **101/101 exact**;
   SW64 vs Fortran: **101/101 strict 1e-10**, no diagnostic exception.
 
+![Stage-2 speed-up](figures/kokkos_stage2_speedup.png)
+
+*Per-step speed-up over the original Fortran build on 12 MPI ranks.
+Solid filled markers: PRE3D+REMAINDER. Open markers: PRE3D only.
+The right-hand summary gives the geometric mean over the five grids.*
+
 | application | grid | reference s/step | PRE3D s/step | +REMAINDER s/step | PRE3D speedup | +REMAINDER speedup | REMAINDER vs PRE3D |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | UPWELLING | 360x176 | 1.066405 | 0.222023 | 0.188793 | 4.80x | 5.65x | 1.18x |
@@ -192,7 +204,7 @@ whose samples disagreed by more than 5% had all three repetitions
 remeasured; the medians above use the clean samples. A few groups retain
 one slow sample, but the median is at the consistent value.
 
-## Interpretation
+## Interpretation (r8 binaries, before Stage 2)
 
 - KELVIN is a barotropic-dominated case, so the already-ported 2-D kernel
   covers most of its work; it reaches 9.2-9.9x.
@@ -210,29 +222,11 @@ one slow sample, but the median is at the consistent value.
 ## Remaining hot spots after Stage 2
 
 With `KK_STAGE_PRE3D` and `KK_STAGE_REMAINDER` enabled, every
-iteration-time compute loop exercised by these five configurations is now
-in Kokkos. What remains in the stepping wall is dominated by the 2-D
-kernel and by non-kernel work:
-
-- about 51% of the stepping wall is the step2d kernel entries
-  (`rhs_fused`, `coupling`, `diag_int`, `store_rhs`, `zeta_step`,
-  `momentum_step`, `depth_flux`, `time_average`);
-- about 22% is the non-kernel remainder (2-D/3-D MPI halo exchanges,
-  lateral boundary fills, global reductions, launch gaps);
-- the 3-D entries (pressure gradient, RHS proper, tracer corrector,
-  predictor, `step3d_uv`) account for most of the rest.
-
-There is no large un-migrated module left for these physics. The next
-optimization targets, in order, are:
-
-1. fuse `store_rhs` and `diag_int` into the producer kernels to remove two
-   full-tile launches/sweeps per fast step;
-2. reduce or overlap the 2-D halo exchanges, which are the largest
-   non-kernel item;
-3. tune `rhs_fused`/`coupling` loop order and cache blocking, subject to
-   the exact-arithmetic gate.
-
-Details and the validation protocol are in
+iteration-time compute loop of these five configurations is in Kokkos. In the
+12-rank UPWELLING 1440x704 profile about 51% of the stepping wall is the
+step2d kernel entries and about 22% is non-kernel work (halo exchanges,
+boundary fills, global reductions, launch gaps). The profile, the ranked next
+steps and the validation protocol for follow-ups are in
 `kokkos-remaining-optimization.md`.
 
 ## Exclusions
@@ -251,11 +245,10 @@ These applications are not part of the speedup table:
 
 ## Evidence
 
-Run root (Sunway):
+All paths are on the Sunway system under
+`~/voyage/roms/work/gls-r6-20261104/`.
 
-```
-~/voyage/roms/work/gls-r6-20261104/runs/mpi12-scale-r8-20261104T155324/
-```
+### r8 matrix (`runs/mpi12-scale-r8-20261104T155324/`)
 
 Key files:
 
@@ -272,15 +265,82 @@ Key files:
 The validated rerun for CHANNEL s4 SW64 is `8951263`; all five applications
 then have three valid samples at all five scales, both backends.
 
+### Stage-2 campaign (`runs/mpi12-stage2-20261105T0320/`)
+
+- 225 jobs: 5 applications x 5 grids x 3 builds (original Fortran, PRE3D,
+  PRE3D+REMAINDER) x 3 samples, randomly interleaved, with the 12-rank
+  two-node configuration, two computed steps, no output and the same inputs
+  as the r8 matrix.
+- Result files: `RESULT-stage2.json`, `summary-stage2.csv`,
+  `stage2-tables.md`, `analyze-stage2.log`.
+- A first attempt with the default (not final-size) grids is preserved at
+  `runs/mpi12-stage2-wrongsizes-20261105T0300/` and must not be used.
+- The driver exited on a broken pipe at 220/225 during a cluster network
+  outage. All 225 jobs had been submitted; the tolerant `analyze_stage2.py`
+  audited the logs, and two samples with truncated timer headers and one with
+  a truncated `pre_step3d` line were rerun (jobs 8962792, 8962805, 8963031).
+- Case/label groups whose three samples spread by more than 5% had all three
+  repetitions archived as `<rep>.attempt1` and remeasured (75 jobs,
+  `rerun-noise.log`, `rerun-noise.json`). The final medians are in
+  `RESULT-stage2.json`.
+- Field validation (two ranks, four steps, all output):
+  `runs/pre3d-r9-20261105T0250/validation/` for PRE3D and
+  `runs/pre3d-r9-20261105T0250/validation-remainder/` for PRE3D+REMAINDER,
+  each with STATUS.json, run logs and per-file comparison logs. The
+  large-grid runs are performance measurements only.
+- Profile smoke run (12 ranks, UPWELLING 1440x704):
+  `runs/pre3d-r9-20261105T0250/smoke/upwelling-s3-rem/run.log`, the source of
+  the shares in `kokkos-remaining-optimization.md`.
+
+### Re-validation of the cleaned-up source (2026-11-05)
+
+After superseded kernels, the TeamPolicy and benchmark code, duplicate scripts
+and dead generator paths were removed, the result was checked against the
+binaries behind the numbers above. The two trees (`old` = git `62487af2`,
+`new` = working tree) and all logs are in
+`~/voyage/roms/work/cleanup-20261105T1334/`.
+
+- **Preprocessing** (cpp, cpp_clean, `row_codegen.py`) of 13 retained
+  configurations: the five applications as pure Fortran and as SW64, UPWELLING
+  Serial, and the GLS and KPP builds. The five pure-Fortran builds are
+  identical (ignoring the embedded source path and `__LINE__` arguments). The
+  Kokkos builds differ only in `step2d`, the two Kokkos interface modules and,
+  where PRE3D is enabled, `pre_step3d` (removed kernels and arguments, the
+  `NT <= 32` guard and its fallback message), identically in every
+  configuration. All generated `*_rows.cpp` files are identical, except that
+  the BL_TEST bulk-flux helper now lists its locals in sorted instead of hash
+  order.
+- **Rebuild** of the UPWELLING 12-rank reference, Serial and SW64 builds with
+  `build_app.sh`: all 1052 translation units have the same compile commands as
+  the r8/r10 builds except for the removed `-DKK_PROFILE_STEP3D_T`, and
+  `link.txt` is identical.
+- **Fields**, two ranks, four steps, all output, UPWELLING 41x80 (jobs
+  8967363, 8967373, 8967390 for the retained Fortran, Serial and SW64 binaries;
+  8967407, 8967416, 8967436 for the rebuilt ones): new against retained is
+  **101/101 exact for all three builds**; new Serial against new Fortran
+  101/101 exact; new SW64 against Fortran 101/101 within 1e-10. No fallback
+  line, both ranks print kernel timing tables. BL_TEST (39x4, jobs 8967898 and
+  8967900) and CANYON (65x48, jobs 8967910 and 8967923) were rebuilt with the
+  options of their r10 builds (same compile commands, identical `link.txt`) and
+  run the same way: the SW64 outputs equal the retained binaries' in 96/96 and
+  63/63 fields.
+- **Speed**, 12 ranks, UPWELLING 1440x704, two steps, no output, retained and
+  rebuilt SW64 binaries interleaved three times (jobs 8967454-8967514): rank-0
+  stepping wall 3.852, 3.678, 3.606 s against 3.678, 3.655, 3.659 s, i.e. median
+  1.839 against 1.829 s/step (the campaign median for this grid is 1.966 s/step,
+  measured on another day).
+- **Direct tests** on Serial and SW64 (jobs 8967792-8967796, 8967802): all
+  pass, see `ROMS/Cpp/tools/sw64/README.md`.
+
 ## Caveats
 
 - This is a performance-only matrix. No field was compared for the large
   grids in this run; field validation of the migrated modules is reported
   separately in `ROMS/Cpp/tools/sw64/*.md`.
 - GLS and LMD/KPP are not active in these five physics configurations
-  (UPWELLING and CANYON use `ANA_VMIX`; KELVIN and BL_TEST do not enable a
-  vertical mixing scheme; CHANNEL uses `FORWARD_MIXING`). The GLS stage is
-  compiled but has no work in this matrix. GLS/KPP speedups are separate
-  results.
+  (UPWELLING and CANYON use `ANA_VMIX`; KELVIN, BL_TEST and CHANNEL enable no
+  vertical mixing scheme in the forward model: `channel.h` defines
+  `FORWARD_MIXING` only under `OPT_PERTURBATION`). The GLS stage is compiled
+  but has no work in this matrix. GLS/KPP speedups are separate results.
 - MPI communication, halo exchanges and I/O remain in Fortran and are
   included in the measured stepping wall.

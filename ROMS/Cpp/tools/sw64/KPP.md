@@ -51,7 +51,7 @@ CPE IEEE-division error. Disabling contraction alone did not fix the model.
 A stage-local workaround fixed the first barotropic loop but exposed the
 next discrepancy at step3d_uv; disabling vectorization only in step2d did
 not fix the complete model. The maintained correction therefore applies
-`-fno-tree-vectorize` to ROMS C++ computation units and direct tests/benchmarks
+`-fno-tree-vectorize` to ROMS C++ computation units and the direct tests
 when the backend is SW64 and `ROMS_FAST_MATH=OFF`.
 
 **Kokkos/CPE parallel offload remains enabled.** No physics, tolerance,
@@ -112,7 +112,7 @@ from these correctness runs.
 
 Additional regressions:
 
-- Host suite: **46/46** passed, including generator integer-layout/kind,
+- Host suite at the time of the run: **46/46** passed, including generator integer-layout/kind,
   concurrent private-buffer, restart and strict-build acceptance checks.
 - Target stride guards: **21/21**, including integer row/column strides,
   padded columns, singleton axes and empty sections (`8941131`).

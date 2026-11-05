@@ -23,15 +23,20 @@ STAGES=('KK_STAGE_FUSED;KK_STAGE_TAVG;KK_STAGE_COUP;KK_STAGE_MOMT;'
         'KK_STAGE_DIAG;KK_STAGE_STOR;KK_STAGE_UV3DMIX;KK_STAGE_T3DMIX;'
         'KK_STAGE_PRSGRD;KK_STAGE_OMEGA;KK_STAGE_SETZETA;'
         'KK_STAGE_PRE3D;KK_STAGE_STEP3DUV')
+# A crash, or any fall back from a kernel to Fortran (that would time and
+# validate the wrong code): step3d_t and pre_step3d print the whole-tile
+# line, a lowered row prints the row line.
+FAILED_RUN=re.compile(r'ERROR STOP|Abnormal termination|BLOWUP|'
+                      r'Kokkos row fallback:|whole-tile Fortran fallback')
 CASES={
     'upwelling': dict(app='UPWELLING',source='ROMS/External/roms_upwelling.in',
-                     header='ROMS/Include',small=(41,80),large=(256,256),extra='',control='sw64'),
+                     header='ROMS/Include',small=(41,80),large=(256,256),extra=''),
     'kelvin': dict(app='KELVIN',source='official/kelvin/roms_kelvin.in',
-                  header='official/kelvin',small=(50,30),large=(256,256),extra='',control='KELVIN-sw64-r2'),
+                  header='official/kelvin',small=(50,30),large=(256,256),extra=''),
     'canyon': dict(app='CANYON',source='ROMS/External/roms_canyon3d.in',
-                  header='ROMS/Include',small=(65,48),large=(256,192),extra='SOLVE3D',control='CANYON-sw64-r2'),
+                  header='ROMS/Include',small=(65,48),large=(256,192),extra='SOLVE3D'),
     'bl_test': dict(app='BL_TEST',source='official/bl_test/roms_bl_test.in',
-                   header='official/bl_test',small=(39,4),large=(256,16),extra='UV_VIS2',control='BL_TEST-sw64-r2'),
+                   header='official/bl_test',small=(39,4),large=(256,16),extra='UV_VIS2'),
 }
 
 
@@ -61,7 +66,7 @@ class Matrix:
         self.out.mkdir(parents=True,exist_ok=False)
         self.report={'state':'running','stage':'starting','cases':{},'jobs':[],
                      'validation_steps':args.validation_steps,'performance_steps':2,
-                     'repeats':args.repeats,'queue':'q_share',
+                     'repeats':args.repeats,'queue':os.environ.get('QUEUE','q_share'),
                      'profile_clock':'SYSTEM_CLOCK (ROMS_WALL_PROFILE)',
                      'profile_scope':'ROMS regions can include initialization; region 34 has a known nested timer collision',
                      'serial_acceptance':'exact against matched prior-kernel Serial; original-Fortran exact and normalized comparisons retained',
@@ -110,32 +115,20 @@ class Matrix:
             cmd+=['--no-output']
             if name=='canyon': cmd+=['--dt','30']
         if 'dt' in c: cmd+=['--dt',str(c['dt'])]
+        if ranks>1: cmd+=['--tiles',str(ranks),'1']
         subprocess.run(cmd,cwd=str(ROOT),check=True)
         inp=d/Path(c['source']).name
-        if ranks>1:
-            text=inp.read_text()
-            text,n=re.subn(r'(?m)^(\s*NtileI\s*==\s*)\S+',lambda m:m[1]+str(ranks),text)
-            if n!=1: raise RuntimeError('MPI NtileI not found')
-            inp.write_text(text)
         self.prepare_input(inp,perf)
         exe=ROOT/'build'/tag/('romsM' if ranks>1 else 'romsS')
         digest=sha(exe)
         self.status('run '+name+' '+label+' '+('MPI' if ranks>1 else 'perf' if perf else 'validation')+' '+str(rep))
-        env=dict(os.environ,ROMS_KK_TIMING='1',OMP_NUM_THREADS='1')
-        if ranks==1:
-            result=subprocess.run(['bash',str(TOOLS/'run_app.sh'),tag,str(d)],env=env,cwd=str(ROOT))
-            rc=result.returncode
-        else:
-            args=['bsub','-I','-b','-q','q_share','-n',str(ranks),'-np',str(ranks),'-cgsp','64',
-                  '-share_size','15000','-cross_size','1024','-host_stack','1024','-cache_size','128',
-                  '-timelimit','00:10:00','-J','roms-remainder-'+name+'-'+label,'-i',str(inp),str(exe),str(inp)]
-            with (d/'run.log').open('w') as log:
-                rc=subprocess.run(args,env=env,cwd=str(d),stdout=log,stderr=subprocess.STDOUT).returncode
+        env=dict(os.environ,ROMS_KK_TIMING='1',RANKS=str(ranks))
+        rc=subprocess.run(['bash',str(TOOLS/'run_app.sh'),tag,str(d)],env=env,cwd=str(ROOT)).returncode
         text=(d/'run.log').read_text(errors='replace')
         jobs=re.findall(r'Job <(\d+)>',text)
         self.report['jobs'] += [dict(id=j,case=name,label=label,directory=str(d)) for j in jobs]
         self.status()
-        if rc or 'ROMS: DONE' not in text or re.search(r'ERROR STOP|Abnormal termination|BLOWUP|Kokkos row fallback:',text):
+        if rc or 'ROMS: DONE' not in text or FAILED_RUN.search(text):
             raise RuntimeError('model run failed or fell back: '+str(d))
         expected='SW64' if label in ('sw64','control') else 'Serial' if label in ('serial','control_serial') else None
         space=re.search(r'ROMS Kokkos execution space:\s*(\w+)',text)

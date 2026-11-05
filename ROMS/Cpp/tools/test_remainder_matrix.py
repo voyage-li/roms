@@ -64,6 +64,19 @@ class AcceptanceTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'strict field comparison failed'):
             self.compare('roms_rst.nc',[self.failed()],include_restart=True)
 
+    def test_any_fallback_to_fortran_invalidates_a_run(self):
+        # A fallback would validate and time the wrong code.  The wording must
+        # stay the one the Fortran sources print.
+        root=Path(__file__).resolve().parents[2]/'Nonlinear'
+        for name in ('step3d_t.F','pre_step3d.F'):
+            self.assertIn('whole-tile Fortran fallback',(root/name).read_text(),name)
+        for line in ('step3d_t: whole-tile Fortran fallback (tracer scheme)',
+                     'pre_step3d: whole-tile Fortran fallback (point sources)',
+                     'Kokkos row fallback: rhs3d','forrtl: ERROR STOP','BLOWUP'):
+            self.assertTrue(module.FAILED_RUN.search(line),line)
+        self.assertFalse(module.FAILED_RUN.search(
+            'ROMS time stepping wall [rank=0]: 3.541 s\n ROMS: DONE'))
+
     def test_no_reference_outputs_is_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory); ref=root/'ref'; ref.mkdir()

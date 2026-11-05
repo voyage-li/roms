@@ -1,9 +1,12 @@
 # Remaining compute ports — four-case matrix completed, 2026-11-04
 
-This remains **opt-in**, not the production default. The four-case single-rank
-performance and two-rank correctness matrix below is complete, with the
-explicit diagnostic-roundoff exceptions retained. The previous `*-r2`
-controls and their evidence are preserved.
+`KK_STAGE_REMAINDER` is selected by a CPP flag and is part of the validated
+stage list of `build_app.sh`. The four-case single-rank performance and
+two-rank correctness matrix below is complete, with the explicit
+diagnostic-roundoff exceptions retained. The previous `*-r2` controls and
+their evidence are preserved. The 12-rank speed-ups of the current code are in
+`docs/kokkos-mpi12-scale-benchmark.md`; the figures below are the
+single-rank/four-case record of the time.
 
 **Compilation provenance:** these measurements predate the conservative
 SW64 arithmetic correction described in [KPP.md](KPP.md). They remain valid
@@ -110,14 +113,15 @@ never cancels other account jobs. No automatic commit or push.
 
 ## Evidence so far
 
-- Host regression suite: **18/18 passed**, including actual compiled C++
-  execution with forward/reverse/concurrent rows, full five-dimensional
-  time/tracer layout, scratch ownership, boundary-fill ownership, optional
-  arrays, source guards, scalar kinds/dependencies and no-output inputs.
-  The full tool suite is **32/32 passed**: those 18 tests, 8 NetCDF-parser
-  tests and 6 acceptance-policy tests (a diagnostic absolute cross-check
-  cannot become a strict PASS, and new Serial/control differences stop
-  the matrix).
+- Host regression suite at the time: **18/18 passed**, including actual
+  compiled C++ execution with forward/reverse/concurrent rows, full
+  five-dimensional time/tracer layout, scratch ownership, boundary-fill
+  ownership, optional arrays, source guards, scalar kinds/dependencies and
+  no-output inputs. The full tool suite was **32/32 passed**: those 18 tests,
+  8 NetCDF-parser tests and 6 acceptance-policy tests (a diagnostic absolute
+  cross-check cannot become a strict PASS, and new Serial/control differences
+  stop the matrix). The suite has grown since; run it with
+  `python3 -m unittest discover -s ROMS/Cpp/tools -p 'test_*.py'`.
 - Four-option-set local preprocessing/code-generation/C++ syntax checks:
   **64/64 passed**. Local temporary headers explicitly reproduce the
   relevant official kelvin/bl_test header differences. This is **not**
@@ -145,7 +149,8 @@ never cancels other account jobs. No automatic commit or push.
   Fortran.
 - Target descriptor-guard executable: **14/14 passed** (`8940125`), covering
   contiguous/strided rank 1--5 arrays, padded columns, singleton axes and
-  rank-one empty sections (`ROMS/Cpp/test_row_guards.f90`).
+  rank-one empty sections (`ROMS/Cpp/test_row_guards.f90`, now built by
+  `TESTS=ON`).
 - Complete target validation/performance matrix: **finished**, state
   `complete_with_reference_roundoff`, 76 queue jobs. Artifacts:
   `runs/remainder-20261104T040106-63596/STATUS.json`. All four applications
@@ -314,9 +319,7 @@ RUN_ROOT=runs/remainder-$(date -u +%Y%m%dT%H%M%S) \
     --apps canyon bl_test kelvin upwelling --mpi
 ```
 
-From the local checkout, `bash ROMS/Cpp/tools/sw64/deploy_remainder.sh`
-waits for the authorized `ssh SW` connection, deploys only the listed
-project files and watches a detached matrix. It covers success, failure,
-unexpected process exit and connection/monitor deadlines; silence is not
-reported as success. Existing runs are never overwritten. All remote
-artifacts remain under `~/voyage/roms/`.
+Existing runs are never overwritten, and all remote artifacts stay under
+`~/voyage/roms/`. The matrix launches every run through `run_app.sh` and
+treats any `whole-tile Fortran fallback` or `Kokkos row fallback:` line as a
+failure.

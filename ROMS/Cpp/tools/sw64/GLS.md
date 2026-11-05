@@ -173,8 +173,8 @@ as an unaddressed hotspot.
   management core. Further gains require separate kernels for those phases.
 - The row kernel inherits the strict arithmetic policy and uses the pinned
   Kokkos revision; no dependency was changed.
-- These changes are **uncommitted** at the time of writing. The earlier
-  KPP/remainder commit `f1dde43f` is independent.
+- Committed as `58191be0` (`feat: port iteration-time GLS rows and validate
+  MPI`); the earlier KPP/remainder commit `f1dde43f` is independent.
 
 ## Reproduce
 
@@ -193,6 +193,10 @@ BACKENDS=serial TAG_SUFFIX=-gls-r6 KK_STAGES="$STAGES" MPI=OFF \
   'GLS_MIXING;ROMS_WALL_PROFILE' ROMS/Include
 # remove ;KK_STAGE_GLS for the matched control
 ```
+
+The list above reproduces the r6 binaries. The default `KK_STAGES` of
+`build_app.sh` is now the final production list (it also contains
+`KK_STAGE_REMAINDER`).
 
 Model launch still requires both `bsub -i INPUT` and the executable input
 argument. Validation inputs enable `Hout(idMtke)`/`Hout(idMtls)` and
