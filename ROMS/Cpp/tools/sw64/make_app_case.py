@@ -3,12 +3,17 @@
 
   make_app_case.py SOURCE_IN DIRECTORY [--size LM MM] [--steps N]
                    [--dt DT] [--tiles NI NJ] [--no-output]
+                   [--output-interval N]
 
 SOURCE_IN is the application's roms_*.in (for example official/kelvin/
 roms_kelvin.in or ROMS/External/roms_canyon3d.in).  The copy keeps every
 physics choice and only changes grid size, step count, time step, tiling
 and output frequency.  NI*NJ must equal the number of MPI ranks (ROMS
 runs one tile per rank).  It refuses to replace an existing input.
+
+Without --no-output the history, average and diagnostic files are written
+every step unless --output-interval says otherwise; that default writes
+one file per step, which is not what a long integration wants.
 """
 import argparse
 from pathlib import Path
@@ -23,12 +28,17 @@ p.add_argument("--steps", type=int, default=2)
 p.add_argument("--dt", type=str)
 p.add_argument("--tiles", type=int, nargs=2, default=(1, 1), metavar=("NI", "NJ"))
 p.add_argument("--no-output", action="store_true")
+p.add_argument("--output-interval", type=int, metavar="N")
 a = p.parse_args()
 if min(a.tiles) < 1:
     p.error("--tiles must be positive")
+if a.output_interval is not None and a.output_interval < 1:
+    p.error("--output-interval must be positive")
+if a.no_output and a.output_interval is not None:
+    p.error("--no-output and --output-interval are exclusive")
 root = Path(__file__).resolve().parents[4]
 text = a.source.read_text()
-out = 0 if a.no_output else 1
+out = 0 if a.no_output else (a.output_interval or 1)
 values = dict(NTIMES=a.steps, NtileI=a.tiles[0], NtileJ=a.tiles[1], NHIS=out,
               NAVG=out, NDIA=out, NRST=0)
 if a.size:

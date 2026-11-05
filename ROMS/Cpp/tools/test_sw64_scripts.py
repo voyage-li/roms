@@ -59,6 +59,22 @@ class CaseTests(unittest.TestCase):
         text = case('--tiles', '12', '2')
         self.assertEqual((setting(text, 'NtileI'), setting(text, 'NtileJ')), ('12', '2'))
 
+    def test_output_interval_sets_the_three_write_intervals(self):
+        text = case('--steps', '1000', '--output-interval', '100')
+        for key in ('NHIS', 'NAVG', 'NDIA'):
+            self.assertEqual(setting(text, key), '100', key)
+        self.assertEqual(setting(text, 'NRST'), '0')
+
+    def test_output_interval_and_no_output_are_exclusive(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run(
+                [sys.executable, str(SW64 / 'make_app_case.py'),
+                 str(EXTERNAL / 'roms_bl_test.in'), directory,
+                 '--no-output', '--output-interval', '10'],
+                capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('exclusive', result.stderr)
+
     def test_tiles_must_be_positive(self):
         with tempfile.TemporaryDirectory() as directory:
             result = subprocess.run(
