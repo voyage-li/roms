@@ -1,7 +1,8 @@
 # Remaining iteration-time hot spots after the PRE3D/REMAINDER ports
 
 Date: 2026-11-05
-Source commit: `58191be0`
+Source commit: `58191be0`; the kernels are unchanged through `2cc37f4c`,
+where the throughput analysis and the re-ranking below were added.
 
 This note records what is left to optimize after the coarse kernels and the
 row-level remainder ports are enabled. It is a planning document based on
@@ -76,36 +77,66 @@ After the remainder ports, there is no large un-migrated compute loop left
 in these configurations. The next gains must come from the already-ported
 2-D kernels and from communication, not from another module translation.
 
+## Where the time goes inside the 2-D kernels
+
+Each rank owns one tile of the 6x2 decomposition, so on the 1440x704 grid a
+tile is 240x352 points and one field slab is about 0.69 MB. Dividing the
+entry-timer time of each kernel by the number of slabs it reads and writes
+gives the sustained throughput it runs at:
+
+| kernel | calls | ms/call | slabs touched per call | GB/s |
+|---|---:|---:|---:|---:|
+| `store_rhs` | 84 | 1.59 | ~44 (22 read, 22 written) | ~19 |
+| `diag_int` | 84 | 3.82 | ~140 (10 terms, U and V) | ~25 |
+| `coupling` | 168 | 2.59 | ~80 (8 compact terms plus stresses) | ~22 |
+| `rhs_fused` | 168 | 3.79 | ~56 | ~10 |
+
+`NDM2d` is 11 for these configurations (UV_ADV, UV_COR, UV_VIS2), so
+`diag_int` integrates 10 terms over U and V and `coupling` loops over the
+8 terms below `M2pgrd` plus the two stresses. `store_rhs`, `diag_int` and
+`coupling` all sustain 19-25 GB/s, the streaming rate this rank reaches,
+so their cost is data movement and their traffic is what the Fortran does.
+`rhs_fused` runs at about half that rate because it evaluates the scalar
+CPE arithmetic of the whole 2-D RHS: with `-fno-tree-vectorize` it is
+ALU-bound, not memory-bound.
+
 ## Candidate optimizations, in priority order
 
-1. **Fuse the 2-D diagnostic/store passes.**
-   `store_rhs` (0.134 s) copies `rhs_ubar`/`rhs_vbar` and the diagnostic
-   RHS into `rubar`/`rvbar`; `diag_int` (0.321 s) then accumulates the
-   diagnostic integrals in separate launches. Both are full-tile passes
-   over data already resident from `rhs_fused`/`coupling`. Fusing the
-   copies and integral accumulation into the producer kernel would remove
-   two launches and two array sweeps per fast step. This is the largest
-   safe target that does not change arithmetic order.
-2. **Reduce 2-D halo exchange cost.**
-   The 2-D halo exchange is 7.9% of the profiled total (all MPI
+1. **Reduce 2-D halo exchange cost**, the only remaining lever above a few
+   percent. The 2-D halo exchange is 7.9% of the profiled total (all MPI
    communication 13.0%) and scales with the number of fast steps per
-   baroclinic step. Options are nonblocking
-   exchange overlapped with the interior update, exchanging only the
-   boundary strips needed by the next kernel, and avoiding redundant
-   exchanges when a kernel does not read the halo. This is Fortran/MPI
-   work, not a Kokkos kernel change.
-3. **Tune `rhs_fused` and `coupling` loop order.**
-   These two kernels account for about 59% of the 2-D kernel time (1.07 s
-   of 1.81 s over the two steps). Under the strict-arithmetic policy the
-   kernels evaluate scalar code on each CPE (`-fno-tree-vectorize`), so SIMD
-   is an option only with its own exactness check; TeamPolicy was measured
-   to be slower on SW64 and was removed (`ROMS/Cpp/tools/sw64/README.md`,
-   Decisions). Cache blocking over j and reusing face fluxes between
-   `rhs_fused` and `coupling` are the remaining structural options, but both
-   need an exact-arithmetic check.
-4. **Global reductions and boundary fills.**
-   The CFL/global-information reductions and the lateral boundary fills are
-   small individually. Porting them is only worth it after the items above.
+   baroclinic step. Options are nonblocking exchange overlapped with the
+   interior update, exchanging only the boundary strips the next kernel
+   reads, and skipping exchanges whose result is not read. This is
+   Fortran/MPI work, not a Kokkos kernel change, and it changes the order
+   of messages, so it needs the full acceptance protocol.
+2. **Global reductions and boundary fills.** Small individually, and inside
+   the same non-kernel remainder as item 1.
+3. **SIMD in `rhs_fused`.** It is 0.636 s of the 3.541 s stepping wall and
+   runs at about half the streaming rate, so it is the one large kernel
+   whose cost is arithmetic rather than data movement; `coupling` is
+   already at the streaming rate and would gain little. Vectorisation is
+   therefore the only change that could move `rhs_fused` materially.
+   swgcc-1473 changes rounding in auto-vectorised CPE arithmetic, which is
+   why the strict-arithmetic policy disables it; a vectorised variant would
+   need its own exactness proof before it may be used (TeamPolicy was
+   measured slower and was removed, see `ROMS/Cpp/tools/sw64/README.md`,
+   Decisions).
+
+The following was listed earlier as the first candidate and is withdrawn
+after checking the data flow:
+
+- **Fusing the diagnostic/store passes into their producer.** `store_rhs`
+  and `diag_int` do not consume `rhs_fused`'s output directly: `coupling`
+  runs between them and rewrites `rhs_ubar`/`rhs_vbar` and `DiaU2rhs`/
+  `DiaV2rhs` in place (all four coupling branches), so the copies must stay
+  after it. The exact fusion is therefore into `coupling`, which saves the
+  overlap between what `coupling` writes and what `store_rhs` reads: about
+  15 MB per fast step for `store_rhs` and the `DiaU2rhs` re-read for
+  `diag_int`, about 0.12 s or 3% of the stepping wall, in exchange for
+  merging a four-branch kernel with two more modes. Not worth it. (MASKING and
+  WET_DRY, the only other writers between the kernels, are rejected at
+  compile time by `ROMS/Cpp/kokkos_step2d.cpp`.)
 
 ## Validation protocol for any follow-up
 
