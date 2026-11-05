@@ -58,9 +58,6 @@
 !
 !  Local variable declarations.
 !
-# ifdef KK_PROFILE_STEP3D_T
-      integer(kind=SELECTED_INT_KIND(18)) :: kk_start, kk_end, kk_rate
-# endif
       character (len=*), parameter :: MyFile = &
      &  __FILE__
 !
@@ -68,9 +65,6 @@
 !
 # ifdef PROFILE
       CALL wclock_on (ng, iNLM, 35, __LINE__, MyFile)
-# endif
-# ifdef KK_PROFILE_STEP3D_T
-      CALL SYSTEM_CLOCK (kk_start, kk_rate)
 # endif
       CALL step3d_t_tile (ng, tile, &
      &                    LBi, UBi, LBj, UBj, &
@@ -115,14 +109,6 @@
      &                    DIAGS(ng) % DiaTwrk, &
 # endif
      &                    OCEAN(ng) % t)
-# ifdef KK_PROFILE_STEP3D_T
-      CALL SYSTEM_CLOCK (kk_end)
-      IF (kk_rate.gt.0) THEN
-        WRITE (*,'(a,i0,a,i0,a,f14.8)')                               &
-     &    'step3d_t module wall ng=', ng, ' tile=', tile, ': ', &
-     &    REAL(kk_end-kk_start,r8)/REAL(kk_rate,r8)
-      END IF
-# endif
 # ifdef PROFILE
       CALL wclock_off (ng, iNLM, 35, __LINE__, MyFile)
 # endif
@@ -413,8 +399,7 @@
 # if defined ROMS_KOKKOS && defined KK_STAGE_STEP3D_T && \
      defined SPLINES_VDIFF && defined DIAGNOSTICS_TS
       kk_eligible=.FALSE.
-#  if defined SPLINES_VDIFF && defined DIAGNOSTICS_TS && \
-     !defined OMEGA_IMPLICIT && !defined WEC_VF && !defined NESTING && \
+#  if !defined OMEGA_IMPLICIT && !defined WEC_VF && !defined NESTING && \
      !defined MASKING && !defined WET_DRY && \
      !(defined SEDIMENT && defined SED_MORPH)
       kk_eligible=(nnew.ge.1).and.(nnew.le.2).and.(N(ng).ge.3).and. &

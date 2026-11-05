@@ -2,7 +2,6 @@
 set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR sw64)
 set(SW64 TRUE CACHE BOOL "Sunway platform (also for the Serial control)")
-set(SWUC TRUE CACHE BOOL "Sunway unified compiler")
 
 set(CMAKE_CXX_COMPILER swucxx CACHE FILEPATH "Sunway C++ compiler")
 # The available NetCDF/HDF5 archive depends on MPI, even when ROMS itself

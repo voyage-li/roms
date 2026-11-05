@@ -11,8 +11,20 @@
 # Set the name of the Fortran compiler based on FORT and USE_MPI
 ###########################################################################
 
-# project() has already selected and tested the compiler.  In particular,
-# do not replace a cross compiler supplied by a toolchain with host gfortran.
+# A toolchain file (e.g. Compilers/toolchain_SW64.cmake) selects its own
+# cross compiler; do not replace it with the host gfortran or mpif90.
+
+if( NOT DEFINED CMAKE_TOOLCHAIN_FILE )
+  if( MPI )
+    execute_process( COMMAND which mpif90
+                     OUTPUT_VARIABLE CMAKE_Fortran_COMPILER
+                     OUTPUT_STRIP_TRAILING_WHITESPACE )
+  else()
+    execute_process( COMMAND which gfortran
+                     OUTPUT_VARIABLE CMAKE_Fortran_COMPILER
+                     OUTPUT_STRIP_TRAILING_WHITESPACE )
+  endif()
+endif()
 
 ###########################################################################
 # FLAGS COMMON TO ALL BUILD TYPES

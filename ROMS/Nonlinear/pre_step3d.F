@@ -320,6 +320,7 @@
 # if defined ROMS_KOKKOS && defined KK_STAGE_PRE3D
       TYPE(kokkos_pre3d_config) :: kk_cfg
       integer(C_INT) :: kk_hadv(NT(ng)), kk_vadv(NT(ng))
+      integer, save :: kk_fallback_calls=0
       logical :: kk_fast
 # endif
 
@@ -329,12 +330,13 @@
 !-----------------------------------------------------------------------
 !  Kokkos path: the tracer and 3D momentum predictor loops below live in
 !  ROMS/Cpp/kokkos_step3d.cpp.  It is taken for the whole tile when
-!  every tracer uses a scheme the kernel implements and there are no
-!  tracer point sources; otherwise the Fortran loops run.  The lateral
-!  boundary conditions and exchanges at the end run in both cases.
+!  every tracer uses a scheme the kernel implements, there are no
+!  tracer point sources and at most 32 tracers (the kernel's scheme
+!  table); otherwise the Fortran loops run.  The lateral boundary
+!  conditions and exchanges at the end run in both cases.
 !-----------------------------------------------------------------------
 !
-      kk_fast=(.not.LuvSrc(ng)).and.(N(ng).ge.3)
+      kk_fast=(.not.LuvSrc(ng)).and.(N(ng).ge.3).and.(NT(ng).le.32)
       DO itrc=1,NT(ng)
         kk_hadv(itrc)=0
         IF (Hadvection(itrc,ng)%CENTERED2) THEN
@@ -452,6 +454,11 @@
      &                        C_LOC(u), C_LOC(v), C_LOC(u), C_LOC(v))
 #  endif
       ELSE
+        kk_fallback_calls=kk_fallback_calls+1
+        IF (kk_fallback_calls.eq.1) THEN
+          WRITE (*,'(a)') 'pre_step3d: whole-tile Fortran fallback '//  &
+     &      '(point sources, scheme, levels or tracer count)'
+        END IF
 # endif /* ROMS_KOKKOS && KK_STAGE_PRE3D */
 
 # ifndef TS_FIXED

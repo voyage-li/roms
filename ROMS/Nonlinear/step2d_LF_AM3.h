@@ -272,12 +272,7 @@
      &                              k_step2d_depth_flux,                 &
      &                              k_step2d_time_average,               &
      &                              k_step2d_zeta_step,                  &
-     &                              k_step2d_pressure_grad,              &
-     &                              k_step2d_hadv_centered4,             &
      &                              k_step2d_rhs_fused,                  &
-     &                              k_step2d_coriolis,                   &
-     &                              k_step2d_psi_depth,                  &
-     &                              k_step2d_hvisc2,                     &
      &                              k_step2d_coupling,                   &
      &                              k_step2d_momentum_step,              &
      &                              k_step2d_diag_int,                   &
@@ -304,7 +299,7 @@
 # endif
       real(r8), TARGET, intent(in   ) :: fomn(LBi:,LBj:)
 # if defined SEDIMENT && defined SED_MORPH
-      real(r8), intent(inout) :: h(LBi:,LBj:)
+      real(r8), TARGET, intent(inout) :: h(LBi:,LBj:)
 # else
       real(r8), TARGET, intent(in   ) :: h(LBi:,LBj:)
 # endif
@@ -438,9 +433,9 @@
 # endif
       real(r8), TARGET, intent(in   ) :: fomn(LBi:UBi,LBj:UBj)
 # if defined SEDIMENT && defined SED_MORPH
-      real(r8), intent(inout) :: h(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(inout) :: h(LBi:UBi,LBj:UBj)
 # else
-      real(r8), intent(in   ) :: h(LBi:UBi,LBj:UBj)
+      real(r8), TARGET, intent(in   ) :: h(LBi:UBi,LBj:UBj)
 # endif
       real(r8), intent(in   ) :: om_u(LBi:UBi,LBj:UBj)
       real(r8), TARGET, intent(in   ) :: om_v(LBi:UBi,LBj:UBj)
@@ -573,7 +568,6 @@
 !
       TYPE(kokkos_tile_bounds) :: KK_TILE
       TYPE(kokkos_edge_flags)  :: KK_EDGE
-      integer :: kk_krhs, kk_kstp, kk_knew, kk_istp, kk_inew
 #endif
 !
       integer :: i, is, j, ptsk
@@ -685,14 +679,14 @@
 !  Kokkos path: the loops of this stage live in
 !  ROMS/Cpp/kokkos_step2d.cpp.  The halo exchange below stays here.
 !
-      CALL k_step2d_depth_flux (ng, tile, krhs, nfast(ng),              &
+      CALL k_step2d_depth_flux (ng, tile, krhs,                         &
      &                          LBi, UBi, LBj, UBj,                     &
      &                          IminS, ImaxS, JminS, JmaxS,             &
      &                          C_LOC(zeta), C_LOC(h),                  &
      &                          C_LOC(on_u), C_LOC(om_v),               &
      &                          C_LOC(ubar), C_LOC(vbar),               &
      &                          C_LOC(Drhs), C_LOC(DUon),               &
-     &                          C_LOC(DVom), UBk, KK_TILE)
+     &                          C_LOC(DVom), KK_TILE)
 #else
 #if defined DISTRIBUTE && !defined NESTING
 
@@ -1028,11 +1022,9 @@
 !  zeta(:,:,knew) live in ROMS/Cpp/kokkos_step2d.cpp.
 !
       CALL k_step2d_zeta_step (ng, tile, krhs, kstp, knew,              &
-     &                         iif(ng), nfast(ng), ntfirst(ng),         &
-     &                         iic(ng),                                 &
      &                         MERGE(1,0,PREDICTOR_2D_STEP(ng)),         &
      &                         MERGE(1,0,FIRST_2D_STEP),                 &
-     &                         LBi, UBi, LBj, UBj, UBk,                 &
+     &                         LBi, UBi, LBj, UBj,                      &
      &                         IminS, ImaxS, JminS, JmaxS,              &
      &                         C_LOC(zeta), C_LOC(h),                   &
      &                         C_LOC(pm), C_LOC(pn),                    &
@@ -1273,21 +1265,6 @@
 #endif
 #if defined ROMS_KOKKOS && defined KK_STAGE_FUSED
 /* Already evaluated by k_step2d_rhs_fused. */
-#elif defined ROMS_KOKKOS && defined KK_STAGE_PGRD
-!
-!  Kokkos path: the pressure-gradient loops live in
-!  ROMS/Cpp/kokkos_step2d.cpp.
-!!
-      CALL k_step2d_pressure_grad (ng, tile,                            &
-     &                             LBi, UBi, LBj, UBj,                  &
-     &                             IminS, ImaxS, JminS, JmaxS,          &
-     &                             C_LOC(h), C_LOC(on_u), C_LOC(om_v),  &
-     &                             C_LOC(gzeta), C_LOC(gzeta2),         &
-     &                             C_LOC(gzetaSA), C_LOC(rhoA),         &
-     &                             C_LOC(zwrk),                         &
-     &                             C_LOC(rhs_ubar), C_LOC(rhs_vbar),    &
-     &                             C_LOC(DiaU2rhs), C_LOC(DiaV2rhs),    &
-     &                             NDM2d, M2pgrd, g, KK_TILE)
 #else
 
       cff1=0.5_r8*g
@@ -1416,24 +1393,6 @@
 #endif /* ROMS_KOKKOS */
 #if defined ROMS_KOKKOS && defined KK_STAGE_FUSED
 /* Already evaluated by k_step2d_rhs_fused. */
-#elif defined ROMS_KOKKOS && defined KK_STAGE_HADV
-!
-!  Kokkos path: the fourth-order advection loops live in
-!  ROMS/Cpp/kokkos_step2d.cpp.  Only UV_ADV without UV_C2ADVECTION is
-!  covered; the compile-time guard in the C++ file rejects anything else.
-!
-      CALL k_step2d_hadv_centered4 (ng, tile, krhs,                     &
-     &                              LBi, UBi, LBj, UBj,                 &
-     &                              IminS, ImaxS, JminS, JmaxS,         &
-     &                              C_LOC(ubar), C_LOC(vbar),           &
-     &                              C_LOC(DUon), C_LOC(DVom),           &
-     &                              C_LOC(grad), C_LOC(Dgrad),          &
-     &                              C_LOC(UFx), C_LOC(UFe),             &
-     &                              C_LOC(VFx), C_LOC(VFe),             &
-     &                              C_LOC(rhs_ubar), C_LOC(rhs_vbar),   &
-     &                              C_LOC(DiaU2rhs), C_LOC(DiaV2rhs),   &
-     &                              NDM2d, M2xadv, M2yadv, M2hadv,      &
-     &                              KK_EDGE, KK_TILE)
 #else
 
 #ifdef UV_ADV
@@ -1659,19 +1618,6 @@
 #endif /* ROMS_KOKKOS */
 #if defined ROMS_KOKKOS && defined KK_STAGE_FUSED
 /* Already evaluated by k_step2d_rhs_fused. */
-#elif defined ROMS_KOKKOS && defined KK_STAGE_CORI
-!
-!  Kokkos path: the Coriolis loops live in ROMS/Cpp/kokkos_step2d.cpp.
-!
-      CALL k_step2d_coriolis (ng, tile, krhs,                           &
-     &                        LBi, UBi, LBj, UBj,                       &
-     &                        IminS, ImaxS, JminS, JmaxS,               &
-     &                        C_LOC(Drhs), C_LOC(fomn),                 &
-     &                        C_LOC(ubar), C_LOC(vbar),                 &
-     &                        C_LOC(UFx), C_LOC(VFe),                   &
-     &                        C_LOC(rhs_ubar), C_LOC(rhs_vbar),         &
-     &                        C_LOC(DiaU2rhs), C_LOC(DiaV2rhs),         &
-     &                        NDM2d, M2fcor, KK_TILE)
 #else
 
 #ifdef UV_COR
@@ -1816,14 +1762,6 @@
 #if defined UV_VIS2 || defined UV_VIS4
 #if defined ROMS_KOKKOS && defined KK_STAGE_FUSED
 /* Already evaluated by k_step2d_rhs_fused. */
-#elif defined ROMS_KOKKOS && defined KK_STAGE_PSID
-!
-!  Kokkos path: total depth at PSI points (step2d_LF_AM3.h).
-!
-      CALL k_step2d_psi_depth (ng, tile,                                &
-     &                         LBi, UBi, LBj, UBj,                      &
-     &                         IminS, ImaxS, JminS, JmaxS,              &
-     &                         C_LOC(Drhs), C_LOC(Drhs_p), KK_TILE)
 #else
 !
 !-----------------------------------------------------------------------
@@ -1842,30 +1780,10 @@
         END DO
       END DO
 #endif
-#endif /* ROMS_KOKKOS */
+#endif /* UV_VIS2 || UV_VIS4 */
 #ifdef UV_VIS2
 #if defined ROMS_KOKKOS && defined KK_STAGE_FUSED
 /* Already evaluated by k_step2d_rhs_fused. */
-#elif defined ROMS_KOKKOS && defined KK_STAGE_HVIS
-!
-!  Kokkos path: harmonic horizontal viscosity.
-!
-      CALL k_step2d_hvisc2 (ng, tile, krhs,                             &
-     &                     LBi, UBi, LBj, UBj,                          &
-     &                     IminS, ImaxS, JminS, JmaxS,                  &
-     &                     C_LOC(Drhs), C_LOC(Drhs_p),                  &
-     &                     C_LOC(ubar), C_LOC(vbar),                    &
-     &                     C_LOC(pm), C_LOC(pn),                        &
-     &                     C_LOC(pmon_r), C_LOC(pnom_r),                &
-     &                     C_LOC(pmon_p), C_LOC(pnom_p),                &
-     &                     C_LOC(om_r), C_LOC(on_r),                    &
-     &                     C_LOC(om_p), C_LOC(on_p),                    &
-     &                     C_LOC(visc2_r), C_LOC(visc2_p),              &
-     &                     C_LOC(UFx), C_LOC(UFe),                      &
-     &                     C_LOC(VFx), C_LOC(VFe),                      &
-     &                     C_LOC(rhs_ubar), C_LOC(rhs_vbar),            &
-     &                     C_LOC(DiaU2rhs), C_LOC(DiaV2rhs),            &
-     &                     NDM2d, M2hvis, M2xvis, M2yvis, KK_TILE)
 #else
 !
 !-----------------------------------------------------------------------
@@ -1937,7 +1855,7 @@
         END DO
       END DO
 #endif
-#endif /* ROMS_KOKKOS */
+#endif /* UV_VIS2 */
 #ifdef UV_VIS4
 !
 !-----------------------------------------------------------------------
@@ -2536,9 +2454,7 @@
 !  Kokkos path: the 2-D / 3-D coupling forcing lives in
 !  ROMS/Cpp/kokkos_step2d.cpp.
 !
-      kk_istp=istp
-      kk_inew=inew
-      CALL k_step2d_coupling (ng, tile, kk_istp, kk_inew,              &
+      CALL k_step2d_coupling (ng, tile, istp, inew,                    &
      &                        iic(ng), ntfirst(ng),                     &
      &                        MERGE(1,0,FIRST_2D_STEP),                 &
      &                        MERGE(1,0,PREDICTOR_2D_STEP(ng)),         &
@@ -2810,9 +2726,7 @@
 !  Kokkos path: total depth and the 2-D momentum time step live in
 !  ROMS/Cpp/kokkos_step2d.cpp.
 !
-      kk_kstp=kstp
-      kk_knew=knew
-      CALL k_step2d_momentum_step (ng, tile, kk_kstp, kk_knew,          &
+      CALL k_step2d_momentum_step (ng, tile, kstp, knew,                &
      &                             LBi, UBi, LBj, UBj,                  &
      &                             IminS, ImaxS, JminS, JmaxS,          &
      &                             C_LOC(zeta), C_LOC(h),               &
@@ -3057,8 +2971,7 @@
           cff2=0.5_r8*dtfast(ng)*8.0_r8/12.0_r8
           cff3=0.5_r8*dtfast(ng)*1.0_r8/12.0_r8
         END IF
-        kk_kstp=kstp
-        CALL k_step2d_diag_int (ng, tile, kk_kstp,                      &
+        CALL k_step2d_diag_int (ng, tile, kstp,                         &
      &                          MERGE(1,0,FIRST_2D_STEP),               &
      &                          LBi, UBi, LBj, UBj,                     &
      &                          IminS, ImaxS, JminS, JmaxS,             &
@@ -3205,15 +3118,14 @@
 !
 #if defined ROMS_KOKKOS && defined KK_STAGE_STOR
       IF (PREDICTOR_2D_STEP(ng)) THEN
-        kk_krhs=krhs
-        CALL k_step2d_store_rhs (ng, tile, kk_krhs,                   &
+        CALL k_step2d_store_rhs (ng, tile, krhs,                      &
      &                           LBi, UBi, LBj, UBj,                    &
      &                           IminS, ImaxS, JminS, JmaxS,            &
      &                           C_LOC(rubar), C_LOC(rvbar),            &
      &                           C_LOC(rhs_ubar), C_LOC(rhs_vbar),      &
      &                           C_LOC(DiaRUbar), C_LOC(DiaRVbar),      &
      &                           C_LOC(DiaU2rhs), C_LOC(DiaV2rhs),      &
-     &                           NDM2d, M2pgrd, KK_TILE)
+     &                           NDM2d, KK_TILE)
       END IF
 #else
       IF (PREDICTOR_2D_STEP(ng)) THEN

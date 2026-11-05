@@ -109,8 +109,6 @@ void finalize() {
   });
 }
 
-bool is_initialized() { return Kokkos::is_initialized(); }
-
 }  // namespace roms
 
 /*

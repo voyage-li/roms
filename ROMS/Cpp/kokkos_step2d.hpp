@@ -46,17 +46,17 @@
 
 extern "C" {
 
-/* Stage 1: total depth and vertically integrated mass fluxes. */
+/* Total depth and vertically integrated mass fluxes. */
 
-void k_step2d_depth_flux(int ng, int tile, int krhs, int nfast,
+void k_step2d_depth_flux(int ng, int tile, int krhs,
                          int LBi, int UBi, int LBj, int UBj,
                          int IminS, int ImaxS, int JminS, int JmaxS,
                          void* zeta_p, void* h_p, void* on_u_p, void* om_v_p,
                          void* ubar_p, void* vbar_p, void* Drhs_p,
-                         void* DUon_p, void* DVom_p, int UBk,
+                         void* DUon_p, void* DVom_p,
                          const roms::TileBounds* t);
 
-/* Stage 2: time averaged fields over all short time steps (SOLVE3D). */
+/* Time averaged fields over all short time steps (SOLVE3D). */
 
 void k_step2d_time_average(int ng, int tile, int krhs,
                            int predictor, int first_step,
@@ -68,12 +68,11 @@ void k_step2d_time_average(int ng, int tile, int krhs,
                            double cff1, double cff2,
                            const roms::TileBounds* t);
 
-/* Stage 4: free surface advance (FE / LF / AM3). */
+/* Free surface advance (FE / LF / AM3). */
 
 void k_step2d_zeta_step(int ng, int tile, int krhs, int kstp, int knew,
-                        int iif, int nfast, int ntfirst, int iic,
                         int predictor, int first_2d_step,
-                        int LBi, int UBi, int LBj, int UBj, int UBk,
+                        int LBi, int UBi, int LBj, int UBj,
                         int IminS, int ImaxS, int JminS, int JmaxS,
                         void* zeta_p, void* h_p, void* pm_p, void* pn_p,
                         void* DUon_p, void* DVom_p,
@@ -84,79 +83,7 @@ void k_step2d_zeta_step(int ng, int tile, int krhs, int kstp, int knew,
                         void* rzeta_p, double dtfast, double rho0,
                         const roms::TileBounds* t);
 
-/* Stage 6: pressure gradient. */
-
-void k_step2d_pressure_grad(int ng, int tile,
-                            int LBi, int UBi, int LBj, int UBj,
-                            int IminS, int ImaxS, int JminS, int JmaxS,
-                            void* h_p, void* on_u_p, void* om_v_p,
-                            void* gzeta_p, void* gzeta2_p,
-                            void* gzetaSA_p, void* rhoA_p,
-                            void* zwrk_p,
-                            void* rhs_ubar_p, void* rhs_vbar_p,
-                            void* DiaU2rhs_p, void* DiaV2rhs_p,
-                            int NDM2d, int M2pgrd, double g,
-                            const roms::TileBounds* t);
-
-/* Stage 7: fourth-order horizontal advection of 2-D momentum. */
-
-void k_step2d_hadv_centered4(int ng, int tile, int krhs,
-                             int LBi, int UBi, int LBj, int UBj,
-                             int IminS, int ImaxS, int JminS, int JmaxS,
-                             void* ubar_p, void* vbar_p,
-                             void* DUon_p, void* DVom_p,
-                             void* grad_p, void* Dgrad_p,
-                             void* UFx_p, void* UFe_p,
-                             void* VFx_p, void* VFe_p,
-                             void* rhs_ubar_p, void* rhs_vbar_p,
-                             void* DiaU2rhs_p, void* DiaV2rhs_p,
-                             int NDM2d,
-                             int M2xadv, int M2yadv, int M2hadv,
-                             const roms::EdgeFlags* e,
-                             const roms::TileBounds* t);
-
-/* Stage 8: Coriolis. */
-
-void k_step2d_coriolis(int ng, int tile, int krhs,
-                       int LBi, int UBi, int LBj, int UBj,
-                       int IminS, int ImaxS, int JminS, int JmaxS,
-                       void* Drhs_p, void* fomn_p,
-                       void* ubar_p, void* vbar_p,
-                       void* UFx_p, void* VFe_p,
-                       void* rhs_ubar_p, void* rhs_vbar_p,
-                       void* DiaU2rhs_p, void* DiaV2rhs_p,
-                       int NDM2d, int M2fcor,
-                       const roms::TileBounds* t);
-
-/* Stage 10: total depth at PSI points. */
-
-void k_step2d_psi_depth(int ng, int tile,
-                        int LBi, int UBi, int LBj, int UBj,
-                        int IminS, int ImaxS, int JminS, int JmaxS,
-                        void* Drhs_p, void* Drhs_psi_p,
-                        const roms::TileBounds* t);
-
-/* Stage 11: harmonic horizontal viscosity (UV_VIS2). */
-
-void k_step2d_hvisc2(int ng, int tile, int krhs,
-                     int LBi, int UBi, int LBj, int UBj,
-                     int IminS, int ImaxS, int JminS, int JmaxS,
-                     void* Drhs_p, void* Drhs_psi_p,
-                     void* ubar_p, void* vbar_p,
-                     void* pm_p, void* pn_p,
-                     void* pmon_r_p, void* pnom_r_p,
-                     void* pmon_p_p, void* pnom_p_p,
-                     void* om_r_p, void* on_r_p,
-                     void* om_p_p, void* on_p_p,
-                     void* visc2_r_p, void* visc2_p2_p,
-                     void* UFx_p, void* UFe_p,
-                     void* VFx_p, void* VFe_p,
-                     void* rhs_ubar_p, void* rhs_vbar_p,
-                     void* DiaU2rhs_p, void* DiaV2rhs_p,
-                     int NDM2d, int M2hvis, int M2xvis, int M2yvis,
-                     const roms::TileBounds* t);
-
-/* Stage 14: 2-D / 3-D coupling. */
+/* 2-D / 3-D coupling. */
 
 void k_step2d_coupling(int ng, int tile, int istp, int inew,
                        int iic, int ntfirst, int first_2d_step,
@@ -171,7 +98,7 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
                        int NDM2d, int M2pgrd, int M2sstr, int M2bstr,
                        const roms::TileBounds* t);
 
-/* Stage 17: 2-D momentum time step. */
+/* 2-D momentum time step. */
 
 void k_step2d_momentum_step(int ng, int tile, int kstp, int knew,
                             int LBi, int UBi, int LBj, int UBj,
@@ -185,7 +112,7 @@ void k_step2d_momentum_step(int ng, int tile, int kstp, int knew,
                             int predictor, int first_2d_step, double dtfast,
                             const roms::TileBounds* t);
 
-/* Stage 17b: time-integrated 2-D momentum diagnostics (corrector). */
+/* Time-integrated 2-D momentum diagnostics (corrector). */
 
 void k_step2d_diag_int(int ng, int tile, int kstp, int first_2d_step,
                        int LBi, int UBi, int LBj, int UBj,
@@ -198,7 +125,7 @@ void k_step2d_diag_int(int ng, int tile, int kstp, int first_2d_step,
                        int NDM2d, double cff1, double cff2, double cff3,
                        double fac, const roms::TileBounds* t);
 
-/* Stage 18: store the predictor right-hand side for the corrector. */
+/* Store the predictor right-hand side for the corrector. */
 
 void k_step2d_store_rhs(int ng, int tile, int krhs,
                         int LBi, int UBi, int LBj, int UBj,
@@ -207,7 +134,7 @@ void k_step2d_store_rhs(int ng, int tile, int krhs,
                         void* rhs_ubar_p, void* rhs_vbar_p,
                         void* DiaRUbar_p, void* DiaRVbar_p,
                         void* DiaU2rhs_p, void* DiaV2rhs_p,
-                        int NDM2d, int M2pgrd,
+                        int NDM2d,
                         const roms::TileBounds* t);
 
 /* Fused pressure, advection, Coriolis and harmonic-viscosity RHS. */

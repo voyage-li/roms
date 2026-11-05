@@ -18,8 +18,8 @@
 ** v2dbc_tile), zetabc_tile, wetdry_tile and the point sources.
 **
 ** Each function corresponds to one contiguous block of loops in the
-** Fortran source; the comment gives the source line range so the two
-** can be diffed side by side.
+** Fortran source; its banner repeats the Fortran section comment so the
+** two can be found side by side.
 **
 ** Converged macros
 ** ----------------
@@ -141,10 +141,6 @@ inline Array3d<double> priv3d(void* p, const Shape& s, int lb_k, int ub_k) {
   return roms::as_3d<double>(p, s.IminS, s.ImaxS, s.JminS, s.JmaxS, lb_k, ub_k);
 }
 
-/* ROMS uses DSIGN from the Fortran runtime. */
-inline double dsign(double a, double b) { return std::copysign(a, b); }
-
-
 /*
 ** The 2-D state arrays carry three time levels, the rhs history two.
 ** Neither extent is N(ng), which is what UBk means in the step2d_tile
@@ -201,27 +197,24 @@ double ddy2(const roms::Array2d<double>& a, int i, int j,
 extern "C" {
 
 /*======================================================================
-** Stage 1 -- total depth and vertically integrated mass fluxes.
-** Source: step2d_LF_AM3.h lines 609-703.
+** Compute total depth (m) and vertically integrated mass fluxes.
 **
 **   Drhs(i,j) = zeta(i,j,krhs) + h(i,j)
 **   DUon(i,j) = 0.5*on_u*(Drhs(i,j)+Drhs(i-1,j)) * ubar(i,j,krhs)
 **   DVom(i,j) = 0.5*om_v*(Drhs(i,j)+Drhs(i,j-1)) * vbar(i,j,krhs)
 **====================================================================*/
 
-void k_step2d_depth_flux(int ng, int tile, int krhs, int nfast,
+void k_step2d_depth_flux(int ng, int tile, int krhs,
                          int LBi, int UBi, int LBj, int UBj,
                          int IminS, int ImaxS, int JminS, int JmaxS,
                          void* zeta_p, void* h_p, void* on_u_p, void* om_v_p,
                          void* ubar_p, void* vbar_p, void* Drhs_p,
-                         void* DUon_p, void* DVom_p, int UBk,
+                         void* DUon_p, void* DVom_p,
                          const TileBounds* t) {
   roms::initialize();
   ROMS_KK_TIMER("step2d depth_flux");
   (void)ng;
   (void)tile;
-  (void)nfast;
-  (void)UBk;
 
   const Shape s{LBi, UBi, LBj, UBj, IminS, ImaxS, JminS, JmaxS};
 
@@ -275,12 +268,8 @@ void k_step2d_depth_flux(int ng, int tile, int krhs, int nfast,
 }
 
 /*======================================================================
-** Stage 2 -- time averaged fields over all short time steps (SOLVE3D).
-** Source: step2d_LF_AM3.h lines 736-856.
-**
-** `weight` points at weight(1:2, 0:256, ng), i.e. the ng slab; the
-** second index is the fast-step counter.  Element (level, lev) with
-** level in {1,2} and lev 0-based sits at w[lev*2 + level-1].
+** Compute time averaged fields over all short time-steps (SOLVE3D).
+** The caller computes the two coefficients cff1/cff2 from weight(:,:,ng).
 **====================================================================*/
 
 void k_step2d_time_average(int ng, int tile, int krhs,
@@ -367,8 +356,7 @@ void k_step2d_time_average(int ng, int tile, int krhs,
 }
 
 /*======================================================================
-** Stage 4 -- free-surface time stepping.
-** Source: step2d_LF_AM3.h lines 885-1035.
+** Time step free-surface equation.
 **
 ** Branch selection follows FIRST_2D_STEP, which is iif==1 when SOLVE3D
 ** is defined and iic==ntfirst otherwise (ROMS/Include/globaldefs.h).
@@ -378,9 +366,8 @@ void k_step2d_time_average(int ng, int tile, int krhs,
 **====================================================================*/
 
 void k_step2d_zeta_step(int ng, int tile, int krhs, int kstp, int knew,
-                        int iif, int nfast, int ntfirst, int iic,
                         int predictor, int first_2d_step,
-                        int LBi, int UBi, int LBj, int UBj, int UBk,
+                        int LBi, int UBi, int LBj, int UBj,
                         int IminS, int ImaxS, int JminS, int JmaxS,
                         void* zeta_p, void* h_p, void* pm_p, void* pn_p,
                         void* DUon_p, void* DVom_p,
@@ -394,8 +381,6 @@ void k_step2d_zeta_step(int ng, int tile, int krhs, int kstp, int knew,
   ROMS_KK_TIMER("step2d zeta_step");
   (void)ng;
   (void)tile;
-  (void)nfast;
-  (void)UBk;
 
   const Shape s{LBi, UBi, LBj, UBj, IminS, ImaxS, JminS, JmaxS};
 
@@ -530,662 +515,7 @@ void k_step2d_zeta_step(int ng, int tile, int krhs, int kstp, int knew,
 }
 
 /*======================================================================
-** Stage 6 -- pressure gradient, first contribution to rhs_ubar/rhs_vbar.
-** Source: step2d_LF_AM3.h lines 1150-1290.
-**
-**   rhs_ubar(i,j) = 0.5*g*on_u(i,j) *
-**     [ (h(i-1)+h(i))*(gzeta(i-1)-gzeta(i))
-**     + (h(i-1)-h(i))*(gzetaSA(i-1)+gzetaSA(i)
-**        + (1/3)*(rhoA(i-1)-rhoA(i))*(zwrk(i-1)-zwrk(i)))
-**     + (gzeta2(i-1)-gzeta2(i)) ]
-**
-** and the eta-direction counterpart with om_v and j-1.
-**====================================================================*/
-
-void k_step2d_pressure_grad(int ng, int tile,
-                            int LBi, int UBi, int LBj, int UBj,
-                            int IminS, int ImaxS, int JminS, int JmaxS,
-                            void* h_p, void* on_u_p, void* om_v_p,
-                            void* gzeta_p, void* gzeta2_p,
-                            void* gzetaSA_p, void* rhoA_p,
-                            void* zwrk_p,
-                            void* rhs_ubar_p, void* rhs_vbar_p,
-                            void* DiaU2rhs_p, void* DiaV2rhs_p,
-                            int NDM2d, int M2pgrd,
-                            double g,
-                            const TileBounds* t) {
-  roms::initialize();
-  ROMS_KK_TIMER("step2d pressure_grad");
-  (void)ng;
-  (void)tile;
-
-  const Shape s{LBi, UBi, LBj, UBj, IminS, ImaxS, JminS, JmaxS};
-
-  Array2d<double> h       = grid2d(h_p, s);
-  Array2d<double> on_u    = grid2d(on_u_p, s);
-  Array2d<double> om_v    = grid2d(om_v_p, s);
-  Array2d<double> gzeta   = priv2d(gzeta_p, s);
-  Array2d<double> gzeta2  = priv2d(gzeta2_p, s);
-  Array2d<double> gzetaSA = priv2d(gzetaSA_p, s);
-  Array2d<double> rhoA    = grid2d(rhoA_p, s);
-  Array2d<double> zwrk    = priv2d(zwrk_p, s);
-
-  Array2d<double> rhs_ubar = priv2d(rhs_ubar_p, s);
-  Array2d<double> rhs_vbar = priv2d(rhs_vbar_p, s);
-
-#if defined DIAGNOSTICS_UV
-  Array3d<double> DiaU2rhs =
-      priv3d(DiaU2rhs_p, s, 1, NDM2d - 1);
-  Array3d<double> DiaV2rhs =
-      priv3d(DiaV2rhs_p, s, 1, NDM2d - 1);
-#else
-  (void)DiaU2rhs_p;
-  (void)DiaV2rhs_p;
-  (void)M2pgrd;
-#endif
-  (void)NDM2d;
-
-  const double cff1 = 0.5 * g;
-  const double cff2 = 1.0 / 3.0;
-
-  const int iu0 = t->IstrU, iu1 = t->Iend;
-  const int iv0 = t->Istr,  iv1 = t->Iend;
-  const int jv0 = t->Jstr,  jv1 = t->Jend;
-  const int jstr_v = t->JstrV;
-
-  Kokkos::parallel_for(
-      range_policy(jv0, jv1 + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = iu0; i <= iu1; ++i) {
-          const double val =
-              cff1 * on_u(i, j) *
-              ((h(i - 1, j) + h(i, j)) * (gzeta(i - 1, j) - gzeta(i, j)) +
-               (h(i - 1, j) - h(i, j)) *
-                   (gzetaSA(i - 1, j) + gzetaSA(i, j) +
-                    cff2 * (rhoA(i - 1, j) - rhoA(i, j)) *
-                        (zwrk(i - 1, j) - zwrk(i, j))) +
-               (gzeta2(i - 1, j) - gzeta2(i, j)));
-          rhs_ubar(i, j) = val;
-#if defined DIAGNOSTICS_UV
-          DiaU2rhs(i, j, M2pgrd) = val;
-#endif
-        }
-      });
-
-  Kokkos::parallel_for(
-      range_policy(jv0, jv1 + 1), KOKKOS_LAMBDA(int j) {
-        if (j >= jstr_v) {
-          for (int i = iv0; i <= iv1; ++i) {
-            const double val =
-                cff1 * om_v(i, j) *
-                ((h(i, j - 1) + h(i, j)) * (gzeta(i, j - 1) - gzeta(i, j)) +
-                 (h(i, j - 1) - h(i, j)) *
-                     (gzetaSA(i, j - 1) + gzetaSA(i, j) +
-                      cff2 * (rhoA(i, j - 1) - rhoA(i, j)) *
-                          (zwrk(i, j - 1) - zwrk(i, j))) +
-                 (gzeta2(i, j - 1) - gzeta2(i, j)));
-            rhs_vbar(i, j) = val;
-#if defined DIAGNOSTICS_UV
-            DiaV2rhs(i, j, M2pgrd) = val;
-#endif
-          }
-        }
-      });
-}
-
-/*======================================================================
-** Stage 7 -- horizontal advection of 2-D momentum, fourth-order.
-** Source: step2d_LF_AM3.h lines 1327-1495.
-**
-** Two passes: build the fluxes UFx/UFe/VFx/VFe from a biharmonic-
-** corrected interpolation, then add their divergence to the rhs.
-** grad and Dgrad are scratch shared between passes, so the passes stay
-** in separate kernels.
-**====================================================================*/
-
-void k_step2d_hadv_centered4(int ng, int tile, int krhs,
-                             int LBi, int UBi, int LBj, int UBj,
-                             int IminS, int ImaxS, int JminS, int JmaxS,
-                             void* ubar_p, void* vbar_p,
-                             void* DUon_p, void* DVom_p,
-                             void* grad_p, void* Dgrad_p,
-                             void* UFx_p, void* UFe_p,
-                             void* VFx_p, void* VFe_p,
-                             void* rhs_ubar_p, void* rhs_vbar_p,
-                             void* DiaU2rhs_p, void* DiaV2rhs_p,
-                             int NDM2d,
-                             int M2xadv, int M2yadv, int M2hadv,
-                             const EdgeFlags* e,
-                             const TileBounds* t) {
-  roms::initialize();
-  ROMS_KK_TIMER("step2d hadv_centered4");
-  (void)ng;
-  (void)tile;
-  (void)NDM2d;
-
-  const Shape s{LBi, UBi, LBj, UBj, IminS, ImaxS, JminS, JmaxS};
-
-  Array3d<double> ubar = roms::as_3d<double>(ubar_p, LBi, UBi, LBj, UBj, TLEV0, TLEV1);
-  Array3d<double> vbar = roms::as_3d<double>(vbar_p, LBi, UBi, LBj, UBj, TLEV0, TLEV1);
-
-  Array2d<double> DUon = priv2d(DUon_p, s);
-  Array2d<double> DVom = priv2d(DVom_p, s);
-
-  Array2d<double> grad  = priv2d(grad_p, s);
-  Array2d<double> Dgrad = priv2d(Dgrad_p, s);
-
-  Array2d<double> UFx = priv2d(UFx_p, s);
-  Array2d<double> UFe = priv2d(UFe_p, s);
-  Array2d<double> VFx = priv2d(VFx_p, s);
-  Array2d<double> VFe = priv2d(VFe_p, s);
-
-  Array2d<double> rhs_ubar = priv2d(rhs_ubar_p, s);
-  Array2d<double> rhs_vbar = priv2d(rhs_vbar_p, s);
-
-#if defined DIAGNOSTICS_UV
-  Array3d<double> DiaU2rhs =
-      priv3d(DiaU2rhs_p, s, 1, NDM2d - 1);
-  Array3d<double> DiaV2rhs =
-      priv3d(DiaV2rhs_p, s, 1, NDM2d - 1);
-#else
-  (void)DiaU2rhs_p;
-  (void)DiaV2rhs_p;
-  (void)M2xadv;
-  (void)M2yadv;
-  (void)M2hadv;
-#endif
-
-  const double cff = 1.0 / 6.0;
-
-  const int Istr = t->Istr, Iend = t->Iend;
-  const int Jstr = t->Jstr, Jend = t->Jend;
-  const int IstrU = t->IstrU, JstrV = t->JstrV;
-  const int IstrUm1 = t->IstrUm1, Iendp1 = t->Iendp1;
-  const int JstrVm1 = t->JstrVm1, Jendp1 = t->Jendp1;
-  const int Jstrm1 = t->Jstrm1, Istrm1 = t->Istrm1;
-
-
-  /* XI-direction gradient, then UFx. */
-
-  Kokkos::parallel_for(
-      range_policy(Jstr, Jend + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = IstrUm1; i <= Iendp1; ++i) {
-          grad(i, j)  = ubar(i - 1, j, krhs) - 2.0 * ubar(i, j, krhs) +
-                        ubar(i + 1, j, krhs);
-          Dgrad(i, j) = DUon(i - 1, j) - 2.0 * DUon(i, j) + DUon(i + 1, j);
-        }
-      });
-
-  /* Non-periodic physical edges: copy the neighbouring interior value
-  ** into the halo cell so the four-point stencil stays one-sided. */
-
-  if (!e->composite_w && !e->periodic_ew && e->west) {
-    Kokkos::parallel_for(
-        range_policy(Jstr, Jend + 1), KOKKOS_LAMBDA(int j) {
-          grad(Istr, j)  = grad(Istr + 1, j);
-          Dgrad(Istr, j) = Dgrad(Istr + 1, j);
-        });
-  }
-
-  if (!e->composite_e && !e->periodic_ew && e->east) {
-    Kokkos::parallel_for(
-        range_policy(Jstr, Jend + 1), KOKKOS_LAMBDA(int j) {
-          grad(Iend + 1, j)  = grad(Iend, j);
-          Dgrad(Iend + 1, j) = Dgrad(Iend, j);
-        });
-  }
-
-  Kokkos::parallel_for(
-      range_policy(Jstr, Jend + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = IstrU - 1; i <= Iend; ++i) {
-          UFx(i, j) =
-              0.25 * (ubar(i, j, krhs) + ubar(i + 1, j, krhs) -
-                      cff * (grad(i, j) + grad(i + 1, j))) *
-              (DUon(i, j) + DUon(i + 1, j) -
-               cff * (Dgrad(i, j) + Dgrad(i + 1, j)));
-        }
-      });
-
-  /* ETA-direction gradient (at U points), then UFe. */
-
-  Kokkos::parallel_for(
-      range_policy(Jstrm1, Jendp1 + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = IstrU; i <= Iend; ++i) {
-          grad(i, j) = ubar(i, j - 1, krhs) - 2.0 * ubar(i, j, krhs) +
-                       ubar(i, j + 1, krhs);
-        }
-      });
-
-  if (!e->composite_s && !e->periodic_ns && e->south) {
-    Kokkos::parallel_for(
-        range_policy(IstrU, Iend + 1), KOKKOS_LAMBDA(int i) {
-          grad(i, Jstr - 1) = grad(i, Jstr);
-        });
-  }
-
-  if (!e->composite_n && !e->periodic_ns && e->north) {
-    Kokkos::parallel_for(
-        range_policy(IstrU, Iend + 1), KOKKOS_LAMBDA(int i) {
-          grad(i, Jend + 1) = grad(i, Jend);
-        });
-  }
-
-  Kokkos::parallel_for(
-      range_policy(Jstr, Jend + 2), KOKKOS_LAMBDA(int j) {
-        for (int i = IstrU - 1; i <= Iend; ++i) {
-          Dgrad(i, j) = DVom(i - 1, j) - 2.0 * DVom(i, j) + DVom(i + 1, j);
-        }
-      });
-
-  /*
-  ** The Fortran loop is "DO j=Jstr,Jend+1" -- a literal Jend+1, NOT
-  ** Jendp1.  The two differ on a closed northern edge: get_bounds.F
-  ** sets Jendp1 = MIN(Jend+1, Mm), which collapses to Jend when the
-  ** tile sits on the boundary, dropping the very halo row that the
-  ** rhs_ubar difference at j=Jend needs.  Jstrm1 has the matching
-  ** clamp on the south side (MAX(1, Jstr-1)), which is why this read
-  ** as symmetric and slipped through.
-  */
-  Kokkos::parallel_for(
-      range_policy(Jstrm1, Jend + 2), KOKKOS_LAMBDA(int j) {
-        for (int i = IstrU; i <= Iend; ++i) {
-          UFe(i, j) =
-              0.25 * (ubar(i, j, krhs) + ubar(i, j - 1, krhs) -
-                      cff * (grad(i, j) + grad(i, j - 1))) *
-              (DVom(i, j) + DVom(i - 1, j) -
-               cff * (Dgrad(i, j) + Dgrad(i - 1, j)));
-        }
-      });
-
-  /* XI-direction gradient at V points, then VFx. */
-
-  Kokkos::parallel_for(
-      range_policy(JstrV, Jend + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = Istrm1; i <= Iendp1; ++i) {
-          grad(i, j) = vbar(i - 1, j, krhs) - 2.0 * vbar(i, j, krhs) +
-                       vbar(i + 1, j, krhs);
-        }
-      });
-
-  if (!e->composite_w && !e->periodic_ew && e->west) {
-    Kokkos::parallel_for(
-        range_policy(JstrV, Jend + 1), KOKKOS_LAMBDA(int j) {
-          grad(Istr - 1, j) = grad(Istr, j);
-        });
-  }
-
-  if (!e->composite_e && !e->periodic_ew && e->east) {
-    Kokkos::parallel_for(
-        range_policy(JstrV, Jend + 1), KOKKOS_LAMBDA(int j) {
-          grad(Iend + 1, j) = grad(Iend, j);
-        });
-  }
-
-  Kokkos::parallel_for(
-      range_policy(JstrVm1, Jend + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = Istr; i <= Iend + 1; ++i) {
-          Dgrad(i, j) = DUon(i, j - 1) - 2.0 * DUon(i, j) + DUon(i, j + 1);
-        }
-      });
-
-  Kokkos::parallel_for(
-      range_policy(JstrV, Jend + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = Istr; i <= Iend + 1; ++i) {
-          VFx(i, j) =
-              0.25 * (vbar(i, j, krhs) + vbar(i - 1, j, krhs) -
-                      cff * (grad(i, j) + grad(i - 1, j))) *
-              (DUon(i, j) + DUon(i, j - 1) -
-               cff * (Dgrad(i, j) + Dgrad(i, j - 1)));
-        }
-      });
-
-  /* ETA-direction gradient at V points, then VFe. */
-
-  Kokkos::parallel_for(
-      range_policy(JstrVm1, Jendp1 + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = Istr; i <= Iend; ++i) {
-          grad(i, j)  = vbar(i, j - 1, krhs) - 2.0 * vbar(i, j, krhs) +
-                        vbar(i, j + 1, krhs);
-          Dgrad(i, j) = DVom(i, j - 1) - 2.0 * DVom(i, j) + DVom(i, j + 1);
-        }
-      });
-
-  if (!e->composite_s && !e->periodic_ns && e->south) {
-    Kokkos::parallel_for(
-        range_policy(Istr, Iend + 1), KOKKOS_LAMBDA(int i) {
-          grad(i, Jstr)  = grad(i, Jstr + 1);
-          Dgrad(i, Jstr) = Dgrad(i, Jstr + 1);
-        });
-  }
-
-  if (!e->composite_n && !e->periodic_ns && e->north) {
-    Kokkos::parallel_for(
-        range_policy(Istr, Iend + 1), KOKKOS_LAMBDA(int i) {
-          grad(i, Jend + 1)  = grad(i, Jend);
-          Dgrad(i, Jend + 1) = Dgrad(i, Jend);
-        });
-  }
-
-  Kokkos::parallel_for(
-      range_policy(JstrV - 1, Jend + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = Istr; i <= Iend; ++i) {
-          VFe(i, j) =
-              0.25 * (vbar(i, j, krhs) + vbar(i, j + 1, krhs) -
-                      cff * (grad(i, j) + grad(i, j + 1))) *
-              (DVom(i, j) + DVom(i, j + 1) -
-               cff * (Dgrad(i, j) + Dgrad(i, j + 1)));
-        }
-      });
-
-  /* Divergence of the fluxes into the rhs. */
-
-  Kokkos::parallel_for(
-      range_policy(Jstr, Jend + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = IstrU; i <= Iend; ++i) {
-          const double cff1 = UFx(i, j) - UFx(i - 1, j);
-          const double cff2 = UFe(i, j + 1) - UFe(i, j);
-          const double f    = cff1 + cff2;
-          rhs_ubar(i, j) -= f;
-#if defined DIAGNOSTICS_UV
-          DiaU2rhs(i, j, M2xadv) = -cff1;
-          DiaU2rhs(i, j, M2yadv) = -cff2;
-          DiaU2rhs(i, j, M2hadv) = -f;
-#endif
-        }
-      });
-
-  Kokkos::parallel_for(
-      range_policy(JstrV, Jend + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = Istr; i <= Iend; ++i) {
-          const double cff1 = VFx(i + 1, j) - VFx(i, j);
-          const double cff2 = VFe(i, j) - VFe(i, j - 1);
-          const double f    = cff1 + cff2;
-          rhs_vbar(i, j) -= f;
-#if defined DIAGNOSTICS_UV
-          DiaV2rhs(i, j, M2xadv) = -cff1;
-          DiaV2rhs(i, j, M2yadv) = -cff2;
-          DiaV2rhs(i, j, M2hadv) = -f;
-#endif
-        }
-      });
-}
-
-/*======================================================================
-** Stage 8 -- Coriolis term.
-** Source: step2d_LF_AM3.h lines 1498-1545.
-**
-**   cff       = 0.5*Drhs*fomn
-**   UFx(i,j)  = cff*(vbar(i,j)+vbar(i,j+1))
-**   VFe(i,j)  = cff*(ubar(i,j)+ubar(i+1,j))
-**   rhs_ubar += 0.5*(UFx(i,j)+UFx(i-1,j))
-**   rhs_vbar -= 0.5*(VFe(i,j)+VFe(i,j-1))
-**====================================================================*/
-
-void k_step2d_coriolis(int ng, int tile, int krhs,
-                       int LBi, int UBi, int LBj, int UBj,
-                       int IminS, int ImaxS, int JminS, int JmaxS,
-                       void* Drhs_p, void* fomn_p,
-                       void* ubar_p, void* vbar_p,
-                       void* UFx_p, void* VFe_p,
-                       void* rhs_ubar_p, void* rhs_vbar_p,
-                       void* DiaU2rhs_p, void* DiaV2rhs_p,
-                       int NDM2d, int M2fcor,
-                       const TileBounds* t) {
-  roms::initialize();
-  ROMS_KK_TIMER("step2d coriolis");
-  (void)ng;
-  (void)tile;
-  (void)NDM2d;
-
-  const Shape s{LBi, UBi, LBj, UBj, IminS, ImaxS, JminS, JmaxS};
-
-  Array2d<double> Drhs = priv2d(Drhs_p, s);
-  Array2d<double> fomn = grid2d(fomn_p, s);
-
-  Array3d<double> ubar = roms::as_3d<double>(ubar_p, LBi, UBi, LBj, UBj, TLEV0, TLEV1);
-  Array3d<double> vbar = roms::as_3d<double>(vbar_p, LBi, UBi, LBj, UBj, TLEV0, TLEV1);
-
-  Array2d<double> UFx      = priv2d(UFx_p, s);
-  Array2d<double> VFe      = priv2d(VFe_p, s);
-  Array2d<double> rhs_ubar = priv2d(rhs_ubar_p, s);
-  Array2d<double> rhs_vbar = priv2d(rhs_vbar_p, s);
-
-#if defined DIAGNOSTICS_UV
-  Array3d<double> DiaU2rhs =
-      priv3d(DiaU2rhs_p, s, 1, NDM2d - 1);
-  Array3d<double> DiaV2rhs =
-      priv3d(DiaV2rhs_p, s, 1, NDM2d - 1);
-#else
-  (void)DiaU2rhs_p;
-  (void)DiaV2rhs_p;
-  (void)M2fcor;
-#endif
-
-  const int j0 = t->JstrV - 1, j1 = t->Jend;
-  const int i0 = t->IstrU - 1, i1 = t->Iend;
-
-  Kokkos::parallel_for(
-      range_policy(j0, j1 + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = i0; i <= i1; ++i) {
-          const double c = 0.5 * Drhs(i, j) * fomn(i, j);
-          UFx(i, j) = c * (vbar(i, j, krhs) + vbar(i, j + 1, krhs));
-          VFe(i, j) = c * (ubar(i, j, krhs) + ubar(i + 1, j, krhs));
-        }
-      });
-
-  Kokkos::parallel_for(
-      range_policy(t->Jstr, t->Jend + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = t->IstrU; i <= i1; ++i) {
-          const double f = 0.5 * (UFx(i, j) + UFx(i - 1, j));
-          rhs_ubar(i, j) += f;
-#if defined DIAGNOSTICS_UV
-          DiaU2rhs(i, j, M2fcor) = f;
-#endif
-        }
-      });
-
-  Kokkos::parallel_for(
-      range_policy(t->JstrV, t->Jend + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = t->Istr; i <= t->Iend; ++i) {
-          const double f = 0.5 * (VFe(i, j) + VFe(i, j - 1));
-          rhs_vbar(i, j) -= f;
-#if defined DIAGNOSTICS_UV
-          DiaV2rhs(i, j, M2fcor) = -f;
-#endif
-        }
-      });
-}
-
-/*======================================================================
-** Stage 10 -- total depth at PSI points.
-** Source: step2d_LF_AM3.h lines 1564-1581.
-**
-**   Drhs_p(i,j) = 0.25*(Drhs(i,j)+Drhs(i-1,j)+Drhs(i,j-1)+Drhs(i-1,j-1))
-**====================================================================*/
-
-void k_step2d_psi_depth(int ng, int tile,
-                        int LBi, int UBi, int LBj, int UBj,
-                        int IminS, int ImaxS, int JminS, int JmaxS,
-                        void* Drhs_p, void* Drhs_psi_p,
-                        const TileBounds* t) {
-  roms::initialize();
-  ROMS_KK_TIMER("step2d psi_depth");
-  (void)ng;
-  (void)tile;
-
-  const Shape s{LBi, UBi, LBj, UBj, IminS, ImaxS, JminS, JmaxS};
-
-  Array2d<double> Drhs     = priv2d(Drhs_p, s);
-  Array2d<double> Drhs_psi = priv2d(Drhs_psi_p, s);
-
-#if defined UV_VIS4
-  const int j0 = t->Jstrm1, j1 = t->Jendp2;
-  const int i0 = t->Istrm1, i1 = t->Iendp2;
-#else
-  const int j0 = t->Jstr, j1 = t->Jend + 1;
-  const int i0 = t->Istr, i1 = t->Iend + 1;
-#endif
-
-  Kokkos::parallel_for(
-      range_policy(j0, j1 + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = i0; i <= i1; ++i) {
-          Drhs_psi(i, j) = 0.25 * (Drhs(i, j) + Drhs(i - 1, j) +
-                                   Drhs(i, j - 1) + Drhs(i - 1, j - 1));
-        }
-      });
-}
-
-/*======================================================================
-** Stage 11 -- horizontal harmonic viscosity (UV_VIS2).
-** Source: step2d_LF_AM3.h lines 1584-1652.
-**====================================================================*/
-
-void k_step2d_hvisc2(int ng, int tile, int krhs,
-                     int LBi, int UBi, int LBj, int UBj,
-                     int IminS, int ImaxS, int JminS, int JmaxS,
-                     void* Drhs_p, void* Drhs_psi_p,
-                     void* ubar_p, void* vbar_p,
-                     void* pm_p, void* pn_p,
-                     void* pmon_r_p, void* pnom_r_p,
-                     void* pmon_p_p, void* pnom_p_p,
-                     void* om_r_p, void* on_r_p,
-                     void* om_p_p, void* on_p_p,
-                     void* visc2_r_p, void* visc2_p2_p,
-                     void* UFx_p, void* UFe_p,
-                     void* VFx_p, void* VFe_p,
-                     void* rhs_ubar_p, void* rhs_vbar_p,
-                     void* DiaU2rhs_p, void* DiaV2rhs_p,
-                     int NDM2d, int M2hvis, int M2xvis, int M2yvis,
-                     const TileBounds* t) {
-  roms::initialize();
-  ROMS_KK_TIMER("step2d hvisc2");
-  (void)ng;
-  (void)tile;
-  (void)NDM2d;
-
-  const Shape s{LBi, UBi, LBj, UBj, IminS, ImaxS, JminS, JmaxS};
-
-  Array2d<double> Drhs     = priv2d(Drhs_p, s);
-  Array2d<double> Drhs_psi = priv2d(Drhs_psi_p, s);
-
-  Array3d<double> ubar = roms::as_3d<double>(ubar_p, LBi, UBi, LBj, UBj, TLEV0, TLEV1);
-  Array3d<double> vbar = roms::as_3d<double>(vbar_p, LBi, UBi, LBj, UBj, TLEV0, TLEV1);
-
-  Array2d<double> pm = grid2d(pm_p, s);
-  Array2d<double> pn = grid2d(pn_p, s);
-
-  Array2d<double> pmon_r = grid2d(pmon_r_p, s);
-  Array2d<double> pnom_r = grid2d(pnom_r_p, s);
-  Array2d<double> pmon_p = grid2d(pmon_p_p, s);
-  Array2d<double> pnom_p = grid2d(pnom_p_p, s);
-  Array2d<double> om_r   = grid2d(om_r_p, s);
-  Array2d<double> on_r   = grid2d(on_r_p, s);
-  Array2d<double> om_p   = grid2d(om_p_p, s);
-  Array2d<double> on_p   = grid2d(on_p_p, s);
-
-  Array2d<double> visc2_r = grid2d(visc2_r_p, s);
-  Array2d<double> visc2_pp = grid2d(visc2_p2_p, s);
-
-  Array2d<double> UFx = priv2d(UFx_p, s);
-  Array2d<double> UFe = priv2d(UFe_p, s);
-  Array2d<double> VFx = priv2d(VFx_p, s);
-  Array2d<double> VFe = priv2d(VFe_p, s);
-
-  Array2d<double> rhs_ubar = priv2d(rhs_ubar_p, s);
-  Array2d<double> rhs_vbar = priv2d(rhs_vbar_p, s);
-
-#if defined DIAGNOSTICS_UV
-  Array3d<double> DiaU2rhs =
-      priv3d(DiaU2rhs_p, s, 1, NDM2d - 1);
-  Array3d<double> DiaV2rhs =
-      priv3d(DiaV2rhs_p, s, 1, NDM2d - 1);
-#else
-  (void)DiaU2rhs_p;
-  (void)DiaV2rhs_p;
-  (void)M2hvis;
-  (void)M2xvis;
-  (void)M2yvis;
-#endif
-
-  const int Istr = t->Istr, Iend = t->Iend;
-  const int Jstr = t->Jstr, Jend = t->Jend;
-  const int IstrU = t->IstrU, JstrV = t->JstrV;
-
-  /* Fluxes at R points. */
-
-  Kokkos::parallel_for(
-      range_policy(JstrV - 1, Jend + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = IstrU - 1; i <= Iend; ++i) {
-          const double c =
-              visc2_r(i, j) * Drhs(i, j) * 0.5 *
-              (pmon_r(i, j) *
-                   ((pn(i, j) + pn(i + 1, j)) * ubar(i + 1, j, krhs) -
-                    (pn(i - 1, j) + pn(i, j)) * ubar(i, j, krhs)) -
-               pnom_r(i, j) *
-                   ((pm(i, j) + pm(i, j + 1)) * vbar(i, j + 1, krhs) -
-                    (pm(i, j - 1) + pm(i, j)) * vbar(i, j, krhs)));
-          UFx(i, j) = on_r(i, j) * on_r(i, j) * c;
-          VFe(i, j) = om_r(i, j) * om_r(i, j) * c;
-        }
-      });
-
-  /* Fluxes at PSI points. */
-
-  Kokkos::parallel_for(
-      range_policy(Jstr, Jend + 2), KOKKOS_LAMBDA(int j) {
-        for (int i = Istr; i <= Iend + 1; ++i) {
-          const double c =
-              visc2_pp(i, j) * Drhs_psi(i, j) * 0.5 *
-              (pmon_p(i, j) *
-                   ((pn(i, j - 1) + pn(i, j)) * vbar(i, j, krhs) -
-                    (pn(i - 1, j - 1) + pn(i - 1, j)) * vbar(i - 1, j, krhs)) +
-               pnom_p(i, j) *
-                   ((pm(i - 1, j) + pm(i, j)) * ubar(i, j, krhs) -
-                    (pm(i - 1, j - 1) + pm(i, j - 1)) * ubar(i, j - 1, krhs)));
-          UFe(i, j) = om_p(i, j) * om_p(i, j) * c;
-          VFx(i, j) = on_p(i, j) * on_p(i, j) * c;
-        }
-      });
-
-  /* Add the divergence to the rhs. */
-
-  Kokkos::parallel_for(
-      range_policy(Jstr, Jend + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = IstrU; i <= Iend; ++i) {
-          const double cff1 =
-              0.5 * (pn(i - 1, j) + pn(i, j)) * (UFx(i, j) - UFx(i - 1, j));
-          const double cff2 =
-              0.5 * (pm(i - 1, j) + pm(i, j)) * (UFe(i, j + 1) - UFe(i, j));
-          const double f = cff1 + cff2;
-          rhs_ubar(i, j) += f;
-#if defined DIAGNOSTICS_UV
-          DiaU2rhs(i, j, M2hvis) = f;
-          DiaU2rhs(i, j, M2xvis) = cff1;
-          DiaU2rhs(i, j, M2yvis) = cff2;
-#endif
-        }
-      });
-
-  Kokkos::parallel_for(
-      range_policy(JstrV, Jend + 1), KOKKOS_LAMBDA(int j) {
-        for (int i = Istr; i <= Iend; ++i) {
-          const double cff1 =
-              0.5 * (pn(i, j - 1) + pn(i, j)) * (VFx(i + 1, j) - VFx(i, j));
-          const double cff2 =
-              0.5 * (pm(i, j - 1) + pm(i, j)) * (VFe(i, j) - VFe(i, j - 1));
-          const double f = cff1 - cff2;
-          rhs_vbar(i, j) += f;
-#if defined DIAGNOSTICS_UV
-          DiaV2rhs(i, j, M2hvis) = f;
-          DiaV2rhs(i, j, M2xvis) = cff1;
-          DiaV2rhs(i, j, M2yvis) = -cff2;
-#endif
-        }
-      });
-}
-
-/*======================================================================
-** Stage 14 -- coupling between the 2-D and 3-D equations.
-** Source: step2d_LF_AM3.h lines 2316-2545.
+** Coupling between 2D and 3D equations.
 **
 ** On the first barotropic predictor step the vertically integrated 3-D
 ** forcing (rufrc/rvfrc) is turned into a correction: subtract the fast
@@ -1212,7 +542,6 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
   ROMS_KK_TIMER("step2d coupling");
   (void)ng;
   (void)tile;
-  (void)NDM2d;
 
   const Shape s{LBi, UBi, LBj, UBj, IminS, ImaxS, JminS, JmaxS};
 
@@ -1232,7 +561,6 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
   Array2d<double> rhs_ubar = priv2d(rhs_ubar_p, s);
   Array2d<double> rhs_vbar = priv2d(rhs_vbar_p, s);
 
-#if defined DIAGNOSTICS_UV
   Array3d<double> DiaU2rhs =
       priv3d(DiaU2rhs_p, s, 1, NDM2d - 1);
   Array3d<double> DiaV2rhs =
@@ -1241,15 +569,6 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
       grid4d(DiaRUfrc_p, s, 1, 3, 1, NDM2d - 1);
   Array4d<double> DiaRVfrc =
       grid4d(DiaRVfrc_p, s, 1, 3, 1, NDM2d - 1);
-#else
-  (void)DiaU2rhs_p;
-  (void)DiaV2rhs_p;
-  (void)DiaRUfrc_p;
-  (void)DiaRVfrc_p;
-  (void)M2pgrd;
-  (void)M2sstr;
-  (void)M2bstr;
-#endif
 
   const int iu0 = t->IstrU, iu1 = t->Iend;
   const int iv0 = t->Istr,  iv1 = t->Iend;
@@ -1269,7 +588,6 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
             rufrc(i, j) = rufrc(i, j) - rhs_ubar(i, j);
             rhs_ubar(i, j) += rufrc(i, j);
             ru(i, j, 0, istp) = rufrc(i, j);
-#if defined DIAGNOSTICS_UV
             for (int id = 1; id <= M2pgrd; ++id) {
               DiaRUfrc(i, j, 3, id) -= DiaU2rhs(i, j, id);
               DiaU2rhs(i, j, id) += DiaRUfrc(i, j, 3, id);
@@ -1279,14 +597,12 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
             DiaRUfrc(i, j, istp, M2sstr) = DiaRUfrc(i, j, 3, M2sstr);
             DiaU2rhs(i, j, M2bstr)       = DiaRUfrc(i, j, 3, M2bstr);
             DiaRUfrc(i, j, istp, M2bstr) = DiaRUfrc(i, j, 3, M2bstr);
-#endif
           }
           if (j >= jstr_v) {
             for (int i = iv0; i <= iv1; ++i) {
               rvfrc(i, j) = rvfrc(i, j) - rhs_vbar(i, j);
               rhs_vbar(i, j) += rvfrc(i, j);
               rv(i, j, 0, istp) = rvfrc(i, j);
-#if defined DIAGNOSTICS_UV
               for (int id = 1; id <= M2pgrd; ++id) {
                 DiaRVfrc(i, j, 3, id) -= DiaV2rhs(i, j, id);
                 DiaV2rhs(i, j, id) += DiaRVfrc(i, j, 3, id);
@@ -1296,7 +612,6 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
               DiaRVfrc(i, j, istp, M2sstr) = DiaRVfrc(i, j, 3, M2sstr);
               DiaV2rhs(i, j, M2bstr)       = DiaRVfrc(i, j, 3, M2bstr);
               DiaRVfrc(i, j, istp, M2bstr) = DiaRVfrc(i, j, 3, M2bstr);
-#endif
             }
           }
         });
@@ -1307,7 +622,6 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
             rufrc(i, j) = rufrc(i, j) - rhs_ubar(i, j);
             rhs_ubar(i, j) = rhs_ubar(i, j) + 1.5 * rufrc(i, j) - 0.5 * ru(i, j, 0, inew);
             ru(i, j, 0, istp) = rufrc(i, j);
-#if defined DIAGNOSTICS_UV
             for (int id = 1; id <= M2pgrd; ++id) {
               DiaRUfrc(i, j, 3, id) -= DiaU2rhs(i, j, id);
               DiaU2rhs(i, j, id) = DiaU2rhs(i, j, id) + 1.5 * DiaRUfrc(i, j, 3, id) -
@@ -1322,14 +636,12 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
                 1.5 * DiaRUfrc(i, j, 3, M2bstr) -
                 0.5 * DiaRUfrc(i, j, inew, M2bstr);
             DiaRUfrc(i, j, istp, M2bstr) = DiaRUfrc(i, j, 3, M2bstr);
-#endif
           }
           if (j >= jstr_v) {
             for (int i = iv0; i <= iv1; ++i) {
               rvfrc(i, j) = rvfrc(i, j) - rhs_vbar(i, j);
               rhs_vbar(i, j) = rhs_vbar(i, j) + 1.5 * rvfrc(i, j) - 0.5 * rv(i, j, 0, inew);
               rv(i, j, 0, istp) = rvfrc(i, j);
-#if defined DIAGNOSTICS_UV
               for (int id = 1; id <= M2pgrd; ++id) {
                 DiaRVfrc(i, j, 3, id) -= DiaV2rhs(i, j, id);
                 DiaV2rhs(i, j, id) = DiaV2rhs(i, j, id) + 1.5 * DiaRVfrc(i, j, 3, id) -
@@ -1344,7 +656,6 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
                   1.5 * DiaRVfrc(i, j, 3, M2bstr) -
                   0.5 * DiaRVfrc(i, j, inew, M2bstr);
               DiaRVfrc(i, j, istp, M2bstr) = DiaRVfrc(i, j, 3, M2bstr);
-#endif
             }
           }
         });
@@ -1368,7 +679,6 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
                               cff2 * ru(i, j, 0, inew) +
                               cff3 * ru(i, j, 0, istp);
             ru(i, j, 0, istp) = rufrc(i, j);
-#if defined DIAGNOSTICS_UV
             for (int id = 1; id <= M2pgrd; ++id) {
               DiaRUfrc(i, j, 3, id) -= DiaU2rhs(i, j, id);
               DiaU2rhs(i, j, id) = DiaU2rhs(i, j, id) + cff1 * DiaRUfrc(i, j, 3, id) -
@@ -1386,7 +696,6 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
                 cff2 * DiaRUfrc(i, j, inew, M2bstr) +
                 cff3 * DiaRUfrc(i, j, istp, M2bstr);
             DiaRUfrc(i, j, istp, M2bstr) = DiaRUfrc(i, j, 3, M2bstr);
-#endif
           }
           if (j >= jstr_v) {
             for (int i = iv0; i <= iv1; ++i) {
@@ -1395,7 +704,6 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
                                 cff2 * rv(i, j, 0, inew) +
                                 cff3 * rv(i, j, 0, istp);
               rv(i, j, 0, istp) = rvfrc(i, j);
-#if defined DIAGNOSTICS_UV
               for (int id = 1; id <= M2pgrd; ++id) {
                 DiaRVfrc(i, j, 3, id) -= DiaV2rhs(i, j, id);
                 DiaV2rhs(i, j, id) = DiaV2rhs(i, j, id) + cff1 * DiaRVfrc(i, j, 3, id) -
@@ -1413,7 +721,6 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
                   cff2 * DiaRVfrc(i, j, inew, M2bstr) +
                   cff3 * DiaRVfrc(i, j, istp, M2bstr);
               DiaRVfrc(i, j, istp, M2bstr) = DiaRVfrc(i, j, 3, M2bstr);
-#endif
             }
           }
         });
@@ -1422,24 +729,20 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
         range_policy(jv0, jv1 + 1), KOKKOS_LAMBDA(int j) {
           for (int i = iu0; i <= iu1; ++i) {
             rhs_ubar(i, j) += rufrc(i, j);
-#if defined DIAGNOSTICS_UV
             for (int id = 1; id <= M2pgrd; ++id) {
               DiaU2rhs(i, j, id) += DiaRUfrc(i, j, 3, id);
             }
             DiaU2rhs(i, j, M2sstr) = DiaRUfrc(i, j, 3, M2sstr);
             DiaU2rhs(i, j, M2bstr) = DiaRUfrc(i, j, 3, M2bstr);
-#endif
           }
           if (j >= jstr_v) {
             for (int i = iv0; i <= iv1; ++i) {
               rhs_vbar(i, j) += rvfrc(i, j);
-#if defined DIAGNOSTICS_UV
               for (int id = 1; id <= M2pgrd; ++id) {
                 DiaV2rhs(i, j, id) += DiaRVfrc(i, j, 3, id);
               }
               DiaV2rhs(i, j, M2sstr) = DiaRVfrc(i, j, 3, M2sstr);
               DiaV2rhs(i, j, M2bstr) = DiaRVfrc(i, j, 3, M2bstr);
-#endif
             }
           }
         });
@@ -1447,8 +750,7 @@ void k_step2d_coupling(int ng, int tile, int istp, int inew,
 }
 
 /*======================================================================
-** Stage 17 -- time step of the 2-D momentum equations.
-** Source: step2d_LF_AM3.h lines 2572-2755.
+** Time step 2D momentum equations.
 **
 **   Dstp(i,j) = zeta(i,j,kstp) + h(i,j)
 **   ubar(:,:,knew) = (ubar(:,:,kstp)*(Dstp(i,j)+Dstp(i-1,j))
@@ -1473,7 +775,6 @@ void k_step2d_momentum_step(int ng, int tile, int kstp, int knew,
   ROMS_KK_TIMER("step2d momentum_step");
   (void)ng;
   (void)tile;
-  (void)predictor;
 
   const Shape s{LBi, UBi, LBj, UBj, IminS, ImaxS, JminS, JmaxS};
 
@@ -1618,8 +919,7 @@ void k_step2d_momentum_step(int ng, int tile, int kstp, int knew,
 }
 
 /*======================================================================
-** Stage 17b -- time-integrated 2-D momentum diagnostics (SOLVE3D).
-** Source: step2d_LF_AM3.h, "Time step 2D momentum diagnostic terms".
+** Time step 2D momentum diagnostic terms (SOLVE3D).
 **
 ** Corrector steps only.  On the first barotropic step
 **
@@ -1724,8 +1024,8 @@ void k_step2d_diag_int(int ng, int tile, int kstp, int first_2d_step,
 }
 
 /*======================================================================
-** Stage 18 -- store the predictor right-hand side for the corrector.
-** Source: step2d_LF_AM3.h lines 2920-2945.
+** If predictor step, load right-side-term into shared arrays for
+** future use during the subsequent corrector step.
 **
 **   rubar(i,j,krhs) = rhs_ubar(i,j)
 **   rvbar(i,j,krhs) = rhs_vbar(i,j)
@@ -1738,13 +1038,12 @@ void k_step2d_store_rhs(int ng, int tile, int krhs,
                         void* rhs_ubar_p, void* rhs_vbar_p,
                         void* DiaRUbar_p, void* DiaRVbar_p,
                         void* DiaU2rhs_p, void* DiaV2rhs_p,
-                        int NDM2d, int M2pgrd,
+                        int NDM2d,
                         const TileBounds* t) {
   roms::initialize();
   ROMS_KK_TIMER("step2d store_rhs");
   (void)ng;
   (void)tile;
-  (void)NDM2d;
 
   const Shape s{LBi, UBi, LBj, UBj, IminS, ImaxS, JminS, JmaxS};
 
@@ -1754,7 +1053,6 @@ void k_step2d_store_rhs(int ng, int tile, int krhs,
   Array2d<double> rhs_ubar = priv2d(rhs_ubar_p, s);
   Array2d<double> rhs_vbar = priv2d(rhs_vbar_p, s);
 
-#if defined DIAGNOSTICS_UV
   Array4d<double> DiaRUbar =
       grid4d(DiaRUbar_p, s, 1, 2, 1, NDM2d - 1);
   Array4d<double> DiaRVbar =
@@ -1763,13 +1061,6 @@ void k_step2d_store_rhs(int ng, int tile, int krhs,
       priv3d(DiaU2rhs_p, s, 1, NDM2d - 1);
   Array3d<double> DiaV2rhs =
       priv3d(DiaV2rhs_p, s, 1, NDM2d - 1);
-#else
-  (void)DiaRUbar_p;
-  (void)DiaRVbar_p;
-  (void)DiaU2rhs_p;
-  (void)DiaV2rhs_p;
-  (void)M2pgrd;
-#endif
 
   const int iu0 = t->IstrU, iu1 = t->Iend;
   const int iv0 = t->Istr,  iv1 = t->Iend;
@@ -1784,24 +1075,20 @@ void k_step2d_store_rhs(int ng, int tile, int krhs,
         for (int i = iu0; i <= iu1; ++i) {
           rubar(i, j, krhs) = rhs_ubar(i, j);
         }
-#if defined DIAGNOSTICS_UV
         for (int id = 1; id < NDM2d; ++id) {
           for (int i = iu0; i <= iu1; ++i) {
             DiaRUbar(i, j, krhs, id) = DiaU2rhs(i, j, id);
           }
         }
-#endif
         if (j >= jstr_v) {
           for (int i = iv0; i <= iv1; ++i) {
             rvbar(i, j, krhs) = rhs_vbar(i, j);
           }
-#if defined DIAGNOSTICS_UV
           for (int id = 1; id < NDM2d; ++id) {
             for (int i = iv0; i <= iv1; ++i) {
               DiaRVbar(i, j, krhs, id) = DiaV2rhs(i, j, id);
             }
           }
-#endif
         }
       });
 }
@@ -1812,10 +1099,10 @@ void k_step2d_store_rhs(int ng, int tile, int krhs,
 ** Pressure gradient, advection, Coriolis and harmonic viscosity share
 ** the same input fields and have no intervening halo exchange.  Inline
 ** their flux stencils to avoid scratch-array traffic and intermediate
-** dispatches.  Validate this path directly against the staged kernels;
-** an end-to-end run must not also execute the Fortran RHS fallback.
+** dispatches.  It is validated end to end: Serial output must equal the
+** original Fortran exactly (ROMS/Cpp/tools/sw64/README.md).
 **
-** Closed edges: the staged code filled a halo cell from its inward
+** Closed edges: the Fortran fills a halo cell from its inward
 ** neighbour at one index per direction -- grad(Istr), grad(Iend+1),
 ** grad(Jstr-1), grad(Jend+1) in the xi/eta ubar passes; grad(Istr-1),
 ** grad(Iend+1), grad(Jstr), grad(Jend+1) in the vbar passes.  The fold
@@ -1853,7 +1140,6 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
   ROMS_KK_TIMER("step2d rhs_fused");
   (void)ng;
   (void)tile;
-  (void)NDM2d;
 
   const Shape s{LBi, UBi, LBj, UBj, IminS, ImaxS, JminS, JmaxS};
 
@@ -1892,21 +1178,8 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
   Array2d<double> rhs_ubar = priv2d(rhs_ubar_p, s);
   Array2d<double> rhs_vbar = priv2d(rhs_vbar_p, s);
 
-#if defined DIAGNOSTICS_UV
   Array3d<double> DiaU2rhs = priv3d(DiaU2rhs_p, s, 1, NDM2d - 1);
   Array3d<double> DiaV2rhs = priv3d(DiaV2rhs_p, s, 1, NDM2d - 1);
-#else
-  (void)DiaU2rhs_p;
-  (void)DiaV2rhs_p;
-  (void)M2pgrd;
-  (void)M2xadv;
-  (void)M2yadv;
-  (void)M2hadv;
-  (void)M2fcor;
-  (void)M2hvis;
-  (void)M2xvis;
-  (void)M2yvis;
-#endif
 
   const int Istr = t->Istr, Iend = t->Iend;
   const int Jstr = t->Jstr, Jend = t->Jend;
@@ -1928,8 +1201,8 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
   const double c6   = 1.0 / 6.0;
 
   /*--------------------------------------------------------------------
-  ** U rows.  i runs over [IstrU, Iend], which is exactly the staged
-  ** rhs_ubar loop.  Every term the staged code computes at a
+  ** U rows.  i runs over [IstrU, Iend], which is exactly the Fortran
+  ** rhs_ubar loop.  Every term the Fortran computes at a
   ** neighbouring point is recomputed here; the arithmetic order inside
   ** each term matches, so the accumulations into rhs_ubar are the same
   ** sequence of operations.
@@ -1952,13 +1225,11 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
                         (zwrk(i - 1, j) - zwrk(i, j))) +
                (gzeta2(i - 1, j) - gzeta2(i, j)));
           double acc = pg;
-#if defined DIAGNOSTICS_UV
           DiaU2rhs(i, j, M2pgrd) = pg;
-#endif
 
           /* --- advection ---
           ** Fluxes at the two xi faces and two eta faces around (i,j).
-          ** In the staged code these live in UFx/UFe with grad holding
+          ** In the Fortran these live in UFx/UFe with grad holding
           ** the xi and then the eta second differences of ubar, and
           ** Dgrad the matching differences of DUon/DVom. */
           const double gx0 = ddx(ubar, krhs, i, j, fw, fe, Istr, Iend + 1);
@@ -1977,9 +1248,7 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
                       c6 * (gxm + gx0)) *
               (DUon(i - 1, j) + DUon(i, j) - c6 * (dxm + dx0));
 
-          /* eta-direction second differences of ubar at U points: the
-          ** staged code refills grad over j in [Jstrm1, Jendp1] and
-          ** folds at Jstr-1 / Jend+1. */
+          /* eta-direction second differences of ubar at U points. */
           /*
           ** Folds here are Jstr-1 / Jend+1, not Jstr / Jend+1: the
           ** Fortran refills grad over j in [Jstrm1, Jendp1] and then
@@ -2008,11 +1277,9 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
           const double ayadv = ufe1 - ufe;
           const double aadv  = axadv + ayadv;
           acc -= aadv;
-#if defined DIAGNOSTICS_UV
           DiaU2rhs(i, j, M2xadv) = -axadv;
           DiaU2rhs(i, j, M2yadv) = -ayadv;
           DiaU2rhs(i, j, M2hadv) = -aadv;
-#endif
 
           /* --- coriolis --- */
           const double fcor =
@@ -2021,14 +1288,12 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
                      0.5 * Drhs(i - 1, j) * fomn(i - 1, j) *
                          (vbar(i - 1, j, krhs) + vbar(i - 1, j + 1, krhs)));
           acc += fcor;
-#if defined DIAGNOSTICS_UV
           DiaU2rhs(i, j, M2fcor) = fcor;
-#endif
 
           /* --- harmonic viscosity ---
           ** Two flux families: at rho points from visc2_r, and at psi
           ** points from visc2_p with the depth averaged to psi points
-          ** (Drhs_psi in the staged PSID block, inlined here). */
+          ** (Drhs_p in the Fortran, inlined here). */
           const double dp00 = 0.25 * (Drhs(i, j) + Drhs(i - 1, j) +
                                       Drhs(i, j - 1) + Drhs(i - 1, j - 1));
           const double dp0p = 0.25 * (Drhs(i, j + 1) + Drhs(i - 1, j + 1) +
@@ -2073,17 +1338,15 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
           const double vy1 = 0.5 * (pm(i - 1, j) + pm(i, j)) * (uPp - uP);
           const double hv  = vx1 + vy1;
           acc += hv;
-#if defined DIAGNOSTICS_UV
           DiaU2rhs(i, j, M2hvis) = hv;
           DiaU2rhs(i, j, M2xvis) = vx1;
           DiaU2rhs(i, j, M2yvis) = vy1;
-#endif
 
           rhs_ubar(i, j) = acc;
         }
 
         /*------------------------------------------------------------------
-        ** V rows.  i over [Istr, Iend], j over [JstrV, Jend] -- the staged
+        ** V rows.  i over [Istr, Iend], j over [JstrV, Jend] -- the Fortran
         ** rhs_vbar loop.
         **----------------------------------------------------------------*/
 
@@ -2099,9 +1362,7 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
                         (zwrk(i, j - 1) - zwrk(i, j))) +
                (gzeta2(i, j - 1) - gzeta2(i, j)));
           double acc = pg;
-#if defined DIAGNOSTICS_UV
           DiaV2rhs(i, j, M2pgrd) = pg;
-#endif
 
           /* --- advection ---
           ** VFx block: grad over xi at V points folds at Istr-1 /
@@ -2146,11 +1407,9 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
           const double ayadv = vfe - vfem;
           const double aadv  = axadv + ayadv;
           acc -= aadv;
-#if defined DIAGNOSTICS_UV
           DiaV2rhs(i, j, M2xadv) = -axadv;
           DiaV2rhs(i, j, M2yadv) = -ayadv;
           DiaV2rhs(i, j, M2hadv) = -aadv;
-#endif
 
           /* --- coriolis --- */
           const double fcor =
@@ -2159,9 +1418,7 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
                      0.5 * Drhs(i, j - 1) * fomn(i, j - 1) *
                          (ubar(i, j - 1, krhs) + ubar(i + 1, j - 1, krhs)));
           acc -= fcor;
-#if defined DIAGNOSTICS_UV
           DiaV2rhs(i, j, M2fcor) = -fcor;
-#endif
 
           /* --- harmonic viscosity --- */
           const double dp00 = 0.25 * (Drhs(i, j) + Drhs(i - 1, j) +
@@ -2210,11 +1467,9 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
           const double vy1 = 0.5 * (pm(i, j - 1) + pm(i, j)) * (vR - vRm);
           const double hv  = vx1 - vy1;
           acc += hv;
-#if defined DIAGNOSTICS_UV
           DiaV2rhs(i, j, M2hvis) = hv;
           DiaV2rhs(i, j, M2xvis) = vx1;
           DiaV2rhs(i, j, M2yvis) = -vy1;
-#endif
 
           rhs_vbar(i, j) = acc;
         }

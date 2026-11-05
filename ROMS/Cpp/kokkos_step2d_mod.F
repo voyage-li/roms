@@ -37,12 +37,7 @@
       PUBLIC :: k_step2d_depth_flux
       PUBLIC :: k_step2d_time_average
       PUBLIC :: k_step2d_zeta_step
-      PUBLIC :: k_step2d_pressure_grad
-      PUBLIC :: k_step2d_hadv_centered4
       PUBLIC :: k_step2d_rhs_fused
-      PUBLIC :: k_step2d_coriolis
-      PUBLIC :: k_step2d_psi_depth
-      PUBLIC :: k_step2d_hvisc2
       PUBLIC :: k_step2d_coupling
       PUBLIC :: k_step2d_momentum_step
       PUBLIC :: k_step2d_diag_int
@@ -76,21 +71,20 @@
 !
       INTERFACE
 !
-        SUBROUTINE k_step2d_depth_flux (kng, ktile, kkrhs, nfast,           &
+        SUBROUTINE k_step2d_depth_flux (kng, ktile, kkrhs,                  &
      &                                  LBi, UBi, LBj, UBj,              &
      &                                  IminS, ImaxS, JminS, JmaxS,      &
      &                                  zeta_p, h_p, on_u_p, om_v_p,     &
      &                                  ubar_p, vbar_p, Drhs_p,          &
-     &                                  DUon_p, DVom_p, UBk, tl)         &
+     &                                  DUon_p, DVom_p, tl)              &
      &                                  BIND(C, NAME='k_step2d_depth_flux')
           IMPORT :: C_PTR, C_INT, kokkos_tile_bounds
-          integer(C_INT), VALUE :: kng, ktile, kkrhs, nfast
+          integer(C_INT), VALUE :: kng, ktile, kkrhs
           integer(C_INT), VALUE :: LBi, UBi, LBj, UBj
           integer(C_INT), VALUE :: IminS, ImaxS, JminS, JmaxS
           type(C_PTR),    VALUE :: zeta_p, h_p, on_u_p, om_v_p
           type(C_PTR),    VALUE :: ubar_p, vbar_p, Drhs_p
           type(C_PTR),    VALUE :: DUon_p, DVom_p
-          integer(C_INT), VALUE :: UBk
           type(kokkos_tile_bounds), INTENT(IN) :: tl
         END SUBROUTINE k_step2d_depth_flux
 !
@@ -117,9 +111,8 @@
         END SUBROUTINE k_step2d_time_average
 !
         SUBROUTINE k_step2d_zeta_step (kng, ktile, kkrhs, kstp, knew,       &
-     &                                 iif, nfast, ntfirst, iic,         &
      &                                 predictor, first_2d_step,         &
-     &                                 LBi, UBi, LBj, UBj, UBk,          &
+     &                                 LBi, UBi, LBj, UBj,               &
      &                                 IminS, ImaxS, JminS, JmaxS,       &
      &                                 zeta_p, h_p, pm_p, pn_p,          &
      &                                 DUon_p, DVom_p,                   &
@@ -131,9 +124,8 @@
      &          BIND(C, NAME='k_step2d_zeta_step')
           IMPORT :: C_PTR, C_INT, C_DOUBLE, kokkos_tile_bounds
           integer(C_INT), VALUE :: kng, ktile, kkrhs, kstp, knew
-          integer(C_INT), VALUE :: iif, nfast, ntfirst, iic
           integer(C_INT), VALUE :: predictor, first_2d_step
-          integer(C_INT), VALUE :: LBi, UBi, LBj, UBj, UBk
+          integer(C_INT), VALUE :: LBi, UBi, LBj, UBj
           integer(C_INT), VALUE :: IminS, ImaxS, JminS, JmaxS
           type(C_PTR),    VALUE :: zeta_p, h_p, pm_p, pn_p
           type(C_PTR),    VALUE :: DUon_p, DVom_p
@@ -144,59 +136,6 @@
           real(C_DOUBLE), VALUE :: dtfast, rho0
           type(kokkos_tile_bounds), INTENT(IN) :: tl
         END SUBROUTINE k_step2d_zeta_step
-!
-        SUBROUTINE k_step2d_pressure_grad (kng, ktile,                     &
-     &                                     LBi, UBi, LBj, UBj,           &
-     &                                     IminS, ImaxS, JminS, JmaxS,   &
-     &                                     h_p, on_u_p, om_v_p,          &
-     &                                     gzeta_p, gzeta2_p,            &
-     &                                     gzetaSA_p, rhoA_p, zwrk_p,    &
-     &                                     rhs_ubar_p, rhs_vbar_p,       &
-     &                                     DiaU2rhs_p, DiaV2rhs_p,       &
-     &                                     NDM2d, M2pgrd, g, tl)         &
-     &          BIND(C, NAME='k_step2d_pressure_grad')
-          IMPORT :: C_PTR, C_INT, C_DOUBLE, kokkos_tile_bounds
-          integer(C_INT), VALUE :: kng, ktile
-          integer(C_INT), VALUE :: LBi, UBi, LBj, UBj
-          integer(C_INT), VALUE :: IminS, ImaxS, JminS, JmaxS
-          type(C_PTR),    VALUE :: h_p, on_u_p, om_v_p
-          type(C_PTR),    VALUE :: gzeta_p, gzeta2_p
-          type(C_PTR),    VALUE :: gzetaSA_p, rhoA_p, zwrk_p
-          type(C_PTR),    VALUE :: rhs_ubar_p, rhs_vbar_p
-          type(C_PTR),    VALUE :: DiaU2rhs_p, DiaV2rhs_p
-          integer(C_INT), VALUE :: NDM2d, M2pgrd
-          real(C_DOUBLE), VALUE :: g
-          type(kokkos_tile_bounds), INTENT(IN) :: tl
-        END SUBROUTINE k_step2d_pressure_grad
-!
-        SUBROUTINE k_step2d_hadv_centered4 (kng, ktile, krhs,              &
-     &                                      LBi, UBi, LBj, UBj,          &
-     &                                      IminS, ImaxS, JminS, JmaxS,  &
-     &                                      ubar_p, vbar_p,              &
-     &                                      DUon_p, DVom_p,              &
-     &                                      grad_p, Dgrad_p,             &
-     &                                      UFx_p, UFe_p,                &
-     &                                      VFx_p, VFe_p,                &
-     &                                      rhs_ubar_p, rhs_vbar_p,      &
-     &                                      DiaU2rhs_p, DiaV2rhs_p,      &
-     &                                      NDM2d, M2xadv, M2yadv,       &
-     &                                      M2hadv, de, tl)              &
-     &          BIND(C, NAME='k_step2d_hadv_centered4')
-          IMPORT :: C_PTR, C_INT, kokkos_tile_bounds, kokkos_edge_flags
-          integer(C_INT), VALUE :: kng, ktile, krhs
-          integer(C_INT), VALUE :: LBi, UBi, LBj, UBj
-          integer(C_INT), VALUE :: IminS, ImaxS, JminS, JmaxS
-          type(C_PTR),    VALUE :: ubar_p, vbar_p
-          type(C_PTR),    VALUE :: DUon_p, DVom_p
-          type(C_PTR),    VALUE :: grad_p, Dgrad_p
-          type(C_PTR),    VALUE :: UFx_p, UFe_p
-          type(C_PTR),    VALUE :: VFx_p, VFe_p
-          type(C_PTR),    VALUE :: rhs_ubar_p, rhs_vbar_p
-          type(C_PTR),    VALUE :: DiaU2rhs_p, DiaV2rhs_p
-          integer(C_INT), VALUE :: NDM2d, M2xadv, M2yadv, M2hadv
-          type(kokkos_edge_flags),  INTENT(IN) :: de
-          type(kokkos_tile_bounds), INTENT(IN) :: tl
-        END SUBROUTINE k_step2d_hadv_centered4
 !
         SUBROUTINE k_step2d_rhs_fused (kng, ktile, krhs,                   &
      &                                 LBi, UBi, LBj, UBj,               &
@@ -244,79 +183,6 @@
           type(kokkos_edge_flags),  INTENT(IN) :: de
           type(kokkos_tile_bounds), INTENT(IN) :: tl
         END SUBROUTINE k_step2d_rhs_fused
-!
-        SUBROUTINE k_step2d_coriolis (kng, ktile, krhs,                    &
-     &                                LBi, UBi, LBj, UBj,                &
-     &                                IminS, ImaxS, JminS, JmaxS,        &
-     &                                Drhs_p, fomn_p,                    &
-     &                                ubar_p, vbar_p,                    &
-     &                                UFx_p, VFe_p,                      &
-     &                                rhs_ubar_p, rhs_vbar_p,            &
-     &                                DiaU2rhs_p, DiaV2rhs_p,            &
-     &                                NDM2d, M2fcor, tl)                 &
-     &          BIND(C, NAME='k_step2d_coriolis')
-          IMPORT :: C_PTR, C_INT, kokkos_tile_bounds
-          integer(C_INT), VALUE :: kng, ktile, krhs
-          integer(C_INT), VALUE :: LBi, UBi, LBj, UBj
-          integer(C_INT), VALUE :: IminS, ImaxS, JminS, JmaxS
-          type(C_PTR),    VALUE :: Drhs_p, fomn_p
-          type(C_PTR),    VALUE :: ubar_p, vbar_p
-          type(C_PTR),    VALUE :: UFx_p, VFe_p
-          type(C_PTR),    VALUE :: rhs_ubar_p, rhs_vbar_p
-          type(C_PTR),    VALUE :: DiaU2rhs_p, DiaV2rhs_p
-          integer(C_INT), VALUE :: NDM2d, M2fcor
-          type(kokkos_tile_bounds), INTENT(IN) :: tl
-        END SUBROUTINE k_step2d_coriolis
-!
-        SUBROUTINE k_step2d_psi_depth (kng, ktile,                         &
-     &                                 LBi, UBi, LBj, UBj,               &
-     &                                 IminS, ImaxS, JminS, JmaxS,       &
-     &                                 Drhs_p, Drhs_psi_p, tl)           &
-     &          BIND(C, NAME='k_step2d_psi_depth')
-          IMPORT :: C_PTR, C_INT, kokkos_tile_bounds
-          integer(C_INT), VALUE :: kng, ktile
-          integer(C_INT), VALUE :: LBi, UBi, LBj, UBj
-          integer(C_INT), VALUE :: IminS, ImaxS, JminS, JmaxS
-          type(C_PTR),    VALUE :: Drhs_p, Drhs_psi_p
-          type(kokkos_tile_bounds), INTENT(IN) :: tl
-        END SUBROUTINE k_step2d_psi_depth
-!
-        SUBROUTINE k_step2d_hvisc2 (kng, ktile, krhs,                      &
-     &                              LBi, UBi, LBj, UBj,                  &
-     &                              IminS, ImaxS, JminS, JmaxS,          &
-     &                              Drhs_p, Drhs_psi_p,                  &
-     &                              ubar_p, vbar_p,                      &
-     &                              pm_p, pn_p,                          &
-     &                              pmon_r_p, pnom_r_p,                  &
-     &                              pmon_p_p, pnom_p_p,                  &
-     &                              om_r_p, on_r_p,                      &
-     &                              om_p_p, on_p_p,                      &
-     &                              visc2_r_p, visc2_p2_p,               &
-     &                              UFx_p, UFe_p,                        &
-     &                              VFx_p, VFe_p,                        &
-     &                              rhs_ubar_p, rhs_vbar_p,              &
-     &                              DiaU2rhs_p, DiaV2rhs_p,              &
-     &                              NDM2d, M2hvis, M2xvis, M2yvis, tl)   &
-     &          BIND(C, NAME='k_step2d_hvisc2')
-          IMPORT :: C_PTR, C_INT, kokkos_tile_bounds
-          integer(C_INT), VALUE :: kng, ktile, krhs
-          integer(C_INT), VALUE :: LBi, UBi, LBj, UBj
-          integer(C_INT), VALUE :: IminS, ImaxS, JminS, JmaxS
-          type(C_PTR),    VALUE :: Drhs_p, Drhs_psi_p
-          type(C_PTR),    VALUE :: ubar_p, vbar_p
-          type(C_PTR),    VALUE :: pm_p, pn_p
-          type(C_PTR),    VALUE :: pmon_r_p, pnom_r_p
-          type(C_PTR),    VALUE :: pmon_p_p, pnom_p_p
-          type(C_PTR),    VALUE :: om_r_p, on_r_p
-          type(C_PTR),    VALUE :: om_p_p, on_p_p
-          type(C_PTR),    VALUE :: visc2_r_p, visc2_p2_p
-          type(C_PTR),    VALUE :: UFx_p, UFe_p
-          type(C_PTR),    VALUE :: VFx_p, VFe_p
-          type(C_PTR),    VALUE :: rhs_ubar_p, rhs_vbar_p
-          type(C_PTR),    VALUE :: DiaU2rhs_p, DiaV2rhs_p
-          integer(C_INT), VALUE :: NDM2d, M2hvis, M2xvis, M2yvis
-          type(kokkos_tile_bounds), INTENT(IN) :: tl
-        END SUBROUTINE k_step2d_hvisc2
 !
         SUBROUTINE k_step2d_coupling (kng, ktile, istp, inew,            &
      &                                iic, ntfirst, first_2d_step,       &
@@ -402,7 +268,7 @@
      &                                 rhs_ubar_p, rhs_vbar_p,           &
      &                                 DiaRUbar_p, DiaRVbar_p,           &
      &                                 DiaU2rhs_p, DiaV2rhs_p,           &
-     &                                 NDM2d, M2pgrd, tl)                &
+     &                                 NDM2d, tl)                        &
      &          BIND(C, NAME='k_step2d_store_rhs')
           IMPORT :: C_PTR, C_INT, kokkos_tile_bounds
           integer(C_INT), VALUE :: kng, ktile, kkrhs
@@ -412,7 +278,7 @@
           type(C_PTR),    VALUE :: rhs_ubar_p, rhs_vbar_p
           type(C_PTR),    VALUE :: DiaRUbar_p, DiaRVbar_p
           type(C_PTR),    VALUE :: DiaU2rhs_p, DiaV2rhs_p
-          integer(C_INT), VALUE :: NDM2d, M2pgrd
+          integer(C_INT), VALUE :: NDM2d
           type(kokkos_tile_bounds), INTENT(IN) :: tl
         END SUBROUTINE k_step2d_store_rhs
 !

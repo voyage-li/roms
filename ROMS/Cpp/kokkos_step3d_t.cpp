@@ -1,11 +1,10 @@
 /* U3/C4 and HSIMT tracer advection followed by spline vertical diffusion.
-** Each work item owns a complete water column, including both tracers.
 ** Predictor slot 3 is read-only. Boundary exchange and epilogue stay in
-** Fortran; this entry is called only after whole-tile eligibility checks. */
+** Fortran; this entry is called only after whole-tile eligibility checks
+** in ROMS/Nonlinear/step3d_t.F. */
 #include "kokkos_step3d_t.hpp"
 #if defined ROMS_KOKKOS
 #include <cmath>
-#include <cstdio>
 #ifndef __sw_slave__
 #include <memory>
 #endif
@@ -30,7 +29,6 @@ struct Workspace {
   }
 };
 thread_local Workspace workspace;
-thread_local unsigned long calls = 0;
 #endif
 
 struct Fields {
@@ -132,156 +130,16 @@ struct Fields {
     const double delta=correction(s,neighbor,1.0/s.ka);
     return velocity*(velocity>=0?t(i,j,k,3,it)+delta:t(i,j,k+1,3,it)-delta);
   }
-
-  KOKKOS_INLINE_FUNCTION
-  void column_body(int i, int j, int it, int scheme, double* cf, double* dc,
-                   const double* fx0, const double* fx1) const {
-    const double c=p.dt*pm(i,j)*pn(i,j);
-    for (int k=1;k<=p.N;++k) {
-      const double dx=fx0 ? c*(fx1[k-1]-fx0[k-1])
-          : c*(horizontal(i+1,j,k,it,true,scheme)-horizontal(i,j,k,it,true,scheme));
-      const double dy=c*(horizontal(i,j+1,k,it,false,scheme)-horizontal(i,j,k,it,false,scheme));
-      const double d=dx+dy;
-      t(i,j,k,p.nnew,it)=t(i,j,k,p.nnew,it)-d;
-      const double dz=c*(vertical(i,j,k,it,scheme)-vertical(i,j,k-1,it,scheme));
-      t(i,j,k,p.nnew,it)=t(i,j,k,p.nnew,it)-dz;
-      const double oh=1.0/hz(i,j,k);
-      t(i,j,k,p.nnew,it)=t(i,j,k,p.nnew,it)*oh;
-      diag(i,j,k,it,p.xadv)=-dx;
-      diag(i,j,k,it,p.yadv)=-dy;
-      diag(i,j,k,it,p.hadv)=-d;
-      diag(i,j,k,it,p.vadv)=-dz;
-      for (int id=1;id<=p.NDT;++id) diag(i,j,k,it,id)=diag(i,j,k,it,id)*oh;
-    }
-    const int tracer=it<p.NAT?it:p.NAT;
-    cf[0]=0.0; dc[0]=0.0;
-    for (int k=1;k<p.N;++k) {
-      const double oh=1.0/hz(i,j,k), oh1=1.0/hz(i,j,k+1);
-      const double lower=(1.0/6.0)*hz(i,j,k)-p.dt*akt(i,j,k-1,tracer)*oh;
-      const double upper=(1.0/6.0)*hz(i,j,k+1)-p.dt*akt(i,j,k+1,tracer)*oh1;
-      const double b=(1.0/3.0)*(hz(i,j,k)+hz(i,j,k+1))+
-                     p.dt*akt(i,j,k,tracer)*(oh+oh1);
-      const double inverse=1.0/(b-lower*cf[k-1]);
-      cf[k]=inverse*upper;
-      dc[k]=inverse*(t(i,j,k+1,p.nnew,it)-t(i,j,k,p.nnew,it)-lower*dc[k-1]);
-    }
-    dc[p.N]=0.0;
-    for (int k=p.N-1;k>=1;--k) dc[k]=dc[k]-cf[k]*dc[k+1];
-    for (int k=1;k<=p.N;++k) {
-      dc[k]=dc[k]*akt(i,j,k,tracer);
-      const double change=p.dt*(1.0/hz(i,j,k))*(dc[k]-dc[k-1]);
-      t(i,j,k,p.nnew,it)=t(i,j,k,p.nnew,it)+change;
-      diag(i,j,k,it,p.vdif)=diag(i,j,k,it,p.vdif)+change;
-    }
-  }
-
-  KOKKOS_INLINE_FUNCTION
-  void column(int i, int j, int it, int scheme, double* cf, double* dc) const {
-    column_body(i,j,it,scheme,cf,dc,nullptr,nullptr);
-  }
 };
 }  // namespace
 
-extern "C" void k_step3d_t(const TracerConfig* config, const int* schemes,
-    void* pm, void* pn, void* Hz, void* Huon, void* Hvom, void* W,
-    void* zr, void* Akt, void* tracer, void* diagnostics) {
-  roms::initialize();
-  ROMS_KK_TIMER("step3d_t");
-  const TracerConfig p=*config;
-  if (p.N<3 || p.NT<1 || p.NAT<1 || p.nnew<1 || p.nnew>2)
-    Kokkos::abort("Invalid Kokkos tracer dimensions or predictor alias");
-  const int nx=p.Iend-p.Istr+1, ny=p.Jend-p.Jstr+1;
-  const std::size_t columns=std::size_t(nx)*ny;
-  if (nx<1 || ny<1 || columns>2147483647u) Kokkos::abort("Invalid tracer tile");
-  for (int it=0;it<p.NT;++it)
-    if (schemes[it]!=0 && schemes[it]!=1) Kokkos::abort("Unsupported tracer scheme");
-  double* scratch=nullptr;
-#ifndef __sw_slave__
-  scratch=workspace.reserve(columns*2*(p.N+1));
-  if (++calls==1) std::printf("Kokkos step3d_t: backend=%s one launch/call columns=%zu N=%d NT=%d\n",
-      roms::exec_space::name(),columns,p.N,p.NT);
-#endif
-  const auto a2=[&](void* v) {return roms::as_2d<double>(v,p.LBi,p.UBi,p.LBj,p.UBj);};
-  const auto a3=[&](void* v,int low) {return roms::as_3d<double>(v,p.LBi,p.UBi,p.LBj,p.UBj,low,p.N);};
-  const Fields f{p,a2(pm),a2(pn),a3(Hz,1),a3(Huon,1),a3(Hvom,1),a3(W,0),a3(zr,1),
-      roms::as_4d<double>(Akt,p.LBi,p.UBi,p.LBj,p.UBj,0,p.N,1,p.NAT),
-      roms::as_5d<double>(tracer,p.LBi,p.UBi,p.LBj,p.UBj,1,p.N,1,3,1,p.NT),
-      roms::as_5d<double>(diagnostics,p.LBi,p.UBi,p.LBj,p.UBj,1,p.N,1,p.NT,1,p.NDT)};
-  Kokkos::parallel_for("ROMS step3d_t columns",
-      Kokkos::RangePolicy<roms::exec_space,Kokkos::IndexType<int>>(0,int(columns)),
-      KOKKOS_LAMBDA(int index) {
-        const int i=p.Istr+index%nx, j=p.Jstr+index/nx;
-        double* cf=scratch+std::size_t(index)*2*(p.N+1);
-        double* dc=cf+p.N+1;
-        for (int it=1;it<=p.NT;++it) f.column(i,j,it,schemes[it-1],cf,dc);
-      });
-}
-
 /*
-** Row variant of k_step3d_t.  The xi-face flux at (i,j,k) is used by the
-** columns on both sides of that face, and the per-column kernel evaluates
-** it twice.  A work item here owns one (j, tracer) row, walks i and rolls
-** two face buffers, so every face is evaluated once.  No team, no
-** cross-item sharing, and the arithmetic is the same expression at the
-** same index, so the result is bitwise identical to k_step3d_t.
-*/
-extern "C" void k_step3d_t_rows(const TracerConfig* config, const int* schemes,
-    void* pm, void* pn, void* Hz, void* Huon, void* Hvom, void* W,
-    void* zr, void* Akt, void* tracer, void* diagnostics) {
-  roms::initialize();
-  ROMS_KK_TIMER("step3d_t rows");
-  const TracerConfig p=*config;
-  if (p.N<3 || p.NT<1 || p.NAT<1 || p.nnew<1 || p.nnew>2)
-    Kokkos::abort("Invalid Kokkos tracer dimensions or predictor alias");
-  const int nx=p.Iend-p.Istr+1, ny=p.Jend-p.Jstr+1;
-  if (nx<1 || ny<1 || nx>2147483647 || ny>2147483647)
-    Kokkos::abort("Invalid tracer tile");
-  for (int it=0;it<p.NT;++it)
-    if (schemes[it]!=0 && schemes[it]!=1) Kokkos::abort("Unsupported tracer scheme");
-  const int per=2*p.N+2*(p.N+1);
-  double* scratch=nullptr;
-#ifndef __sw_slave__
-  scratch=workspace.reserve(std::size_t(ny)*p.NT*per);
-#endif
-  const auto a2=[&](void* v) {return roms::as_2d<double>(v,p.LBi,p.UBi,p.LBj,p.UBj);};
-  const auto a3=[&](void* v,int low) {return roms::as_3d<double>(v,p.LBi,p.UBi,p.LBj,p.UBj,low,p.N);};
-  const Fields f{p,a2(pm),a2(pn),a3(Hz,1),a3(Huon,1),a3(Hvom,1),a3(W,0),a3(zr,1),
-      roms::as_4d<double>(Akt,p.LBi,p.UBi,p.LBj,p.UBj,0,p.N,1,p.NAT),
-      roms::as_5d<double>(tracer,p.LBi,p.UBi,p.LBj,p.UBj,1,p.N,1,3,1,p.NT),
-      roms::as_5d<double>(diagnostics,p.LBi,p.UBi,p.LBj,p.UBj,1,p.N,1,p.NT,1,p.NDT)};
-  Kokkos::parallel_for("ROMS step3d_t rows",
-      Kokkos::RangePolicy<roms::exec_space,Kokkos::IndexType<int>>(0,ny*p.NT),
-      KOKKOS_LAMBDA(int index) {
-        const int j=p.Jstr+index%ny;
-        const int it=1+index/ny;
-        const int scheme=schemes[it-1];
-        double* base=scratch+std::size_t(index)*per;
-        double* cf=base+2*p.N;
-        double* dc=cf+p.N+1;
-        double* fx=base;
-        for (int k=1;k<=p.N;++k)
-          fx[k-1]=f.horizontal(p.Istr,j,k,it,true,scheme);
-        int parity=0;
-        for (int i=p.Istr;i<=p.Iend;++i) {
-          double* left =fx+(parity?p.N:0);
-          double* right=fx+(parity?0:p.N);
-          for (int k=1;k<=p.N;++k)
-            right[k-1]=f.horizontal(i+1,j,k,it,true,scheme);
-          f.column_body(i,j,it,scheme,cf,dc,left,right);
-          parity^=1;
-        }
-      });
-}
-
-/*
-** Chunked row kernel, the production entry.  k_step3d_t_rows walks a row
-** one column at a time and, per column, touches every level of the
-** tracer, the fluxes and the NDT diagnostics before moving on; on the
-** CPEs that working set does not stay in cache.  Here a work item still
-** owns one (j, tracer) row, but replays the column body level by level
-** with i innermost over KB columns at a time, the loop order the Fortran
-** uses.  Per point the operations and their order are those of
-** column_body, so the result is bitwise identical to k_step3d_t_rows.
+** A work item owns one (j, tracer) row of the tile and walks it in chunks
+** of KB columns, level by level with i innermost: the Fortran loop order,
+** which keeps the working set of a chunk in CPE cache.  Each xi-face flux
+** is evaluated once per chunk and shared by the two columns beside it.
+** Per point the operations and their order are those of step3d_t.F, so
+** the Serial result equals the Fortran exactly.
 */
 extern "C" void k_step3d_t_chunks(const TracerConfig* config, const int* schemes,
     void* pm, void* pn, void* Hz, void* Huon, void* Hvom, void* W,
@@ -292,8 +150,7 @@ extern "C" void k_step3d_t_chunks(const TracerConfig* config, const int* schemes
   if (p.N<3 || p.NT<1 || p.NAT<1 || p.nnew<1 || p.nnew>2)
     Kokkos::abort("Invalid Kokkos tracer dimensions or predictor alias");
   const int nx=p.Iend-p.Istr+1, ny=p.Jend-p.Jstr+1;
-  if (nx<1 || ny<1 || nx>2147483647 || ny>2147483647)
-    Kokkos::abort("Invalid tracer tile");
+  if (nx<1 || ny<1) Kokkos::abort("Invalid tracer tile");
   for (int it=0;it<p.NT;++it)
     if (schemes[it]!=0 && schemes[it]!=1) Kokkos::abort("Unsupported tracer scheme");
   constexpr int KB=32;
@@ -377,95 +234,4 @@ extern "C" void k_step3d_t_chunks(const TracerConfig* config, const int* schemes
       });
 }
 
-#ifdef KK_STEP3D_T_TEAM
-/*
-** Experimental TeamPolicy entries, compiled only for the team benchmark.
-** On the SW64 backend a team is fixed at 64 CPEs (one core group) and the
-** leagues run one after another inside that group, so these variants trade
-** launch-level parallelism for team-scoped sharing.
-**
-**   mode 0: one column per team member; identical work to k_step3d_t and
-**           only measures the team machinery's overhead.
-**   mode 1: one team per row (j), the team computes the x-face fluxes for
-**           every level once into its scratch, then each member advances
-**           its own columns using those fluxes. This removes the duplicate
-**           x-face evaluation the per-column kernel does for neighbouring
-**           columns.
-*/
-extern "C" void k_step3d_t_team(const roms::TracerConfig* config,
-    const int* schemes, int mode, void* pm, void* pn, void* Hz, void* Huon,
-    void* Hvom, void* W, void* zr, void* Akt, void* tracer, void* diagnostics,
-    void* scratch_buffer) {
-  roms::initialize();
-  const TracerConfig p=*config;
-  if (p.N<3 || p.NT<1 || p.NAT<1 || p.nnew<1 || p.nnew>2 || mode<0 || mode>1)
-    Kokkos::abort("Invalid team tracer configuration");
-  const int nx=p.Iend-p.Istr+1, ny=p.Jend-p.Jstr+1;
-  const std::size_t columns=std::size_t(nx)*ny;
-  if (nx<1 || ny<1) Kokkos::abort("Invalid tracer tile");
-  for (int it=0;it<p.NT;++it)
-    if (schemes[it]!=0 && schemes[it]!=1) Kokkos::abort("Unsupported tracer scheme");
-  double* sh=static_cast<double*>(scratch_buffer);
-  const auto a2=[&](void* v) {return roms::as_2d<double>(v,p.LBi,p.UBi,p.LBj,p.UBj);};
-  const auto a3=[&](void* v,int low) {return roms::as_3d<double>(v,p.LBi,p.UBi,p.LBj,p.UBj,low,p.N);};
-  const Fields f{p,a2(pm),a2(pn),a3(Hz,1),a3(Huon,1),a3(Hvom,1),a3(W,0),a3(zr,1),
-      roms::as_4d<double>(Akt,p.LBi,p.UBi,p.LBj,p.UBj,0,p.N,1,p.NAT),
-      roms::as_5d<double>(tracer,p.LBi,p.UBi,p.LBj,p.UBj,1,p.N,1,3,1,p.NT),
-      roms::as_5d<double>(diagnostics,p.LBi,p.UBi,p.LBj,p.UBj,1,p.N,1,p.NT,1,p.NDT)};
-  using team_policy=Kokkos::TeamPolicy<roms::exec_space>;
-  using member=team_policy::member_type;
-#if defined(ROMS_KOKKOS_SW64)
-  constexpr int team_size=64;   // one core group; the backend fixes this
-#else
-  constexpr int team_size=1;    // the Serial backend rejects larger teams
-#endif
-
-  if (mode==0) {
-    const int league=(int(columns)+team_size-1)/team_size;
-    Kokkos::parallel_for("ROMS step3d_t team columns",
-        team_policy(league,team_size),
-        KOKKOS_LAMBDA(const member& team) {
-          const int index=team.league_rank()*team_size+team.team_rank();
-          if (index<int(columns)) {
-            const int i=p.Istr+index%nx, j=p.Jstr+index/nx;
-            double* cf=sh+std::size_t(index)*2*(p.N+1);
-            double* dc=cf+p.N+1;
-            for (int it=1;it<=p.NT;++it) f.column(i,j,it,schemes[it-1],cf,dc);
-          }
-          team.team_barrier();
-        });
-    return;
-  }
-
-  const std::size_t face_size=std::size_t(nx+1)*p.N;
-  const std::size_t team_scratch=face_size+std::size_t(team_size)*2*(p.N+1);
-  Kokkos::parallel_for("ROMS step3d_t team rows",
-      team_policy(ny,team_size),
-      KOKKOS_LAMBDA(const member& team) {
-        const int j=p.Jstr+team.league_rank();
-        double* base=sh+std::size_t(team.league_rank())*team_scratch;
-        double* fx=base;
-        for (int it=1;it<=p.NT;++it) {
-          const int scheme=schemes[it-1];
-          Kokkos::parallel_for(Kokkos::TeamThreadRange(team,nx+1),
-              [&](int fi) {
-                const int i=p.Istr+fi;
-                double* out=fx+std::size_t(fi)*p.N;
-                for (int k=1;k<=p.N;++k) out[k-1]=f.horizontal(i,j,k,it,true,scheme);
-              });
-          team.team_barrier();
-          Kokkos::parallel_for(Kokkos::TeamThreadRange(team,nx),
-              [&](int ci) {
-                const int i=p.Istr+ci;
-                double* cf=base+face_size+
-                    std::size_t(team.team_rank())*2*(p.N+1);
-                double* dc=cf+p.N+1;
-                f.column_body(i,j,it,scheme,cf,dc,
-                    fx+std::size_t(ci)*p.N,fx+std::size_t(ci+1)*p.N);
-              });
-          team.team_barrier();
-        }
-      });
-}
-#endif
 #endif

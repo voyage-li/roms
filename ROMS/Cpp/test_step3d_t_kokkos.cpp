@@ -1,3 +1,6 @@
+/* Direct regression for the production tracer kernel k_step3d_t_chunks
+** against a Fortran copy of the step3d_t loops (test_step3d_t_reference.F).
+** The 37-column tile crosses the 32-column chunk boundary. */
 #include "kokkos_step3d_t.hpp"
 #include <algorithm>
 #include <cmath>
@@ -6,10 +9,10 @@
 extern "C" void reference_step3d_t(const roms::TracerConfig*, const int*,
     void*,void*,void*,void*,void*,void*,void*,void*,void*,void*);
 
-bool run_case(int levels, int output, int periodic, int mode) {
+bool run_case(int nx, int levels, int output, int periodic, int mode) {
   roms::TracerConfig p{};
-  p.LBi=p.LBj=-3; p.UBi=13; p.UBj=11;
-  p.Istr=p.Jstr=1; p.Iend=9; p.Jend=7;
+  p.LBi=p.LBj=-3; p.UBi=nx+4; p.UBj=11;
+  p.Istr=p.Jstr=1; p.Iend=nx; p.Jend=7;
   p.N=levels; p.NT=p.NAT=2; p.NDT=8; p.nnew=output;
   p.xadv=1; p.yadv=2; p.hadv=3; p.vadv=4; p.vdif=5;
   p.west=p.east=p.south=p.north=1;
@@ -52,7 +55,7 @@ bool run_case(int levels, int output, int periodic, int mode) {
   auto expected=t, expected_diag=diag;
   reference_step3d_t(&p,schemes,pm.data(),pn.data(),hz.data(),hu.data(),hv.data(),
       w.data(),zr.data(),akt.data(),expected.data(),expected_diag.data());
-  k_step3d_t(&p,schemes,pm.data(),pn.data(),hz.data(),hu.data(),hv.data(),
+  k_step3d_t_chunks(&p,schemes,pm.data(),pn.data(),hz.data(),hu.data(),hv.data(),
       w.data(),zr.data(),akt.data(),t.data(),diag.data());
   bool ok=true; double error=0,derr=0,peak=0,dpeak=0;
   for (std::size_t k=0;k<t.size();++k) {
@@ -108,8 +111,8 @@ bool run_case(int levels, int output, int periodic, int mode) {
     }
   }
 
-  std::printf("N=%d nnew=%d periodic=%d mode=%d tracer=%.4e diag=%.4e %s\n",
-      levels,output,periodic,mode,error,derr,ok?"PASS":"FAIL");
+  std::printf("nx=%d N=%d nnew=%d periodic=%d mode=%d tracer=%.4e diag=%.4e %s\n",
+      nx,levels,output,periodic,mode,error,derr,ok?"PASS":"FAIL");
   return ok;
 }
 int main() {
@@ -117,7 +120,10 @@ int main() {
   bool ok=true;
   for (int n:{4,7,16,33}) for (int output=1;output<=2;++output)
     for (int periodic=0;periodic<4;++periodic) for (int mode=0;mode<4;++mode)
-      ok &= run_case(n,output,periodic,mode);
+      ok &= run_case(9,n,output,periodic,mode);
+  for (int n:{4,33}) for (int output=1;output<=2;++output)
+    for (int periodic:{0,3}) for (int mode=1;mode<=2;++mode)
+      ok &= run_case(37,n,output,periodic,mode);
   roms::finalize();
   return ok?0:1;
 }

@@ -53,6 +53,38 @@ message( STATUS "CPP_CLEAN = ${CPP_CLEAN}" )
 
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/f90")
 
+# Optional row lowering (ROMS_KOKKOS only).  A source file is passed through
+# ROMS/Cpp/tools/row_codegen.py when the stage flag that owns it is in
+# MY_CPP_FLAGS.  The three lists name the same files as row_codegen.TARGETS;
+# ROMS/Cpp/tools/test_row_codegen.py checks that they stay in step.
+
+set(row_files rhs3d set_depth set_massflux rho_eos bulk_flux t3dmix
+              uv_var_change pre_step3d step3d_t diag wvelocity set_vbc
+              analytical set_avg set_diags lmd_swfrac)              # KK_STAGE_REMAINDER
+set(lmd_files lmd_vmix lmd_skpp lmd_bkpp)                           # KK_STAGE_LMD
+set(gls_files gls_prestep gls_corstep)                              # KK_STAGE_GLS
+
+set(row_lowered)
+if("KK_STAGE_REMAINDER" IN_LIST MY_CPP_FLAGS)
+  list(APPEND row_lowered ${row_files})
+endif()
+if("KK_STAGE_LMD" IN_LIST MY_CPP_FLAGS)
+  list(APPEND row_lowered ${lmd_files})
+endif()
+if("KK_STAGE_GLS" IN_LIST MY_CPP_FLAGS)
+  list(APPEND row_lowered ${gls_files})
+endif()
+
+if(ROMS_KOKKOS AND NOT "${row_lowered}" STREQUAL "")
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  set(row_gen "${CMAKE_CURRENT_SOURCE_DIR}/ROMS/Cpp/tools/row_codegen.py")
+  # The generator reads the field lists of these modules.
+  set(row_field_deps)
+  foreach(owner grid ocean mixing forces diags average param scalars ncparam eoscoef)
+    list(APPEND row_field_deps "${CMAKE_CURRENT_SOURCE_DIR}/ROMS/Modules/mod_${owner}.F")
+  endforeach()
+endif()
+
 function(preprocess_fortran)
 
    # Determine include directories.
@@ -108,30 +140,17 @@ function(preprocess_fortran)
 
        # Preprocess the thing.
 
-       # Optional row lowering uses the already selected physics and keeps
-       # the original Fortran as the sole source of arithmetic expressions.
-       set(row_files rhs3d set_depth set_massflux rho_eos bulk_flux
-                     t3dmix uv_var_change pre_step3d step3d_t diag
-                     wvelocity set_vbc analytical set_avg set_diags lmd_swfrac)
-       set(lmd_files lmd_vmix lmd_skpp lmd_bkpp)
-       set(gls_files gls_prestep gls_corstep)
-       if(ROMS_KOKKOS AND
-          (("KK_STAGE_REMAINDER" IN_LIST MY_CPP_FLAGS AND n IN_LIST row_files)
-           OR ("KK_STAGE_LMD" IN_LIST MY_CPP_FLAGS AND n IN_LIST lmd_files)
-           OR ("KK_STAGE_GLS" IN_LIST MY_CPP_FLAGS AND n IN_LIST gls_files)))
-         find_package(Python3 REQUIRED COMPONENTS Interpreter)
+       # Row lowering uses the already selected physics and keeps the
+       # original Fortran as the sole source of arithmetic expressions.
+
+       if(ROMS_KOKKOS AND n IN_LIST row_lowered)
          set(raw "${of}.raw")
          set(oc "${CMAKE_CURRENT_BINARY_DIR}/f90/${n}_rows.cpp")
-         set(gen "${CMAKE_CURRENT_SOURCE_DIR}/ROMS/Cpp/tools/row_codegen.py")
-         set(row_field_deps)
-         foreach(owner grid ocean mixing forces diags average param scalars ncparam eoscoef)
-           list(APPEND row_field_deps "${CMAKE_CURRENT_SOURCE_DIR}/ROMS/Modules/mod_${owner}.F")
-         endforeach()
          add_custom_command(OUTPUT "${of}" "${oc}"
            COMMAND ${CPP_EXECUTABLE} ${CPPFLAGS} ${defflags} ${fdefflags} ${incflags} "${f}" > "${raw}"
            COMMAND ${CPP_CLEAN} "${raw}"
-           COMMAND ${Python3_EXECUTABLE} "${gen}" "${raw}" "${of}" "${oc}"
-           DEPENDS "${gen}" ${row_field_deps}
+           COMMAND ${Python3_EXECUTABLE} "${row_gen}" "${raw}" "${of}" "${oc}"
+           DEPENDS "${row_gen}" ${row_field_deps}
            IMPLICIT_DEPENDS Fortran "${f}"
            COMMENT "Preprocessing and lowering rows in ${f}"
            COMMAND_EXPAND_LISTS VERBATIM)

@@ -50,34 +50,18 @@ if( DEFINED ENV{ECBUILD_MODULE_PATH} )
   set( IN_ECBUILD TRUE )
 endif()
 
-if( MPI AND NOT DEFINED CMAKE_Fortran_COMPILER AND
-    NOT DEFINED CMAKE_TOOLCHAIN_FILE )
-  find_program( ROMS_MPIF90 NAMES mpif90 )
-  if( NOT ROMS_MPIF90 )
-    message( FATAL_ERROR "MPI build requires an MPI Fortran compiler" )
-  endif()
-  set( CMAKE_Fortran_COMPILER "${ROMS_MPIF90}" CACHE FILEPATH "Fortran compiler" )
-endif()
-
-project(roms VERSION 4.1 LANGUAGES CXX Fortran)
+project(roms VERSION 4.1 LANGUAGES Fortran)
 
 #::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 # Kokkos (optional)
 #
 # When ROMS_KOKKOS is ON the ROMS/Cpp kernels are built and linked, and
 # the ROMS_KOKKOS define reaches both Fortran and C++ so the two sides
-# agree on which path is active.  The Serial backend is used on purpose:
-# ROMS already threads over tiles (see ROMS/Drivers/nl_roms.h), so a
-# threaded Kokkos backend would either nest inside that region or
-# oversubscribe.
+# agree on which path is active.  C++ is enabled only for these builds.
 #::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 option( ROMS_KOKKOS "Build ROMS with Kokkos compute kernels" OFF )
-option( ROMS_KOKKOS_STEP3D_T "Enable the U3/C4 and HSIMT tracer column kernel" OFF )
-option( ROMS_TRACER_TIMING "Report step3d_t module wall time" OFF )
-if( ROMS_TRACER_TIMING )
-  add_compile_definitions( KK_PROFILE_STEP3D_T )
-endif()
+option( ROMS_KOKKOS_STEP3D_T "Enable the U3/C4 and HSIMT tracer chunk kernel" OFF )
 if( ROMS_KOKKOS AND ROMS_KOKKOS_STEP3D_T )
   add_compile_definitions( KK_STAGE_STEP3D_T )
 endif()
@@ -86,6 +70,7 @@ set( ROMS_KOKKOS_BACKEND "serial" CACHE STRING
 set_property( CACHE ROMS_KOKKOS_BACKEND PROPERTY STRINGS serial openmp sw64 )
 
 if( ROMS_KOKKOS )
+  enable_language( CXX )
   # Backend.  "serial" keeps ROMS as the only source of parallelism (it
   # threads over tiles) and the kernels are plain loops; "openmp" lets
   # Kokkos thread inside each kernel, which requires running ROMS itself
@@ -101,10 +86,8 @@ if( ROMS_KOKKOS )
     set( Kokkos_ENABLE_SERIAL ON  CACHE BOOL "" FORCE )
     set( Kokkos_ENABLE_OPENMP OFF CACHE BOOL "" FORCE )
     set( Kokkos_ENABLE_SW64   ON  CACHE BOOL "" FORCE )
-    # Kokkos' SW64 backend needs C++17 (core/src/CMakeLists.txt enforces
-    # nothing; cmake/kokkos_enable_devices.cmake does).
-    set( CMAKE_CXX_STANDARD 17 CACHE STRING "" FORCE )
-    set( CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL "" FORCE )
+    # The SW64 backend needs C++17: Compilers/toolchain_SW64.cmake sets
+    # it and Kokkos' cmake/kokkos_enable_devices.cmake enforces it.
     add_compile_definitions( ROMS_KOKKOS_SW64 )
   elseif( _kk_backend STREQUAL "serial" )
     set( Kokkos_ENABLE_SERIAL ON  CACHE BOOL "" FORCE )
@@ -120,6 +103,16 @@ if( ROMS_KOKKOS )
   set( Kokkos_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE )
   add_subdirectory( Kokkos )
   add_compile_definitions( ROMS_KOKKOS )
+  if( SW64 )
+    # Static try-compile cannot discover the cross C++ implicit runtime.
+    # Append it after Kokkos archives: these toolchains link statically.
+    # It applies to every Fortran-linked executable, tests included.
+    string( APPEND CMAKE_Fortran_STANDARD_LIBRARIES " -lstdc++" )
+    if( _kk_backend STREQUAL "sw64" )
+      string( APPEND CMAKE_Fortran_STANDARD_LIBRARIES
+        " -lstdc++_slave -lm_slave" )
+    endif()
+  endif()
   message( STATUS "ROMS will be built with Kokkos kernels (ROMS/Cpp), "
                   "backend = ${_kk_backend}" )
 endif()
@@ -399,102 +392,65 @@ add_library( Objects OBJECT ${All_f90s} )
 # it does not add anything to Objects' own link step.
 
 if( ROMS_KOKKOS )
-  target_link_libraries( Objects Kokkos::kokkos )
-  if( _kk_backend STREQUAL "sw64" )
-    # The fused RHS and hvisc2 touch 17+ arrays; GCC's default limit of 20
-    # alias-versioning checks makes it give up on those loops. 64 lets it
-    # vectorise hvisc2 (and the V pass of pressure_grad) instead.
-    target_compile_options( Objects PRIVATE
-      "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive;--param;vect-max-version-for-alias-checks=64>" )
-  endif()
-
-  option( ROMS_KOKKOS_TESTS "Build direct step2d regression tests" OFF )
-  if( ROMS_KOKKOS_TESTS )
-    add_executable( test_step2d_kokkos ROMS/Cpp/test_step2d_kokkos.cpp
-      ROMS/Cpp/test_step2d_reference.f90
-      ROMS/Cpp/kokkos_config.cpp ROMS/Cpp/kokkos_step2d.cpp )
-    set_target_properties( test_step2d_kokkos PROPERTIES LINKER_LANGUAGE Fortran )
-    target_link_libraries( test_step2d_kokkos Kokkos::kokkos )
-    if( ROMS_KOKKOS_STEP3D_T )
-      preprocess_fortran( ROMS/Cpp/test_step3d_t_reference.F )
-      add_executable( test_step3d_t_kokkos ${f90srcs}
-        ROMS/Cpp/test_step3d_t_kokkos.cpp ROMS/Cpp/kokkos_config.cpp
-        ROMS/Cpp/kokkos_step3d_t.cpp )
-      add_dependencies( test_step3d_t_kokkos Objects )
-      target_link_libraries( test_step3d_t_kokkos Kokkos::kokkos )
-      set_target_properties( test_step3d_t_kokkos PROPERTIES LINKER_LANGUAGE Fortran )
-      if( _kk_backend STREQUAL "sw64" )
-        target_compile_options( test_step3d_t_kokkos PRIVATE
-          "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive>" )
-      endif()
-
-      add_executable( bench_step3d_t_kokkos
-        ROMS/Cpp/bench_step3d_t.cpp ROMS/Cpp/kokkos_config.cpp
-        ROMS/Cpp/kokkos_step3d_t.cpp )
-      target_link_libraries( bench_step3d_t_kokkos Kokkos::kokkos )
-      set_target_properties( bench_step3d_t_kokkos PROPERTIES LINKER_LANGUAGE Fortran )
-      if( _kk_backend STREQUAL "sw64" )
-        target_compile_options( bench_step3d_t_kokkos PRIVATE
-          "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive>" )
-      endif()
-
-      # Same benchmark with the experimental TeamPolicy entries compiled in.
-      add_executable( bench_step3d_t_team_kokkos
-        ROMS/Cpp/bench_step3d_t.cpp ROMS/Cpp/kokkos_config.cpp
-        ROMS/Cpp/kokkos_step3d_t.cpp )
-      target_compile_definitions( bench_step3d_t_team_kokkos PRIVATE KK_STEP3D_T_TEAM )
-      target_link_libraries( bench_step3d_t_team_kokkos Kokkos::kokkos )
-      set_target_properties( bench_step3d_t_team_kokkos PROPERTIES LINKER_LANGUAGE Fortran )
-      if( _kk_backend STREQUAL "sw64" )
-        target_compile_options( bench_step3d_t_team_kokkos PRIVATE
-          "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive>" )
-      endif()
-    endif()
-
-    # Same step2d kernels with the experimental TeamPolicy entries.
-    add_executable( bench_step2d_team_kokkos
-      ROMS/Cpp/bench_step2d_team.cpp ROMS/Cpp/kokkos_config.cpp
-      ROMS/Cpp/kokkos_step2d.cpp ROMS/Cpp/kokkos_step2d_team.cpp )
-    target_compile_definitions( bench_step2d_team_kokkos PRIVATE KK_STEP2D_TEAM )
-    target_link_libraries( bench_step2d_team_kokkos Kokkos::kokkos )
-    if( _kk_backend STREQUAL "sw64" )
-      target_compile_options( bench_step2d_team_kokkos PRIVATE
-        "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive;--param;vect-max-version-for-alias-checks=64>" )
-
-      # Same kernels with the team scratch taken from the shared-LDM pool.
-      # Requires -cache_size 32 -ldm_share_mode 5 -ldm_share_size 128.
-      add_executable( bench_step2d_team_ldm_kokkos
-        ROMS/Cpp/bench_step2d_team.cpp ROMS/Cpp/kokkos_config.cpp
-        ROMS/Cpp/kokkos_step2d.cpp ROMS/Cpp/kokkos_step2d_team.cpp )
-      target_compile_definitions( bench_step2d_team_ldm_kokkos PRIVATE
-        KK_STEP2D_TEAM KK_STEP2D_TEAM_LDM )
-      target_link_libraries( bench_step2d_team_ldm_kokkos Kokkos::kokkos )
-      target_compile_options( bench_step2d_team_ldm_kokkos PRIVATE
-        "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive>" )
-    endif()
-
-    if( _kk_backend STREQUAL "sw64" )
-      target_compile_options( test_step2d_kokkos PRIVATE
-        "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive;--param;vect-max-version-for-alias-checks=64>" )
-    endif()
-  endif()
-
+  # Options for every translation unit that includes the kernels.
+  # -mhybrid-coding is required by the SW64 backend (kokkos_config.hpp).
+  # The alias-check limit only matters where GCC vectorises
+  # (ROMS_FAST_MATH=ON): the fused 2-D RHS and coupling loops touch more
+  # arrays than the default limit of 20 versioning checks.
+  #
   # swgcc-1473 changes rounding in auto-vectorized CPE arithmetic even
   # without fast-math (an identical-input momentum replay differs by one
   # ULP; its scalar CPE form is exact). KPP amplifies such seeds through
   # density cancellation and convective mixing. Conservative math must
   # therefore also retain scalar evaluation within each CPE. This does
   # not disable Kokkos/CPE parallelism or change the Fortran reference.
-  # Apply the same policy to production and direct tests/benchmarks.
-  if( _kk_backend STREQUAL "sw64" AND NOT ROMS_FAST_MATH )
-    foreach( kk_target Objects test_step2d_kokkos test_step3d_t_kokkos
-             bench_step3d_t_kokkos bench_step3d_t_team_kokkos
-             bench_step2d_team_kokkos bench_step2d_team_ldm_kokkos )
-      if( TARGET ${kk_target} )
-        target_compile_options( ${kk_target} PRIVATE
+  function( roms_kokkos_cxx_options target )
+    if( _kk_backend STREQUAL "sw64" )
+      target_compile_options( ${target} PRIVATE
+        "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive;--param;vect-max-version-for-alias-checks=64>" )
+      if( NOT ROMS_FAST_MATH )
+        target_compile_options( ${target} PRIVATE
           "$<$<COMPILE_LANGUAGE:CXX>:-fno-tree-vectorize>" )
       endif()
-    endforeach()
+    endif()
+  endfunction()
+
+  target_link_libraries( Objects Kokkos::kokkos )
+  roms_kokkos_cxx_options( Objects )
+
+  option( ROMS_KOKKOS_TESTS "Build the direct kernel regression tests" OFF )
+  if( ROMS_KOKKOS_TESTS )
+    function( roms_kokkos_test target )
+      add_executable( ${target} ${ARGN} )
+      target_link_libraries( ${target} Kokkos::kokkos )
+      set_target_properties( ${target} PROPERTIES LINKER_LANGUAGE Fortran )
+      roms_kokkos_cxx_options( ${target} )
+    endfunction()
+
+    roms_kokkos_test( test_step2d_kokkos ROMS/Cpp/test_step2d_kokkos.cpp
+      ROMS/Cpp/test_step2d_reference.f90
+      ROMS/Cpp/kokkos_config.cpp ROMS/Cpp/kokkos_step2d.cpp )
+
+    if( ROMS_KOKKOS_STEP3D_T )
+      preprocess_fortran( ROMS/Cpp/test_step3d_t_reference.F )
+      roms_kokkos_test( test_step3d_t_kokkos ${f90srcs}
+        ROMS/Cpp/test_step3d_t_kokkos.cpp ROMS/Cpp/kokkos_config.cpp
+        ROMS/Cpp/kokkos_step3d_t.cpp )
+      # It recompiles the ROMS modules; serialise their .mod writes.
+      add_dependencies( test_step3d_t_kokkos Objects )
+    endif()
+
+    # Fortran only.  The two small modules are the preprocessed copies that
+    # the Objects library generates (a .F source would be compiled as fixed
+    # form); their own module directory keeps them from overwriting the ones
+    # Objects writes.
+    add_executable( test_row_guards
+      "${CMAKE_CURRENT_BINARY_DIR}/f90/kokkos_step3d_t_mod.f90"
+      "${CMAKE_CURRENT_BINARY_DIR}/f90/kokkos_loops_mod.f90"
+      ROMS/Cpp/test_row_guards.f90 )
+    set_target_properties( test_row_guards PROPERTIES
+      Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/module_test_row_guards" )
+    add_dependencies( test_row_guards Objects )
   endif()
 endif()
 
@@ -549,10 +505,8 @@ else()
     set_target_properties(ROMS_shared PROPERTIES OUTPUT_NAME ROMS)
     install( TARGETS ROMS_shared LIBRARY )
 
-    # This is needed to add to the depency list of the ROMS executable
-    # since it is linking with libROMS.so instead of libROMS_shared.so
-    # The executable doesn't see "ROMS" as a target generated by this
-    # project so it starts linking before the library is fully assembled.
+    # The executable links the ROMS_shared target, which already orders
+    # the build; the explicit dependency below is kept for clarity.
 
     list( APPEND deplib ROMS_shared )
   endif()
@@ -562,10 +516,8 @@ else()
     set_target_properties(ROMS_static PROPERTIES OUTPUT_NAME ROMS)
     install( TARGETS ROMS_static ARCHIVE )
 
-    # This is needed to add to the depency list of the ROMS executable
-    # since it is linking with libROMS.a instead of libROMS_static.a
-    # The executable doesn't see "ROMS" as a target generated by this
-    # project so it starts linking before the library is fully assembled.
+    # The executable links the ROMS_static target, which already orders
+    # the build; the explicit dependency below is kept for clarity.
 
     list( APPEND deplib ROMS_static )
   endif()
@@ -628,22 +580,13 @@ else()
     endif()
 
     # Kokkos kernels live in ROMS/Cpp and are linked into the executable.
-    # The linker language is forced back to Fortran: adding CXX to the
-    # project() languages would otherwise let CMake pick the C++ driver,
-    # which does not know about the Fortran runtime ROMS needs.
+    # The linker language is forced back to Fortran: with C++ objects in
+    # the link, CMake would otherwise pick the C++ driver, which does not
+    # know about the Fortran runtime ROMS needs.
 
     if( ROMS_KOKKOS )
       target_link_libraries( "${BIN}" Kokkos::kokkos )
       set_target_properties( "${BIN}" PROPERTIES LINKER_LANGUAGE Fortran )
-      if( SW64 )
-        # Static try-compile cannot discover the cross C++ implicit runtime.
-        # Append it after Kokkos archives: these toolchains link statically.
-        string( APPEND CMAKE_Fortran_STANDARD_LIBRARIES " -lstdc++" )
-        if( _kk_backend STREQUAL "sw64" )
-          string( APPEND CMAKE_Fortran_STANDARD_LIBRARIES
-            " -lstdc++_slave -lm_slave" )
-        endif()
-      endif()
     endif()
 
     # If ARPACK is needed, add to linking library list.

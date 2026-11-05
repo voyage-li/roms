@@ -6,9 +6,7 @@
      &                                      C_INTPTR_T, C_LOC
       implicit none
       PRIVATE
-      PUBLIC :: kokkos_tracer_config, k_step3d_t, k_step3d_t_rows, &
-     &          k_step3d_t_chunks, &
-     &          kk_is_contiguous
+      PUBLIC :: kokkos_tracer_config, k_step3d_t_chunks, kk_is_contiguous
 !
       TYPE, BIND(C) :: kokkos_tracer_config
         integer(C_INT) :: LBi, UBi, LBj, UBj
@@ -30,26 +28,6 @@
       END INTERFACE
 !
       INTERFACE
-        SUBROUTINE k_step3d_t (config, schemes, pm, pn, Hz, Huon, &
-     &                        Hvom, W, zr, Akt, tracer, diagnostics) &
-     &                        BIND(C, NAME='k_step3d_t')
-          IMPORT :: kokkos_tracer_config, C_INT, C_PTR
-          TYPE(kokkos_tracer_config), INTENT(IN) :: config
-          integer(C_INT), INTENT(IN) :: schemes(*)
-          TYPE(C_PTR), VALUE :: pm, pn, Hz, Huon, Hvom, W, zr, Akt
-          TYPE(C_PTR), VALUE :: tracer, diagnostics
-        END SUBROUTINE k_step3d_t
-!
-        SUBROUTINE k_step3d_t_rows (config, schemes, pm, pn, Hz, Huon, &
-     &                        Hvom, W, zr, Akt, tracer, diagnostics) &
-     &                        BIND(C, NAME='k_step3d_t_rows')
-          IMPORT :: kokkos_tracer_config, C_INT, C_PTR
-          TYPE(kokkos_tracer_config), INTENT(IN) :: config
-          integer(C_INT), INTENT(IN) :: schemes(*)
-          TYPE(C_PTR), VALUE :: pm, pn, Hz, Huon, Hvom, W, zr, Akt
-          TYPE(C_PTR), VALUE :: tracer, diagnostics
-        END SUBROUTINE k_step3d_t_rows
-!
         SUBROUTINE k_step3d_t_chunks (config, schemes, pm, pn, Hz,      &
      &                        Huon, Hvom, W, zr, Akt, tracer,           &
      &                        diagnostics)                              &
@@ -77,7 +55,6 @@
         kk_contiguous2=kk_contiguous2.and. &
      &    (TRANSFER(C_LOC(a(1,2)),0_C_INTPTR_T)-base.eq.stride)
       END IF
-      stride=stride*INT(SIZE(a,2),C_INTPTR_T)
       END FUNCTION kk_contiguous2
 !
       logical FUNCTION kk_contiguous3(a)
@@ -100,7 +77,6 @@
         kk_contiguous3=kk_contiguous3.and. &
      &    (TRANSFER(C_LOC(a(1,1,2)),0_C_INTPTR_T)-base.eq.stride)
       END IF
-      stride=stride*INT(SIZE(a,3),C_INTPTR_T)
       END FUNCTION kk_contiguous3
 !
       logical FUNCTION kk_contiguous4(a)
@@ -128,7 +104,6 @@
         kk_contiguous4=kk_contiguous4.and. &
      &    (TRANSFER(C_LOC(a(1,1,1,2)),0_C_INTPTR_T)-base.eq.stride)
       END IF
-      stride=stride*INT(SIZE(a,4),C_INTPTR_T)
       END FUNCTION kk_contiguous4
 !
       logical FUNCTION kk_contiguous5(a)
@@ -161,7 +136,6 @@
         kk_contiguous5=kk_contiguous5.and. &
      &    (TRANSFER(C_LOC(a(1,1,1,1,2)),0_C_INTPTR_T)-base.eq.stride)
       END IF
-      stride=stride*INT(SIZE(a,5),C_INTPTR_T)
       END FUNCTION kk_contiguous5
 !
       END MODULE kokkos_step3d_t_mod

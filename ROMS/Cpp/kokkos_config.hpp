@@ -115,20 +115,6 @@
 #  error "Define only one of ROMS_KOKKOS_SERIAL / _OPENMP / _SW64"
 #endif
 
-/*
-** SW64 carries its own trap.  Kokkos guards the entire SW64 backend with
-**
-**   #if defined(KOKKOS_ENABLE_SW64) && defined(__sw_hybrid_coding__)
-**
-** so a translation unit compiled without -mhybrid-coding gets an empty
-** backend.  It still compiles: Kokkos_Setup_SW64.hpp falls back to an
-** ordinary "KOKKOS_LAMBDA [&]" when __sw_hybrid_coding__ is absent, so
-** the failure is silent rather than a build error.  Kokkos' own CMake
-** applies -mhybrid-coding only to its two internal sources and does not
-** propagate it, so the kernels must assert it here.  (The check itself
-** lives above the Kokkos include, next to cppdefs.h.)
-*/
-
 namespace roms {
 
 /*
@@ -137,18 +123,6 @@ namespace roms {
 ** kernel bodies can be written to match the Fortran source line for
 ** line.
 */
-
-template <class T>
-struct Array1d {
-  T*  p   = nullptr;
-  int lb  = 0;
-  int ni  = 0;
-
-  KOKKOS_INLINE_FUNCTION
-  T& operator()(int i) const {
-    return p[(i - lb)];
-  }
-};
 
 template <class T>
 struct Array2d {
@@ -160,11 +134,6 @@ struct Array2d {
   T& operator()(int i, int j) const {
     return p[std::ptrdiff_t(i - lb_i) + std::ptrdiff_t(j - lb_j) * ni];
   }
-
-  KOKKOS_INLINE_FUNCTION
-  int size_i() const { return ni; }
-  KOKKOS_INLINE_FUNCTION
-  int size_j() const { return nj; }
 };
 
 template <class T>
@@ -329,7 +298,6 @@ using exec_space = Kokkos::Serial;
 
 void initialize();
 void finalize();
-bool is_initialized();
 
 /*
 ** Optional per-kernel wall time.  Set ROMS_KK_TIMING=1 in the job's

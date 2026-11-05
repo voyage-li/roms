@@ -7,9 +7,9 @@
 ** --------------
 **   * uv3dmix2_s computes the stress-tensor fluxes at rho and psi
 **     points into tile scratch, then updates.  Here one work item owns a
-**     (j, k) row and carries the xi-flux along i; the flux a neighbour
-**     row would have stored is recomputed from the same inputs, which is
-**     the same expression (not a re-read of a race-prone value).
+**     row j, loops over k and carries the xi-flux along i; the flux a
+**     neighbour row would have stored is recomputed from the same inputs,
+**     which is the same expression (not a re-read of a race-prone value).
 **   * t3dmix2_s is the same pattern per tracer.
 **   * prsgrd32 has a column recursion (P) followed by two face passes.
 **     The column pass keeps dR/dZ in a reusable workspace; the face
@@ -19,7 +19,8 @@
 ** The Fortran expressions are copied in the same order and grouping, so
 ** the results are bitwise identical on a serial backend.  Every stage is
 ** compiled only under its own flag; an unsupported macro combination is
-** a compile error rather than a silent fallback.
+** a compile error rather than a silent fallback.  The mixing and pressure
+** gradient stages require the diagnostics their Fortran callers pass.
 */
 
 #include "kokkos_rhs3d.hpp"
@@ -69,6 +70,9 @@ thread_local Workspace workspace;
 
 #if defined MASKING || defined WET_DRY || defined VISC_3DCOEF
 #  error "Kokkos uv3dmix2 supports the constant-coefficient, unmasked case"
+#endif
+#if !defined DIAGNOSTICS_UV
+#  error "Kokkos uv3dmix2 requires DIAGNOSTICS_UV"
 #endif
 
 namespace {
@@ -173,7 +177,6 @@ extern "C" void k_uv3dmix2_s(int ng, int tile, int nrhs, int nnew,
   Array2d<double> rufrc = roms::as_2d<double>(rufrc_p, LBi, UBi, LBj, UBj);
   Array2d<double> rvfrc = roms::as_2d<double>(rvfrc_p, LBi, UBi, LBj, UBj);
 
-#if defined DIAGNOSTICS_UV
   Array4d<double> DiaRUfrc = roms::as_4d<double>(
       DiaRUfrc_p, LBi, UBi, LBj, UBj, 1, 3, 1, NDM2d - 1);
   Array4d<double> DiaRVfrc = roms::as_4d<double>(
@@ -182,12 +185,6 @@ extern "C" void k_uv3dmix2_s(int ng, int tile, int nrhs, int nnew,
       DiaU3wrk_p, LBi, UBi, LBj, UBj, 1, NLev, 1, NDM3d);
   Array4d<double> DiaV3wrk = roms::as_4d<double>(
       DiaV3wrk_p, LBi, UBi, LBj, UBj, 1, NLev, 1, NDM3d);
-#else
-  (void)DiaRUfrc_p; (void)DiaRVfrc_p; (void)DiaU3wrk_p; (void)DiaV3wrk_p;
-  (void)NDM2d; (void)NDM3d;
-  (void)M2hvis; (void)M2xvis; (void)M2yvis;
-  (void)M3hvis; (void)M3xvis; (void)M3yvis;
-#endif
 
   const int j0 = t->JstrV - 1, j1 = t->Jend;
   const int iu0 = t->IstrU, iv0 = t->Istr, i1 = t->Iend;
@@ -216,7 +213,6 @@ extern "C" void k_uv3dmix2_s(int ng, int tile, int nrhs, int nnew,
             const double cff3 = cff * (cff1 + cff2);
             rufrc(i, j) = rufrc(i, j) + cff1 + cff2;
             f.u(i, j, k, nnew) = f.u(i, j, k, nnew) + cff3;
-#if defined DIAGNOSTICS_UV
             DiaRUfrc(i, j, 3, M2hvis) =
                 DiaRUfrc(i, j, 3, M2hvis) + cff1 + cff2;
             DiaRUfrc(i, j, 3, M2xvis) =
@@ -226,7 +222,6 @@ extern "C" void k_uv3dmix2_s(int ng, int tile, int nrhs, int nnew,
             DiaU3wrk(i, j, k, M3hvis) = cff3;
             DiaU3wrk(i, j, k, M3xvis) = cff * cff1;
             DiaU3wrk(i, j, k, M3yvis) = cff * cff2;
-#endif
             fprev = fc;
           }
         }
@@ -245,7 +240,6 @@ extern "C" void k_uv3dmix2_s(int ng, int tile, int nrhs, int nnew,
             const double cff3 = cff * (cff1 - cff2);
             rvfrc(i, j) = rvfrc(i, j) + cff1 - cff2;
             f.v(i, j, k, nnew) = f.v(i, j, k, nnew) + cff3;
-#if defined DIAGNOSTICS_UV
             DiaRVfrc(i, j, 3, M2hvis) =
                 DiaRVfrc(i, j, 3, M2hvis) + cff1 - cff2;
             DiaRVfrc(i, j, 3, M2xvis) =
@@ -255,7 +249,6 @@ extern "C" void k_uv3dmix2_s(int ng, int tile, int nrhs, int nnew,
             DiaV3wrk(i, j, k, M3hvis) = cff3;
             DiaV3wrk(i, j, k, M3xvis) = cff * cff1;
             DiaV3wrk(i, j, k, M3yvis) = -cff * cff2;
-#endif
             fnext = fc;
           }
         }
@@ -274,6 +267,9 @@ extern "C" void k_uv3dmix2_s(int ng, int tile, int nrhs, int nnew,
 #if defined MASKING || defined WET_DRY || defined DIFF_3DCOEF || \
     defined TS_MIX_STABILITY || defined TS_MIX_CLIMA
 #  error "Kokkos t3dmix2 supports the constant-coefficient, unmasked case"
+#endif
+#if !defined DIAGNOSTICS_TS
+#  error "Kokkos t3dmix2 requires DIAGNOSTICS_TS"
 #endif
 
 namespace {
@@ -330,13 +326,8 @@ extern "C" void k_t3dmix2_s(int ng, int tile, int nrhs, int nstp, int nnew,
                                     1, NT),
                 nrhs};
 
-#if defined DIAGNOSTICS_TS
   Array5d<double> DiaTwrk = roms::as_5d<double>(
       DiaTwrk_p, LBi, UBi, LBj, UBj, 1, NLev, 1, NT, 1, NDT);
-#else
-  (void)DiaTwrk_p; (void)NDT;
-  (void)iTxdif; (void)iTydif; (void)iThdif;
-#endif
 
   const int Jstr = t->Jstr, Jend = t->Jend;
   const int Istr = t->Istr, Iend = t->Iend;
@@ -358,11 +349,9 @@ extern "C" void k_t3dmix2_s(int ng, int tile, int nrhs, int nstp, int nnew,
               cff * (f.fe(i, j + 1, k, itrc) - f.fe(i, j, k, itrc));
           const double cff3 = cff1 + cff2;
           f.t(i, j, k, nnew, itrc) = f.t(i, j, k, nnew, itrc) + cff3;
-#if defined DIAGNOSTICS_TS
           DiaTwrk(i, j, k, itrc, iTxdif) = cff1;
           DiaTwrk(i, j, k, itrc, iTydif) = cff2;
           DiaTwrk(i, j, k, itrc, iThdif) = cff3;
-#endif
           fprev = fc;
         }
       });
@@ -379,6 +368,9 @@ extern "C" void k_t3dmix2_s(int ng, int tile, int nrhs, int nstp, int nnew,
 #if defined MASKING || defined WET_DRY || defined WEC_VF || \
     defined TIDE_GENERATING_FORCES || defined ATM_PRESS
 #  error "Kokkos prsgrd32 supports the unmasked DJ_GRADPS case"
+#endif
+#if !defined DIAGNOSTICS_UV
+#  error "Kokkos prsgrd32 requires DIAGNOSTICS_UV"
 #endif
 
 namespace {
@@ -422,14 +414,10 @@ extern "C" void k_prsgrd32(int ng, int tile, int nrhs,
                g,
                rho0};
 
-#if defined DIAGNOSTICS_UV
   Array5d<double> DiaRU = roms::as_5d<double>(
       DiaRU_p, LBi, UBi, LBj, UBj, 1, NLev, 1, 2, 1, NDrhs);
   Array5d<double> DiaRV = roms::as_5d<double>(
       DiaRV_p, LBi, UBi, LBj, UBj, 1, NLev, 1, 2, 1, NDrhs);
-#else
-  (void)DiaRU_p; (void)DiaRV_p; (void)NDrhs; (void)M3pgrd;
-#endif
 
   const double GRho = g / rho0;
   const double HalfGRho = 0.5 * GRho;
@@ -542,9 +530,7 @@ extern "C" void k_prsgrd32(int ng, int tile, int nrhs,
                              (f.rho(i, j, k) - f.rho(i - 1, j, k) -
                               OneTwelfth * (drx + drx_prev)))));
           f.ru(i, j, k, nrhs) = val;
-#if defined DIAGNOSTICS_UV
           DiaRU(i, j, k, nrhs, M3pgrd) = val;
-#endif
           dzx_prev = dzx;
           drx_prev = drx;
         }
@@ -593,9 +579,7 @@ extern "C" void k_prsgrd32(int ng, int tile, int nrhs,
                              (f.rho(i, j, k) - f.rho(i, j - 1, k) -
                               OneTwelfth * (drx + drx_prev)))));
           f.rv(i, j, k, nrhs) = val;
-#if defined DIAGNOSTICS_UV
           DiaRV(i, j, k, nrhs, M3pgrd) = val;
-#endif
           dzx_prev = dzx;
           drx_prev = drx;
         }
