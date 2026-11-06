@@ -10,8 +10,17 @@ sequential inside a row whenever it carries a vertical recurrence.
 Generated f90/cpp are build artifacts, not maintained copies of the math.
 """
 import argparse
+import os
 import re
+import sys
 from pathlib import Path
+
+# The translator is deliberately closed: a construct it does not model is an
+# error, not a guess, so that a hot row can never be silently mistranslated.
+# An application outside the supported set can ask for the row to stay in
+# Fortran instead, with a warning, and the rest of the application still
+# builds; the default keeps the strict behaviour the tests pin down.
+SKIP_UNTRANSLATED = os.environ.get('ROMS_KK_SKIP_UNTRANSLATED') == '1'
 
 TARGETS = {
     'rhs3d': ['rhs3d_tile'],
@@ -45,7 +54,13 @@ HOST_ARRAYS = set(('n nt lm mm dt hc iic ntfirst r0 s0 t0 tcoef scoef tdays el x
                    'gls_c1 gls_c2 gls_c3m gls_c3p gls_kmin gls_pmin zos zob '
                    'crgban_cw').split())
 FIELD_ARRAYS = {'scalars': {'sc_r','sc_w','cs_r','cs_w'},
-                'clima': {'m3nudgcof','uclm','vclm','tnudgcof','tclm'}}
+                'clima': {'m3nudgcof','uclm','vclm','tnudgcof','tclm'},
+                # The SEDBED type is declared in an include file
+                # (ROMS/Nonlinear/Sediment/sedbed_mod.h), so its components
+                # cannot be discovered from mod_sedbed.F.
+                'sedbed': {'avgbedldu','avgbedldv','bed','bed_frac','bed_mass',
+                           'bed_thick0','bed_thick','bedldu','bedldv','bottom',
+                           'ero_flux','settling_flux'}}
 FIELD_MODULES={name:'mod_'+name for name in ('grid','ocean','mixing','forces','diags')}
 FIELD_MODULES['average']='mod_average'
 FIELD_CACHE={}
@@ -61,7 +76,10 @@ OPERATORS = {'.true.': 'true', '.false.': 'false', '.not.': '!', '.and.': '&&',
              '.lt.': '<', '.le.': '<=', '/=': '!='}
 INTRINSICS = {'sqrt':'std::sqrt', 'abs':'std::abs', 'exp':'std::exp',
               'log':'std::log', 'log10':'std::log10', 'atan':'std::atan',
-              'tanh':'std::tanh', 'sin':'std::sin', 'cos':'std::cos',
+              'atan2':'std::atan2', 'acos':'std::acos', 'asin':'std::asin',
+              'tanh':'std::tanh', 'tan':'std::tan', 'cosh':'std::cosh',
+              'sinh':'std::sinh', 'erf':'std::erf',
+              'sin':'std::sin', 'cos':'std::cos',
               'min':'roms_loops::fmin', 'max':'roms_loops::fmax',
               'sign':'roms_loops::sign', 'int':'int', 'real':'double',
               'mod':'std::fmod'}
@@ -632,7 +650,11 @@ def process(text, stem):
                 body=k.translate()
                 f,c=emit_kernel(k,body)
             except ValueError as e:
-                raise ValueError(routine+' row '+str(len(kernels))+': '+str(e)) from e
+                if not SKIP_UNTRANSLATED:
+                    raise ValueError(routine+' row '+str(len(kernels))+': '+str(e)) from e
+                print('row_codegen: '+routine+' row '+str(len(kernels))+
+                      ' stays in Fortran: '+str(e), file=sys.stderr)
+                continue
             cpp.append(c); kernels.append(k); spans.append((i,finish,k))
             if stem in ('pre_step3d','step3d_t'):
                 guards += ['(nnew.ge.1)', '(nnew.le.2)']

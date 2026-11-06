@@ -430,9 +430,21 @@ if( ROMS_KOKKOS )
       roms_kokkos_cxx_options( ${target} )
     endfunction()
 
-    roms_kokkos_test( test_step2d_kokkos ROMS/Cpp/test_step2d_kokkos.cpp
-      ROMS/Cpp/test_step2d_reference.f90
-      ROMS/Cpp/kokkos_config.cpp ROMS/Cpp/kokkos_step2d.cpp )
+    # kokkos_step2d.cpp only defines the kernels when one of the 2-D stages
+    # is enabled, so the direct test follows the same condition.
+    set( step2d_stages KK_STAGE_FUSED KK_STAGE_TAVG KK_STAGE_COUP
+                       KK_STAGE_MOMT KK_STAGE_DIAG KK_STAGE_STOR )
+    set( have_step2d FALSE )
+    foreach( stage IN LISTS step2d_stages )
+      if( stage IN_LIST MY_CPP_FLAGS )
+        set( have_step2d TRUE )
+      endif()
+    endforeach()
+    if( have_step2d )
+      roms_kokkos_test( test_step2d_kokkos ROMS/Cpp/test_step2d_kokkos.cpp
+        ROMS/Cpp/test_step2d_reference.f90
+        ROMS/Cpp/kokkos_config.cpp ROMS/Cpp/kokkos_step2d.cpp )
+    endif()
 
     if( ROMS_KOKKOS_STEP3D_T )
       preprocess_fortran( ROMS/Cpp/test_step3d_t_reference.F )

@@ -674,7 +674,7 @@
 !  Compute total depth (m) and vertically integrated mass fluxes.
 !-----------------------------------------------------------------------
 !
-#ifdef ROMS_KOKKOS
+#if defined ROMS_KOKKOS && defined KK_STAGE_FUSED
 !
 !  Kokkos path: the loops of this stage live in
 !  ROMS/Cpp/kokkos_step2d.cpp.  The halo exchange below stays here.
@@ -1015,7 +1015,7 @@
       fac=1000.0_r8/rho0                                ! nondimensional
 #endif
 !
-#ifdef ROMS_KOKKOS
+#if defined ROMS_KOKKOS && defined KK_STAGE_FUSED
 !
 !  Kokkos path: all three time-stepping branches (Forward Euler,
 !  Leap-frog predictor, Adams-Moulton corrector) and the reload of

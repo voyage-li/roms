@@ -445,5 +445,34 @@ class LoweringTests(unittest.TestCase):
         out=self.compile_run('', 'int main(){std::printf("%d",std::signbit(roms_loops::sign(1.0,-0.0)));}')
         self.assertEqual(out,'1')
 
+    def test_sediment_bed_component_arrays_are_registered(self):
+        # SEDBED's components come from an include file, not from the module.
+        for name in ('avgbedldu','bedldv','bottom'):
+            k,_,cpp=kernel('DO j=1,3\n a(1,j)=sedbed(ng)%'+name+'(1,j,1)\nEND DO',
+                           'real(r8), intent(out) :: a(:,:)')
+            self.assertIn('field_sedbed_'+name,k.arrays)
+
+    def test_untranslated_row_stays_in_fortran_only_when_asked(self):
+        # Applications outside the supported set can ask the generator to
+        # keep a row it cannot lower.  The strict default is unchanged.
+        source=('      SUBROUTINE ana_srflux_tile (ng, tile, i, j)\n'
+                '      USE mod_kinds\n'
+                '      integer :: i, j, ng, tile\n'
+                '      real(r8) :: cff\n'
+                '      DO j=1,3\n'
+                '        cff=surprise(j)\n'
+                '      END DO\n'
+                '      END SUBROUTINE ana_srflux_tile\n')
+        with self.assertRaisesRegex(ValueError,'unsupported call'):
+            gen.process(source,'analytical')
+        old=gen.SKIP_UNTRANSLATED
+        gen.SKIP_UNTRANSLATED=True
+        try:
+            text,cpp=gen.process(source,'analytical')
+        finally:
+            gen.SKIP_UNTRANSLATED=old
+        self.assertEqual(text,source)
+        self.assertNotIn('kk_ana',cpp)
+
 
 if __name__=='__main__': unittest.main()

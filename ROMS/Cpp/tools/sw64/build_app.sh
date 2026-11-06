@@ -41,7 +41,11 @@ module load swgcc/1473 mpi/swuc
 export NF_CONFIG=${NF_CONFIG:-$HOME/ftao/local-saca/bin/nf-config}
 export NETCDF=${NETCDF:-$HOME/ftao/local-saca}
 export NETCDF_INCDIR=${NETCDF_INCDIR:-$HOME/ftao/local-saca/include}
-BASE="OUT_DOUBLE;VAR_RHO_2D;DIAGNOSTICS_UV;DIAGNOSTICS_TS"
+# NLM_DRIVER selects the nonlinear trajectory in the headers that gate their
+# physics on it (DOUBLE_GYRE, CHANNEL, WC13).  Nothing else in this tree
+# defines it, so without it those headers skip their whole physics block and
+# every build of them is a different model.
+BASE="NLM_DRIVER;OUT_DOUBLE;VAR_RHO_2D;DIAGNOSTICS_UV;DIAGNOSTICS_TS"
 [[ -n "$EXTRA" ]] && BASE="$BASE;$EXTRA"
 [[ ";$BASE;" == *";ROMS_WALL_PROFILE;"* ]] || BASE="$BASE;ROMS_WALL_PROFILE"
 DEFAULT_STAGES="KK_STAGE_FUSED;KK_STAGE_TAVG;KK_STAGE_COUP;KK_STAGE_MOMT;KK_STAGE_DIAG;KK_STAGE_STOR;"

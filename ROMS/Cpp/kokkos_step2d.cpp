@@ -60,6 +60,14 @@
 
 #include <cmath>
 
+/* Only the stages that call these kernels need the physics below.  A build
+** that enables none of them is free of the restriction, so an application
+** with masking or a curvilinear grid can still be compiled with the stages
+** it does support; the Fortran call sites are gated on the same macros
+** (ROMS/Nonlinear/step2d_LF_AM3.h). */
+#if defined KK_STAGE_FUSED || defined KK_STAGE_TAVG || defined KK_STAGE_COUP || \
+    defined KK_STAGE_MOMT || defined KK_STAGE_DIAG || defined KK_STAGE_STOR
+
 #if !defined SOLVE3D || !defined VAR_RHO_2D || !defined UV_ADV || \
     !defined UV_COR || !defined UV_VIS2 || !defined DIAGNOSTICS_UV
 #  error "Kokkos step2d currently requires the diagnostic 3-D upwelling physics"
@@ -1516,5 +1524,8 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
 }
 
 }  // extern "C"
+
+#endif  // KK_STAGE_FUSED || KK_STAGE_TAVG || KK_STAGE_COUP || KK_STAGE_MOMT ||
+        // KK_STAGE_DIAG || KK_STAGE_STOR
 
 #endif  // ROMS_KOKKOS

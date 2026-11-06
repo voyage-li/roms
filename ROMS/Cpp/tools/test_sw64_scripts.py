@@ -195,8 +195,8 @@ class ScriptTests(unittest.TestCase):
                          {'UPWELLING-reference', 'UPWELLING-serial', 'UPWELLING-sw64'})
         reference, sw64 = configures['UPWELLING-reference'], configures['UPWELLING-sw64']
         self.assertEqual(self.define(reference, 'MY_CPP_FLAGS'),
-                         'OUT_DOUBLE;VAR_RHO_2D;DIAGNOSTICS_UV;DIAGNOSTICS_TS;'
-                         'SOLVE3D;ROMS_WALL_PROFILE')
+                         'NLM_DRIVER;OUT_DOUBLE;VAR_RHO_2D;DIAGNOSTICS_UV;'
+                         'DIAGNOSTICS_TS;SOLVE3D;ROMS_WALL_PROFILE')
         self.assertEqual(self.define(reference, 'ROMS_KOKKOS'), 'OFF')
         flags = self.define(sw64, 'MY_CPP_FLAGS')
         self.assertEqual(flags.count('ROMS_WALL_PROFILE'), 1)
@@ -215,8 +215,9 @@ class ScriptTests(unittest.TestCase):
     def test_wall_profile_is_added_when_the_caller_omits_it(self):
         flags = self.define(self.build('KELVIN', BACKENDS='serial')['KELVIN-serial'],
                             'MY_CPP_FLAGS')
-        self.assertTrue(flags.startswith('OUT_DOUBLE;VAR_RHO_2D;DIAGNOSTICS_UV;'
-                                         'DIAGNOSTICS_TS;ROMS_WALL_PROFILE;KK_STAGE_FUSED'),
+        self.assertTrue(flags.startswith('NLM_DRIVER;OUT_DOUBLE;VAR_RHO_2D;'
+                                         'DIAGNOSTICS_UV;DIAGNOSTICS_TS;'
+                                         'ROMS_WALL_PROFILE;KK_STAGE_FUSED'),
                         flags)
 
     def test_build_options(self):
