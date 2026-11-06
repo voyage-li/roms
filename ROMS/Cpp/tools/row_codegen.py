@@ -531,19 +531,35 @@ def prepare_diag(text):
         if re.match(r'(?:\w+\s*:\s*)?do\s+',st[b][0]): depth+=1
         if st[b][0].startswith(('end do','enddo')): depth-=1
         if depth==0: break
-    names=['my_max_c','my_max_cu','my_max_cv','my_max_cw','my_max_ci','my_max_cj','my_max_ck','my_maxspeed','my_maxrho']
-    initial=''.join('      '+n+'='+('-spval' if n=='my_maxrho' else '0')+'\n' for n in names)
+    # The scalars reduced across rows are exactly those the configuration
+    # initialises before the row: SOLVE3D adds my_max_Cw and my_maxrho, a
+    # 2-D build has neither, so the list must come from the source.
+    init=[]; i=row-1
+    while i>a:
+        m=re.fullmatch(r'\s*(\w+)\s*=\s*.+', st[i][0])
+        if not m: break
+        init.append(st[i][0]); i-=1
+    init.reverse()
+    if not init: raise ValueError('diag_tile: no initialisation block before the row')
+    names=[re.match(r'\s*(\w+)',s)[1] for s in init]
+    group=[n for n in names if n.startswith('my_max_c')]
+    folded=[n for n in names if n not in group]
+    if not group: raise ValueError('diag_tile: no max-C scalar before the row')
+    initial=''.join('      '+s+'\n' for s in init)
     outputs=''.join(f'      kk_diag({i+1},j)={n}\n' for i,n in enumerate(names))
-    fold=initial+'      DO j=Jstr,Jend\n      IF (kk_diag(1,j).gt.my_max_C) THEN\n'
-    fold+=''.join(f'      {n}=kk_diag({i+1},j)\n' for i,n in enumerate(names[:7]))
-    fold+='      END IF\n      my_maxspeed=MAX(my_maxspeed,kk_diag(8,j))\n      my_maxrho=MAX(my_maxrho,kk_diag(9,j))\n      END DO\n'
+    fold=initial+'      DO j=Jstr,Jend\n'
+    fold+=f'      IF (kk_diag(1,j).gt.{group[0]}) THEN\n'
+    fold+=''.join(f'      {n}=kk_diag({i+1},j)\n' for i,n in enumerate(names) if n in group)
+    fold+='      END IF\n'
+    fold+=''.join(f'      {n}=MAX({n},kk_diag({i+1},j))\n' for i,n in enumerate(names) if n in folded)
+    fold+='      END DO\n'
     text=text[:st[b][1]]+outputs+text[st[b][1]:st[b][2]]+fold+text[st[b][2]:]
     text=text[:st[row][2]]+initial+text[st[row][2]:]
     # Automatic array bounds use imported scratch bounds, not the tile
     # locals which are only assigned later by set_bounds.h.
     # Declaration must follow the USE statements, so attach to ke2d.
     needle=re.search(r'^\s*real\(r8\).*:: ke2d\b.*$',text,re.M|re.I)
-    text=text[:needle.start()]+'\n      real(r8), TARGET :: kk_diag(9,JminS:JmaxS)\n'+text[needle.start():]
+    text=text[:needle.start()]+f'\n      real(r8), TARGET :: kk_diag({len(names)},JminS:JmaxS)\n'+text[needle.start():]
     return text
 
 

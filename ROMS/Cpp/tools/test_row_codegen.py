@@ -452,6 +452,43 @@ class LoweringTests(unittest.TestCase):
                            'real(r8), intent(out) :: a(:,:)')
             self.assertIn('field_sedbed_'+name,k.arrays)
 
+    def test_diag_reduction_follows_the_configuration(self):
+        # The scalars reduced across rows are those the configuration
+        # initialises: a 2-D build has no my_max_Cw/my_maxrho.
+        head=('      SUBROUTINE diag_tile (ng, tile)\n'
+              '      USE mod_kinds\n'
+              '      integer :: i, j, ng, tile\n'
+              '      real(r8) :: my_max_C, my_max_Cu, my_max_Cv, my_max_Ci\n'
+              '      real(r8) :: my_max_Cj, my_max_Ck, my_maxspeed\n')
+        decl='      real(r8), dimension(1:3,1:3) :: ke2d\n'
+        tail=('        DO j=Jstr,Jend\n'
+              '          ke2d(1,j)=0.0_r8\n'
+              '        END DO\n'
+              '      END IF\n'
+              '      END SUBROUTINE diag_tile\n')
+        two=(head+decl+'      IF (MOD(iic(ng)-1,ninfo(ng)).eq.0) THEN\n'
+             '        my_max_C =0.0_r8\n'
+             '        my_max_Cu=0.0_r8\n'
+             '        my_max_Cv=0.0_r8\n'
+             '        my_max_Ci=0\n'
+             '        my_max_Cj=0\n'
+             '        my_max_Ck=0\n'
+             '        my_maxspeed=0.0_r8\n'+tail)
+        out=gen.prepare_diag(two)
+        self.assertIn('kk_diag(7,JminS:JmaxS)',out)
+        self.assertNotIn('my_max_cw',out)
+        self.assertNotIn('my_maxrho',out)
+        three=two.replace('        my_maxspeed=0.0_r8\n',
+                          '        my_maxspeed=0.0_r8\n'
+                          '        my_maxrho=-spval\n')
+        three=three.replace('        my_max_Cv=0.0_r8\n',
+                            '        my_max_Cv=0.0_r8\n'
+                            '        my_max_Cw=0.0_r8\n')
+        out=gen.prepare_diag(three)
+        self.assertIn('kk_diag(9,JminS:JmaxS)',out)
+        self.assertIn('my_max_cw',out)
+        self.assertIn('my_maxrho',out)
+
     def test_untranslated_row_stays_in_fortran_only_when_asked(self):
         # Applications outside the supported set can ask the generator to
         # keep a row it cannot lower.  The strict default is unchanged.
