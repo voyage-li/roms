@@ -6,7 +6,7 @@
 #if defined ROMS_KOKKOS
 #include <cmath>
 #ifndef __sw_slave__
-#include <memory>
+#include "kokkos_workspace.hpp"
 #endif
 
 namespace {
@@ -17,18 +17,7 @@ struct Slope { double gradient, ka; };
 /* Raw host ownership needs no Kokkos service at thread/process teardown.
 ** The SW64 HostSpace and borrowed Fortran allocations share this memory.
 ** Each host thread has independent scratch; all supported launches join. */
-struct Workspace {
-  std::unique_ptr<double[]> storage;
-  std::size_t capacity = 0;
-  double* reserve(std::size_t count) {
-    if (count > capacity) {
-      storage.reset(new double[count]);
-      capacity = count;
-    }
-    return storage.get();
-  }
-};
-thread_local Workspace workspace;
+thread_local roms::HostWorkspace workspace;
 #endif
 
 struct Fields {

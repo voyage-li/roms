@@ -33,7 +33,7 @@
 
 #include <cmath>
 #ifndef __sw_slave__
-#include <memory>
+#include "kokkos_workspace.hpp"
 #endif
 
 namespace {
@@ -56,18 +56,7 @@ constexpr int KB = 32;
 #ifndef __sw_slave__
 /* Per-host-thread scratch, raw ownership (no Kokkos at teardown).  Every
 ** launch joins before returning, so it can be reused on the next call. */
-struct Workspace {
-  std::unique_ptr<double[]> storage;
-  std::size_t capacity = 0;
-  double* reserve(std::size_t count) {
-    if (count > capacity) {
-      storage.reset(new double[count]);
-      capacity = count;
-    }
-    return storage.get();
-  }
-};
-thread_local Workspace workspace;
+thread_local roms::HostWorkspace workspace;
 #endif
 
 }  // namespace

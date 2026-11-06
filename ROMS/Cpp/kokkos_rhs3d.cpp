@@ -30,7 +30,7 @@
 #include <cmath>
 
 #ifndef __sw_slave__
-#include <memory>
+#include "kokkos_workspace.hpp"
 #endif
 
 namespace {
@@ -46,18 +46,7 @@ using range_policy = Kokkos::RangePolicy<exec_space, Kokkos::IndexType<int>>;
 #ifndef __sw_slave__
 /* Per-thread scratch for the prsgrd column recursion.  Raw ownership, no
 ** Kokkos service at teardown; the SW64 HostSpace is the same memory. */
-struct Workspace {
-  std::unique_ptr<double[]> storage;
-  std::size_t capacity = 0;
-  double* reserve(std::size_t count) {
-    if (count > capacity) {
-      storage.reset(new double[count]);
-      capacity = count;
-    }
-    return storage.get();
-  }
-};
-thread_local Workspace workspace;
+thread_local roms::HostWorkspace workspace;
 #endif
 
 }  // namespace

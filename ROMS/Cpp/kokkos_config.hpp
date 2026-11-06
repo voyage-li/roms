@@ -121,14 +121,15 @@ namespace roms {
 ** Borrowed Fortran array, indexed with the original Fortran bounds.
 ** operator() reproduces Fortran's column-major linearization so that
 ** kernel bodies can be written to match the Fortran source line for
-** line.
+** line. Only extents used as strides are stored; the final-axis extent
+** is not needed for indexing, and these views do not check bounds.
 */
 
 template <class T>
 struct Array2d {
   T*  p   = nullptr;
   int lb_i = 0, lb_j = 0;
-  int ni   = 0, nj   = 0;
+  int ni   = 0;
 
   KOKKOS_INLINE_FUNCTION
   T& operator()(int i, int j) const {
@@ -140,7 +141,7 @@ template <class T>
 struct Array3d {
   T*  p   = nullptr;
   int lb_i = 0, lb_j = 0, lb_k = 0;
-  int ni   = 0, nj   = 0, nk   = 0;
+  int ni   = 0, nj   = 0;
 
   KOKKOS_INLINE_FUNCTION
   T& operator()(int i, int j, int k) const {
@@ -153,7 +154,7 @@ template <class T>
 struct Array4d {
   T*  p   = nullptr;
   int lb_i = 0, lb_j = 0, lb_k = 0, lb_l = 0;
-  int ni   = 0, nj   = 0, nk   = 0, nl   = 0;
+  int ni   = 0, nj   = 0, nk   = 0;
 
   KOKKOS_INLINE_FUNCTION
   T& operator()(int i, int j, int k, int l) const {
@@ -168,7 +169,7 @@ template <class T>
 struct Array5d {
   T* p = nullptr;
   int lb_i=0, lb_j=0, lb_k=0, lb_l=0, lb_m=0;
-  int ni=0, nj=0, nk=0, nl=0, nm=0;
+  int ni=0, nj=0, nk=0, nl=0;
 
   KOKKOS_INLINE_FUNCTION
   T& operator()(int i, int j, int k, int l, int m) const {
@@ -224,22 +225,23 @@ struct TileBounds {
 
 /*
 ** Pointer helpers.  Fortran passes TYPE(C_PTR); C++ receives void*.
+** Accept full Fortran bounds at call sites, but do not store the unused
+** final upper bound: only the preceding extents contribute to strides.
 */
 
 template <class T>
-inline Array2d<T> as_2d(void* ptr, int lb_i, int ub_i, int lb_j, int ub_j) {
+inline Array2d<T> as_2d(void* ptr, int lb_i, int ub_i, int lb_j, int /*ub_j*/) {
   Array2d<T> a;
   a.p    = static_cast<T*>(ptr);
   a.lb_i = lb_i;
   a.lb_j = lb_j;
   a.ni   = ub_i - lb_i + 1;
-  a.nj   = ub_j - lb_j + 1;
   return a;
 }
 
 template <class T>
 inline Array3d<T> as_3d(void* ptr, int lb_i, int ub_i, int lb_j, int ub_j,
-                        int lb_k, int ub_k) {
+                        int lb_k, int /*ub_k*/) {
   Array3d<T> a;
   a.p    = static_cast<T*>(ptr);
   a.lb_i = lb_i;
@@ -247,13 +249,12 @@ inline Array3d<T> as_3d(void* ptr, int lb_i, int ub_i, int lb_j, int ub_j,
   a.lb_k = lb_k;
   a.ni   = ub_i - lb_i + 1;
   a.nj   = ub_j - lb_j + 1;
-  a.nk   = ub_k - lb_k + 1;
   return a;
 }
 
 template <class T>
 inline Array4d<T> as_4d(void* ptr, int lb_i, int ub_i, int lb_j, int ub_j,
-                        int lb_k, int ub_k, int lb_l, int ub_l) {
+                        int lb_k, int ub_k, int lb_l, int /*ub_l*/) {
   Array4d<T> a;
   a.p    = static_cast<T*>(ptr);
   a.lb_i = lb_i;
@@ -263,15 +264,14 @@ inline Array4d<T> as_4d(void* ptr, int lb_i, int ub_i, int lb_j, int ub_j,
   a.ni   = ub_i - lb_i + 1;
   a.nj   = ub_j - lb_j + 1;
   a.nk   = ub_k - lb_k + 1;
-  a.nl   = ub_l - lb_l + 1;
   return a;
 }
 
 template <class T>
 inline Array5d<T> as_5d(void* ptr, int li, int ui, int lj, int uj,
-                       int lk, int uk, int ll, int ul, int lm, int um) {
+                       int lk, int uk, int ll, int ul, int lm, int /*um*/) {
   return {static_cast<T*>(ptr), li, lj, lk, ll, lm,
-          ui-li+1, uj-lj+1, uk-lk+1, ul-ll+1, um-lm+1};
+          ui-li+1, uj-lj+1, uk-lk+1, ul-ll+1};
 }
 
 /*

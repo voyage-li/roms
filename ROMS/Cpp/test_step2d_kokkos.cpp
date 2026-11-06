@@ -42,6 +42,40 @@ bool check(const Field& a, const Field& b, const char* tag) {
   return ok;
 }
 
+// Exercise every axis and nonzero/negative lower bounds independently of
+// the numerical kernels. The borrowed views store only stride extents.
+bool borrowed_views() {
+  constexpr int li = -2, lj = 4, lk = -1, ll = 2, lm = -3;
+  constexpr int ni = 4, nj = 3, nk = 2, nl = 3, nm = 2;
+  Field data(ni * nj * nk * nl * nm, -99.0);
+  auto a2 = roms::as_2d<double>(data.data(), li, li+ni-1, lj, lj+nj-1);
+  auto a3 = roms::as_3d<double>(data.data(), li, li+ni-1, lj, lj+nj-1,
+                               lk, lk+nk-1);
+  auto a4 = roms::as_4d<double>(data.data(), li, li+ni-1, lj, lj+nj-1,
+                               lk, lk+nk-1, ll, ll+nl-1);
+  auto a5 = roms::as_5d<double>(data.data(), li, li+ni-1, lj, lj+nj-1,
+                               lk, lk+nk-1, ll, ll+nl-1, lm, lm+nm-1);
+  bool ok = true;
+  std::size_t q = 0;
+  for (int m = lm; m < lm+nm; ++m)
+    for (int l = ll; l < ll+nl; ++l)
+      for (int k = lk; k < lk+nk; ++k)
+        for (int j = lj; j < lj+nj; ++j)
+          for (int i = li; i < li+ni; ++i, ++q) {
+            const int p2 = (i-li) + (j-lj)*ni;
+            const int p3 = p2 + (k-lk)*ni*nj;
+            const int p4 = p3 + (l-ll)*ni*nj*nk;
+            ok &= &a2(i,j) == &data[p2];
+            ok &= &a3(i,j,k) == &data[p3];
+            ok &= &a4(i,j,k,l) == &data[p4];
+            ok &= &a5(i,j,k,l,m) == &data[q];
+            a5(i,j,k,l,m) = double(q) + 0.25;
+            ok &= data[q] == double(q) + 0.25;
+          }
+  std::printf("borrowed views rank 2-5: %s\n", ok ? "PASS" : "FAIL");
+  return ok;
+}
+
 // store_rhs copies the predictor RHS and every diagnostic slot, including
 // the stress slots beyond M2pgrd, into time level krhs and nowhere else.
 bool store(int periodic) {
@@ -177,7 +211,7 @@ bool momentum(int mode,int kstp,int fixture) {
 
 int main() {
   roms::initialize();
-  bool ok = true;
+  bool ok = borrowed_views();
   {
     Kokkos::View<int*, Kokkos::HostSpace> ids("CPE IDs", 64);
     Kokkos::parallel_for(Kokkos::RangePolicy<roms::exec_space>(0, 64), KOKKOS_LAMBDA(int i) {
