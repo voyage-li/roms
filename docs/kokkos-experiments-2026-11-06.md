@@ -166,6 +166,24 @@ Where the first difference appears depends on the configuration, not on a
 single kernel: the KELVIN case below stays bitwise exact for 20 steps with
 the same source.
 
+The group was then split. The six stages were added one at a time, in the
+order UV3DMIX, T3DMIX, PRSGRD, OMEGA, SETZETA, STEP3DUV, and each build was
+run for the same 20 steps:
+
+| stages added on top of S1 | result against the original |
+|---|---|
+| UV3DMIX | bitwise identical |
+| + T3DMIX | bitwise identical |
+| + PRSGRD | differs from step 16, same values as the production build |
+| + OMEGA | bitwise identical to the PRSGRD build |
+| + SETZETA | bitwise identical to the PRSGRD build |
+| + STEP3DUV (= S2) | bitwise identical to the PRSGRD build |
+
+The first Fortran/port rounding difference seen over these 20 steps
+therefore comes from the pressure-gradient kernel (`KK_STAGE_PRSGRD`). The
+three stages added after it change no output value, and every build from
+PRSGRD onward reproduces the production differences.
+
 ## Domain decomposition
 
 UPWELLING, 240x176, four steps, output at the first and last step. Five
@@ -180,6 +198,13 @@ and 1x6. The 1x6 split divides Mm=176 by six, so the partition is uneven.
 
 At this configuration the solution does not depend on the decomposition,
 and the port reproduces that invariance exactly.
+
+The same series repeated with 20 steps gives the same picture: all five
+decompositions remain **bitwise identical between the builds**, and all
+five remain **bitwise identical to each other** within each build (101
+fields each). On this grid the port and the original also still agree
+exactly at 20 steps, unlike the 160x80 onset run, which is another sign
+that where the first difference appears depends on the configuration.
 
 ## Restart
 
@@ -301,11 +326,12 @@ absolute difference is 2.3e-19, the same kind of near-zero field as in the
 ## Method notes
 
 - Builds: `build_app.sh UPWELLING` with `MPI=ON`; S1-S3 override
-  `KK_STAGES`; GLS adds `GLS_MIXING` as the extra flag; KPP builds BL_TEST
-  with `UV_VIS2;LMD_MIXING;PERFECT_RESTART`, the official `bl_test` header
-  and `KK_STAGE_LMD` instead of `KK_STAGE_PRE3D`, plus the matched control
-  without `KK_STAGE_LMD`; KELVIN is built with `MPI=ON TAG_SUFFIX=-exp`
-  and the official `kelvin` header directory.
+  `KK_STAGES`, and the incremental series adds one 3-D momentum stage at a
+  time to the S1 list; GLS adds `GLS_MIXING` as the extra flag; KPP builds
+  BL_TEST with `UV_VIS2;LMD_MIXING;PERFECT_RESTART`, the official `bl_test`
+  header and `KK_STAGE_LMD` instead of `KK_STAGE_PRE3D`, plus the matched
+  control without `KK_STAGE_LMD`; KELVIN is built with `MPI=ON
+  TAG_SUFFIX=-exp` and the official `kelvin` header directory.
 - The runs made after the clean-up (decomposition, restart, KELVIN,
   production) use the `-kcarry` builds, i.e. the current source; the
   original-Fortran builds are the ones of the clean-up validation, whose
