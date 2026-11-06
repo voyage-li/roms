@@ -142,6 +142,25 @@ build bitwise over 200 steps on both backends (101/101 fields, 0
 difference). The kernel change therefore does not move the model any closer
 to or further from the original.
 
+### Ten times the length
+
+The same configuration ran for 2000 steps (6.9 days of model time), one
+rank per build, output every 500 steps. The original takes 4837.8 s
+(2.42 s/step), the Serial build 5116.6 s and the SW64 build 593.7 s, 8.15x
+faster than the original. No run blows up.
+
+After 2000 steps the port still passes the 1e-10 normalized gate on 100 of
+101 fields; the exception is again `salt_vdiff`, 2.4e-19 against a
+reference field of about 2e-19. The largest absolute differences are the
+salt transports, 6.6e-9 (`Huon_salt`) and 5.1e-9 (`Hvom_salt`), the same
+size as after 200 steps (5.5e-9). The state fields grow, but far more
+slowly than the run length: over ten times the integration `temp` goes from
+5.1e-13 to 3.6e-12, `u` from 1.5e-14 to 2.0e-13, `v` from 1.0e-13 to
+2.0e-13, `zeta` from 4.8e-15 to 9.2e-15, a factor of two to fourteen.
+
+Serial and SW64 remain bitwise identical over all 2000 steps (101/101
+fields, zero difference).
+
 ## Where the first difference comes from
 
 The stage-ablation builds were run for the same 20 steps as the onset
@@ -228,8 +247,8 @@ run followed by a five-step continuation read from its restart file
 UPWELLING with `GLS_MIXING` from `MY_CPP_FLAGS` (the header then selects
 `KANTHA_CLAYSON`, `N2S2_HORAVG`, `RI_SPLINES` and the standard k-epsilon
 parameters of `ROMS/External/roms_upwelling.in`), two ranks, 41x80. The
-runs below are four, twenty and fifty steps, with all output (the 50-step
-run writes every 25 steps).
+runs below are four steps with output every step, twenty steps with output
+every ten, and fifty steps with output every twenty-five.
 
 - Serial against original Fortran: **101/101 fields exact** (maximum
   difference 0).
@@ -261,8 +280,8 @@ BL_TEST with `LMD_MIXING;PERFECT_RESTART` and the official `bl_test`
 header (which selects LMD_RIMIX, LMD_CONVEC, LMD_SKPP, LMD_BKPP,
 LMD_NONLOCAL, LMD_DDMIX and RI_SPLINES), two ranks, 39x4x30. `KK_STAGE_LMD`
 is added and `KK_STAGE_PRE3D` left out, as in `KPP.md`. The runs below are
-four, twenty and fifty steps, with all output (the 50-step run writes every
-25 steps).
+four steps with output every step, twenty steps with output every ten, and
+fifty steps with output every twenty-five.
 
 - SW64 against the original Fortran: **99/99 fields** (57 diagnostic, 24
   history, 18 station) within the original normalized gate (1e-10 for
