@@ -122,6 +122,58 @@ class ScriptTests(unittest.TestCase):
         for script in SW64.glob('*.sh'):
             subprocess.run([BASH, '-n', str(script)], check=True)
 
+    def compare_app(self, ref_names, test_names):
+        ref = self.root / 'ref'
+        test = self.root / 'test'
+        ref.mkdir()
+        test.mkdir()
+        for name in ref_names:
+            (ref / name).touch()
+        for name in test_names:
+            (test / name).touch()
+        stub = self.tools.parent / 'nccmp.py'
+        stub.write_text("import os, sys\n"
+                        "with open(os.environ['CMP_CALLS'], 'a') as stream:\n"
+                        "    stream.write('\\t'.join(sys.argv[1:]) + '\\n')\n")
+        calls = self.root / 'nccmp-calls.txt'
+        result = subprocess.run(
+            [BASH, str(self.tools / 'cmp_app.sh'), str(ref), str(test)],
+            env=self.env(CMP_CALLS=str(calls)), capture_output=True, text=True,
+            cwd=str(self.elsewhere))
+        return result, calls
+
+    def test_cmp_app_rejects_extra_test_output_before_content_comparison(self):
+        result, calls = self.compare_app(('roms_his.nc',),
+                                         ('roms_his.nc', 'roms_dia.nc'))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('extra test output: roms_dia.nc', result.stderr)
+        self.assertFalse(calls.exists())
+
+    def test_cmp_app_rejects_missing_test_output_before_content_comparison(self):
+        result, calls = self.compare_app(('roms_his.nc', 'roms_dia.nc'),
+                                         ('roms_his.nc',))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('missing test output: roms_dia.nc', result.stderr)
+        self.assertFalse(calls.exists())
+
+    def test_cmp_app_rejects_empty_output_sets(self):
+        result, calls = self.compare_app((), ())
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('no roms_*.nc in', result.stderr)
+        self.assertFalse(calls.exists())
+
+    def test_cmp_app_compares_matching_sets_and_excludes_restart(self):
+        outputs = ('roms_his.nc', 'roms_dia.nc', 'roms_rst.nc')
+        result, calls = self.compare_app(outputs, outputs)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn('roms_rst.nc', result.stdout)
+        args = [line.split('\t') for line in calls.read_text().splitlines()]
+        self.assertEqual({Path(line[0]).name for line in args},
+                         {'roms_his.nc', 'roms_dia.nc'})
+        for line in args:
+            self.assertEqual(Path(line[0]).name, Path(line[1]).name)
+            self.assertIn('--all-time', line)
+
     def build(self, *args, **env):
         self.tool('module', 'exit 0\n')
         self.tool('cmake', 'printf "%s\\n" "$*" >> "$CALLS"\n')

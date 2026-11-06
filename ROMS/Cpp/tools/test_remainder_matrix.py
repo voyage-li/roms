@@ -14,15 +14,20 @@ spec.loader.exec_module(module)
 
 
 class AcceptanceTests(unittest.TestCase):
-    def compare(self,filename,results,exact=False,enforce=True,include_restart=False):
+    def compare_sets(self,reference,test_files,results,exact=False,enforce=True,
+                     include_restart=False):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
             ref=root/'ref'; test=root/'test'
             ref.mkdir(); test.mkdir(); (root/'canyon').mkdir()
-            (ref/filename).touch();(test/filename).touch()
+            for filename in reference: (ref/filename).touch()
+            for filename in test_files: (test/filename).touch()
             matrix=object.__new__(module.Matrix);matrix.out=root
             with patch.object(module.subprocess,'run',side_effect=results):
                 return matrix.compare('canyon',ref,test,'check',exact,enforce,include_restart)
+
+    def compare(self,filename,results,exact=False,enforce=True,include_restart=False):
+        return self.compare_sets((filename,),(filename,),results,exact,enforce,include_restart)
 
     def failed(self):
         return subprocess.CompletedProcess([],1,
@@ -44,6 +49,28 @@ class AcceptanceTests(unittest.TestCase):
     def test_physical_fields_do_not_get_diagnostic_absolute_floor(self):
         with self.assertRaisesRegex(RuntimeError,'strict field comparison failed'):
             self.compare('roms_his.nc',[self.failed()])
+
+    def test_extra_test_output_fails_before_content_comparison(self):
+        with self.assertRaisesRegex(RuntimeError,'extra in test: roms_dia.nc'):
+            self.compare_sets(('roms_his.nc',),
+                              ('roms_his.nc','roms_dia.nc'),[])
+
+    def test_missing_test_output_fails_before_content_comparison(self):
+        with self.assertRaisesRegex(RuntimeError,'missing from test: roms_dia.nc'):
+            self.compare_sets(('roms_his.nc','roms_dia.nc'),
+                              ('roms_his.nc',),[])
+
+    def test_matching_output_sets_are_compared(self):
+        result=self.compare_sets(('roms_dia.nc','roms_his.nc'),
+                                 ('roms_dia.nc','roms_his.nc'),
+                                 [self.passed(),self.passed()])
+        self.assertEqual([item['file'] for item in result],
+                         ['roms_dia.nc','roms_his.nc'])
+
+    def test_restart_is_excluded_from_both_output_sets_by_default(self):
+        result=self.compare_sets(('roms_his.nc','roms_rst.nc'),
+                                 ('roms_his.nc','roms_rst.nc'),[self.passed()])
+        self.assertEqual([item['file'] for item in result],['roms_his.nc'])
 
     def test_absolute_crosscheck_does_not_become_strict_pass(self):
         result=self.compare('roms_dia.nc',[self.failed(),self.passed()])

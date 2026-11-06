@@ -16,14 +16,51 @@ fi
 ref=${1:?reference run directory}
 test=${2:?test run directory}
 shift 2
-status=0 n=0
+ref_files=('') test_files=('')
+n=0
 for f in "$ref"/roms_*.nc; do
   [[ -e $f ]] || continue
   b=$(basename "$f")
   [[ $b == roms_rst.nc ]] && continue
+  ref_files+=("$b")
   n=$((n+1))
-  echo "== $b"
-  python3 "$ROOT/ROMS/Cpp/tools/nccmp.py" "$f" "$test/$b" --all-time "$@" || status=1
 done
+for f in "$test"/roms_*.nc; do
+  [[ -e $f ]] || continue
+  b=$(basename "$f")
+  [[ $b == roms_rst.nc ]] && continue
+  test_files+=("$b")
+done
+
+contains_name() {
+  local sought=$1 name
+  shift
+  for name in "$@"; do
+    [[ $name == "$sought" ]] && return 0
+  done
+  return 1
+}
+status=0
+for b in "${ref_files[@]}"; do
+  [[ -n $b ]] || continue
+  contains_name "$b" "${test_files[@]}" || {
+    echo "missing test output: $b" >&2
+    status=1
+  }
+done
+for b in "${test_files[@]}"; do
+  [[ -n $b ]] || continue
+  contains_name "$b" "${ref_files[@]}" || {
+    echo "extra test output: $b" >&2
+    status=1
+  }
+done
+(( status == 0 )) || exit "$status"
 (( n > 0 )) || { echo "no roms_*.nc in $ref" >&2; exit 1; }
+
+for b in "${ref_files[@]}"; do
+  [[ -n $b ]] || continue
+  echo "== $b"
+  python3 "$ROOT/ROMS/Cpp/tools/nccmp.py" "$ref/$b" "$test/$b" --all-time "$@" || status=1
+done
 exit $status

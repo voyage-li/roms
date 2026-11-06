@@ -147,8 +147,23 @@ class Matrix:
         env['PATH']=str(x86/'bin')+os.pathsep+env.get('PATH','')
         env['LD_LIBRARY_PATH']=str(x86/'lib')+os.pathsep+env.get('LD_LIBRARY_PATH','')
         results=[]
-        for f in sorted(ref.glob('roms_*.nc')):
-            if f.name=='roms_rst.nc' and not include_restart: continue
+        selected = lambda directory: [
+            f for f in sorted(directory.glob('roms_*.nc'))
+            if include_restart or f.name!='roms_rst.nc'
+        ]
+        reference_files=selected(ref)
+        test_files=selected(test)
+        reference_names={f.name for f in reference_files}
+        test_names={f.name for f in test_files}
+        missing=sorted(reference_names-test_names)
+        extra=sorted(test_names-reference_names)
+        if missing or extra:
+            details=[]
+            if missing: details.append('missing from test: '+', '.join(missing))
+            if extra: details.append('extra in test: '+', '.join(extra))
+            raise RuntimeError('NetCDF output file sets differ ('+'; '.join(details)+')')
+        if not reference_files: raise RuntimeError('no reference NetCDF outputs')
+        for f in reference_files:
             cmd=['python3',str(ROOT/'ROMS/Cpp/tools/nccmp.py'),str(f),str(test/f.name),'--all-time']
             if not exact: cmd+=['--rtol','1e-10','--zero-tol','1e-20']
             result=subprocess.run(cmd,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,universal_newlines=True)
@@ -169,7 +184,6 @@ class Matrix:
                             strict_failures=[s for s in result.stdout.splitlines() if s.endswith('FAIL')])
                 if cross.returncode: raise RuntimeError('diagnostic mismatch exceeds absolute cross-check: '+str(crosspath))
             results.append(item)
-        if not results: raise RuntimeError('no reference NetCDF outputs')
         return results
 
     def execute(self):
