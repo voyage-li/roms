@@ -31,9 +31,13 @@ divided by the Kokkos/SW64 build at the same rank count.
 | 4 | 48.353 | 4.368 | 11.07x |
 | 6 | 33.299 | 2.934 | 11.35x |
 | 12 | 16.946 | 1.832 | 9.25x |
+| 24 | 8.276 | 0.890 | 9.30x |
 
 From 2 to 12 ranks (six times the ranks) the original build speeds up 5.66x
-and the port 4.60x.
+and the port 4.60x. At 24 ranks (12x2 tiles, median of three samples each:
+original 16.545-16.556 s, port 1.778-1.785 s per two steps) the step time
+halves again for both builds, 2.05x and 2.06x against 12 ranks, and the
+speedup stays at 9.3x: on the production grid the extra two nodes pay off.
 
 UPWELLING, 720x352, two steps, including the one-rank point:
 
@@ -58,17 +62,17 @@ divided among the ranks. A least-squares fit gives, in s/step:
 |---|---|---:|---:|---:|
 | 720x352 | original Fortran | 0.410 | 47.5 | 0.23 s (0.5%) |
 | 720x352 | Kokkos/SW64 | 0.100 | 4.16 | 0.02 s (0.5%) |
-| 1440x704 | original Fortran | 1.368 | 189.0 | 0.43 s (0.4%) |
-| 1440x704 | Kokkos/SW64 | 0.390 | 16.0 | 0.12 s (1.4%) |
+| 1440x704 | original Fortran | 0.920 | 190.3 | 0.67 s (0.7%) |
+| 1440x704 | Kokkos/SW64 | 0.313 | 16.2 | 0.17 s (2.0%) |
 
 `f` covers everything that does not shrink with the rank count: the serial
 remainder, the halo exchange and the I/O. It is *larger in absolute terms*
-for the original build (1.37 s against 0.39 s at 1440x704). What drops the
-port's efficiency is its share of the step: at 12 ranks `f` is 8% of the
-original's step but 21% of the port's, which is ten times shorter; at 24
-ranks (720x352 only) it is 18% against 37%. That is why the speedup falls
-from 11.2x at one rank to 8.4x at 24 while the original still holds 89%
-efficiency at four nodes.
+for the original build at both grids. What drops the port's efficiency is
+its share of the step: at 12 ranks `f` is 5% of the original's step on the
+production grid but 17% of the port's, which is ten times shorter; at 24
+ranks it is 11% against 35%, and on the 720x352 grid 18% against 37%. That
+is why the speedup falls from 11.4x at two ranks to 9.3x at 24 while the
+original still holds 89% efficiency on the small grid at four nodes.
 
 ## Weak scaling
 
