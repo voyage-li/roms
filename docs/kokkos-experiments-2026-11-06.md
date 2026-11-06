@@ -466,10 +466,42 @@ with only `KK_STAGE_REMAINDER` compiles none of the guarded kernels.
 | an untranslatable row aborted the whole build | deliberate fail-closed design | `ROMS_KK_SKIP_UNTRANSLATED=1` leaves the row in Fortran with a warning; the default still aborts |
 | SEAMOUNT did not compile: `analytical.f90` used an undeclared `io_err` | `ROMS/Functionals/ana_diag.h` declared `io_error` (upstream typo) | declaration renamed |
 | DOUBLE_GYRE, CHANNEL and WC13 skipped their physics block | nothing in the tree defines `NLM_DRIVER` | `build_app.sh` defines it |
+| CHANNEL did not compile: `my_max_Cw` and `my_maxrho` have no IMPLICIT type | `prepare_diag` hardcoded the nine scalars reduced across the `diag_tile` row; the last two only exist under `SOLVE3D` | the list is read from the initialisation block in front of the row, so a 2-D build reduces its seven scalars and a 3-D build still reduces nine |
 
 After these changes UPWELLING rebuilt from the edited sources gives a
 bitwise identical four-step result against its reference (`zeta`, `ubar`,
-`vbar`, `u`, `temp`, 2 ranks, 160x80), and the tooling suite passes 83/83.
+`vbar`, `u`, `temp`, 2 ranks, 160x80), and the tooling suite passes 84/84.
+
+### What runs
+
+Eight applications were then taken to a two-step run on one rank, with the
+`-more` builds (default stages for OVERFLOW, `KK_STAGE_REMAINDER` for the
+rest, `ROMS_KK_SKIP_UNTRANSLATED=1`). Six complete:
+
+| application | grid (IxJxK) | stages | wall, two steps | `step3d_t` |
+|---|---|---|---|---|
+| OVERFLOW | 4x128x20 | default | 0.13 s | Fortran fallback |
+| LAB_CANYON | 110x250x25 | REMAINDER | 7.96 s | accelerated |
+| RIVERPLUME1 | 39x67x13 | REMAINDER | 0.59 s | Fortran fallback |
+| ESTUARY_TEST | 200x3x20 | REMAINDER | 0.21 s | accelerated |
+| BASIN | 180x140x12 | REMAINDER | 5.99 s | accelerated |
+| WINDBASIN | 101x52x25 | REMAINDER | 0.75 s | accelerated |
+
+The two fallbacks are the kernel's own guard, not a build failure: OVERFLOW
+is the hand-written stage set, and RIVERPLUME1's tracer layout is outside
+what the kernel accepts. The remaining two fail for reasons that have
+nothing to do with the port:
+
+| application | failure | evidence |
+|---|---|---|
+| CHANNEL | `FIND_FILE - Grid 01, cannot find input file: channel_frc.nc` | the forcing file is not in this tree; the build itself is clean |
+| SED_TOY | `mod_ncparam.f90`, `End of record`, during tracer-name construction | a reference Fortran build fails at the same line with the same message |
+
+ESTUARY_TEST first failed with `Cannot open file
+'ROMS/External/sediment_estuary_test.in'`: the parameter file is named by a
+path relative to the working directory, so a run outside the tree root
+cannot see it. A `ROMS` symlink in the run directory fixes it; the run above
+uses one.
 
 ### What still cannot be built, and why
 
@@ -519,5 +551,8 @@ files of the ROMS test repository, none of which are in this tree.
   They use the `SEAMOUNT-*-mpi-cases`, `WC13-sw64-mpi-attempt` and
   `*-mpi-rem` tags; the last two built with `ROMS_KK_SKIP_UNTRANSLATED=1`
   and an explicit `KK_STAGES`.
+- The eight application runs are in `new/runs/more/` with the `-more` tags
+  and `logs/run-more-now.log`; the SED_TOY control is
+  `build/SED_TOY-reference-mpi-ref`, built with `BACKENDS=reference`.
 - Logs and runs of the earlier campaigns:
   `~/voyage/roms/work/cleanup-20261105T1334/{logs,new/runs}`.
