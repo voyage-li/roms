@@ -9,10 +9,11 @@ samples each; medians 3.66 s and 3.64 s), so all results are reported
 together.
 
 This note collects the experiments run after the clean-up: strong and weak
-scaling, the contribution of each stage group, where the first difference
-between the port and the original appears, domain decomposition, restart,
-a long integration at 160x80 and at the production grid, and the GLS, KPP
-and KELVIN cases.
+scaling, a 2880x1264 run at six ranks, a SEAMOUNT run at 1440x1440, the
+contribution of each stage group, where the first difference between the
+port and the original appears, domain decomposition, restart, a long
+integration at 160x80 and at the production grid, the GLS, KPP and KELVIN
+cases, and which applications the port can build.
 All runs use the SUNWAY system, queue `q_share`, one tile per rank,
 `ROMS_WALL_PROFILE` builds and the `run_app.sh` / `make_app_case.py` tools.
 Timings are the rank-0 stepping wall of a two-step, no-output run, divided
@@ -73,6 +74,44 @@ production grid but 17% of the port's, which is ten times shorter; at 24
 ranks it is 11% against 35%, and on the 720x352 grid 18% against 37%. That
 is why the speedup falls from 11.4x at two ranks to 9.3x at 24 while the
 original still holds 89% efficiency on the small grid at four nodes.
+
+### The large end: 2880x1264 at six ranks
+
+UPWELLING at 2880x1264 with 16 levels, one node, six ranks, 3x2 tiles (9.72M
+cells per rank), two steps without output, three samples each. Both builds
+come from the current source (`-reviewfix` tags).
+
+| build | two-step wall, rank 0 (s) | s/step | samples (s) |
+|---|---:|---:|---|
+| original Fortran | 235.469 | 117.735 | 235.457-235.714 |
+| Kokkos/SW64 | 20.484 | 10.242 | 20.477-20.485 |
+
+11.50x. At six ranks the speedup rises with the grid - 10.87x at 720x352,
+11.35x at 1440x704, 11.50x here - because the fixed cost is a smaller share
+of a longer step: the port goes from 0.784 to 2.934 to 10.242 s/step while
+the original goes from 8.524 to 33.299 to 117.735. The three samples spread
+by 0.11% (original) and 0.04% (port), and the six ranks finish within 0.01 s
+of each other.
+
+Correctness at this grid uses eight ranks (4x2). Six ranks do not fit: at
+9.72M cells per rank the original keeps about 14.7 GB of the 15 GB
+per-process pool and the first history record needs another 296 MB
+(`malloc size 296 MB is larger than max size 294 MB`). The port fails at the
+same allocation with the same sizes, and the pool cannot be enlarged
+(15500-16000 MB fail at startup with `stask alloc memory error`,
+20000-25000 MB with `CONT_RW space out of range`, also at three ranks per
+node). At eight ranks each rank holds 7.28M cells, both builds complete four
+steps with a 6.7 GB history file, and the sampled fields are **bitwise
+identical** in both records:
+
+| fields | max abs difference | records |
+|---|---:|---|
+| `zeta`, `ubar`, `vbar`, `u`, `temp` | 0.0 | first and last |
+
+The first difference between the builds appears at step 16 (the 160x80 run
+above), so this shows that the large configuration is exact over its four
+steps, not that the builds stay exact; the long-integration evidence remains
+the 160x80 and 1440x704 runs.
 
 ## Weak scaling
 
@@ -346,6 +385,105 @@ identical; the figures above are from the last record, after 200 steps.
 absolute difference is 2.3e-19, the same kind of near-zero field as in the
 160x80 run.
 
+## Seamount at scale
+
+SEAMOUNT is the second application taken to a large grid. Its 320 km x
+320 km analytic domain is fixed, so raising Lm and Mm refines it; the time
+step is reduced with the cell size (60 s at 49x48, 10 s at 1440x1440) to
+keep the external-mode CFL ratio unchanged. One node, six ranks, 3x2 tiles,
+4.5M cells per rank, three two-step samples:
+
+| build | two-step wall, rank 0 (s) | s/step | samples (s) |
+|---|---:|---:|---|
+| original Fortran | 144.175 | 72.088 | 143.521-145.089 |
+| Kokkos/SW64 | 15.417 | 7.709 | 15.212-15.544 |
+
+9.35x, below UPWELLING's 11.50x at a comparable size, and the log says why:
+`step3d_t: whole-tile Fortran fallback (scheme, ...)`. SEAMOUNT advects
+tracers with A4 horizontally and vertically; the tracer kernel only covers
+U3+C4 and HSIMT+HSIMT (`ROMS/Nonlinear/step3d_t.F` picks the scheme at run
+time), so every tracer column stays in Fortran.
+
+Re-running the case with U3 horizontal and C4 vertical advection - the
+kernel's supported combination, nothing else changed - engages the kernel
+(`step3d_t accelerated (first call)` in every tile) and gives 145.126 /
+14.838 s per two steps, 9.78x: about 5% better. The tracer rows are a small
+part of this shallow (N=13), largely two-dimensional step, which is why the
+gap to UPWELLING is not mainly the tracer scheme.
+
+Four steps with history at the first and last step, six ranks:
+
+| field | max abs difference | normalized | first record |
+|---|---:|---:|---:|
+| `zeta` | 2.75e-18 | 1.36e-13 | 0.0 |
+| `ubar`, `vbar` | 1.74e-18 | 3.67e-13 | 0.0 |
+| `temp` | 3.55e-15 | 2.03e-16 | 0.0 |
+
+4/4 within the 1e-10 gate. Unlike UPWELLING, the last record is not
+bitwise identical: UPWELLING's first difference appears at step 16, while
+SEAMOUNT exercises DJ_GRADPS, quadratic bottom drag and A4 advection and
+diverges earlier, still at the 1e-18 level. The U3/C4 variant passes the
+same gate with 5.94e-18 (`zeta`), 2.07e-18 (`ubar`, `vbar`) and 3.55e-15
+(`temp`).
+
+## Application coverage
+
+The kernels are chosen at compile time, and two mechanisms decide whether
+an application can use them.
+
+The hand-written kernels (`kokkos_step2d.cpp`, `kokkos_rhs3d.cpp`,
+`kokkos_step3d.cpp`) each carry a guard that rejects physics they do not
+model. The `step2d` guard used to apply to every Kokkos build whatever the
+stage list; it is now scoped to the 2-D stages (`KK_STAGE_FUSED`,
+`TAVG`, `COUP`, `MOMT`, `DIAG`, `STOR`), so a build that leaves those out
+no longer inherits their requirements. Of the 35 application headers, seven
+satisfy the remaining guards:
+
+| application | domain | note |
+|---|---|---|
+| UPWELLING | 2-D, scalable | the case used throughout this note |
+| SEAMOUNT | 2-D, scalable | see the next section |
+| OVERFLOW | 4x128 channel | dense overflow, too narrow to scale |
+| KELVIN | 50x30 | coastal Kelvin wave |
+| BL_TEST | column | boundary-layer test |
+| LMD_TEST | column | mixing test |
+| DOUBLE_GYRE | 2-D, scalable | `build_app.sh` now defines `NLM_DRIVER`, without which the header skips its whole physics block; the case still needs an initial-condition file this tree does not carry |
+
+The other 28 are outside the envelope, including every realistic
+configuration in the tree: WC13, DAMEE_4, DOGBONE, RIVERPLUME and WEDDELL
+use masking, curvilinear grids or nesting, and SHOREFACE, INLET_TEST and
+SED_TEST1 add wet-dry cells or sediments. The row lowering is a second
+route for them: it works on the preprocessed Fortran, so mask and
+curvilinear branches are ordinary statements to the translator, and a build
+with only `KK_STAGE_REMAINDER` compiles none of the guarded kernels.
+
+### What trying other applications changed
+
+| problem found | cause | change |
+|---|---|---|
+| WC13: `ana_srflux_tile row 0: unsupported call: acos(-cff1/cff2)` | the translator's intrinsic table had no `acos` (nor `asin`, `atan2`, `tan`, `cosh`, `sinh`, `erf`) | added; WC13 now translates every row it targets and builds |
+| SHOREFACE: `set_avg_tile row 15: unregistered component array: sedbed(ng)%avgbedldu` | SEDBED's components are declared in an include file, so the module scan cannot find them | the twelve SEDBED arrays are registered explicitly |
+| an untranslatable row aborted the whole build | deliberate fail-closed design | `ROMS_KK_SKIP_UNTRANSLATED=1` leaves the row in Fortran with a warning; the default still aborts |
+| SEAMOUNT did not compile: `analytical.f90` used an undeclared `io_err` | `ROMS/Functionals/ana_diag.h` declared `io_error` (upstream typo) | declaration renamed |
+| DOUBLE_GYRE, CHANNEL and WC13 skipped their physics block | nothing in the tree defines `NLM_DRIVER` | `build_app.sh` defines it |
+
+After these changes UPWELLING rebuilt from the edited sources gives a
+bitwise identical four-step result against its reference (`zeta`, `ubar`,
+`vbar`, `u`, `temp`, 2 ranks, 160x80), and the tooling suite passes 83/83.
+
+### What still cannot be built, and why
+
+Two applications fail for reasons outside the port: the reference Fortran
+build fails in the same place.
+
+| application | failure | origin |
+|---|---|---|
+| SHOREFACE, INLET_TEST, TEST_HEAD | `wec_output_mod.mod` / `wec_vf_mod.mod` not found | this branch is based on upstream `67192f65` (2025-01-30). Upstream deleted `ROMS/Nonlinear/WEC/` in `c7c4a737` (2023-08-27) but kept the `WEC_VF` references in the headers and in `def_his.F`, and re-added the package in `493391fc` (2025-05-14, on `upstream/develop`); the fork sits inside that window |
+| LAKE_SIGNELL, LAKE_JERSEY, INLET_TEST | `bbl.f90`: `idtbl`, `idpcx`, `idpwc` have no IMPLICIT type | `ssw_bbl.h` writes `bottom(i,j,idpcx)` and the like, but the three ids are declared nowhere; upstream `master` and `develop` lack them too, so `#define SSW_BBL` does not compile upstream either |
+
+WC13 now builds but cannot run here: its input needs the grid and forcing
+files of the ROMS test repository, none of which are in this tree.
+
 ## Method notes
 
 - Builds: `build_app.sh UPWELLING` with `MPI=ON`; S1-S3 override
@@ -376,4 +514,10 @@ absolute difference is 2.3e-19, the same kind of near-zero field as in the
   physics and a `KK_STAGES` list without `KK_STAGE_GLS` / `KK_STAGE_LMD`
   respectively, so a candidate and its control differ only by that one
   offload.
-- Logs and runs: `~/voyage/roms/work/cleanup-20261105T1334/{logs,new/runs}`.
+- The SEAMOUNT and application-coverage runs are in
+  `~/voyage/roms/work/redundancy-20261106T064137Z/{new/runs/cases,new/runs/rem,logs}`.
+  They use the `SEAMOUNT-*-mpi-cases`, `WC13-sw64-mpi-attempt` and
+  `*-mpi-rem` tags; the last two built with `ROMS_KK_SKIP_UNTRANSLATED=1`
+  and an explicit `KK_STAGES`.
+- Logs and runs of the earlier campaigns:
+  `~/voyage/roms/work/cleanup-20261105T1334/{logs,new/runs}`.
