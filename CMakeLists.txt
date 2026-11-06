@@ -407,8 +407,11 @@ if( ROMS_KOKKOS )
   function( roms_kokkos_cxx_options target )
     if( _kk_backend STREQUAL "sw64" )
       target_compile_options( ${target} PRIVATE
-        "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive;--param;vect-max-version-for-alias-checks=64>" )
-      if( NOT ROMS_FAST_MATH )
+        "$<$<COMPILE_LANGUAGE:CXX>:-mhybrid-coding;-fpermissive>" )
+      if( ROMS_FAST_MATH )
+        target_compile_options( ${target} PRIVATE
+          "$<$<COMPILE_LANGUAGE:CXX>:--param;vect-max-version-for-alias-checks=64>" )
+      else()
         target_compile_options( ${target} PRIVATE
           "$<$<COMPILE_LANGUAGE:CXX>:-fno-tree-vectorize>" )
       endif()
@@ -462,6 +465,13 @@ if( IN_ECBUILD )
                        LINKER_LANGUAGE ${ROMS_LINKER_LANGUAGE}
                      )
 
+  # The ecbuild library is consumed through $<TARGET_OBJECTS:Objects>, which
+  # does not carry Objects' link interface. Keep Kokkos on this public target
+  # so ecbuild downstream consumers receive the dependency.
+  if( ROMS_KOKKOS )
+    target_link_libraries( ${PROJECT_NAME} PUBLIC Kokkos::kokkos )
+  endif()
+
   # Set location of modules for editing and recompiling. CMake needs the location
   # of modules in the project subdirectory (-I${CMAKE_BINARY_DIR}/roms/module)
   # for correct USE association.
@@ -503,6 +513,9 @@ else()
     set_property(TARGET Objects PROPERTY POSITION_INDEPENDENT_CODE 1)
     add_library( ROMS_shared SHARED $<TARGET_OBJECTS:Objects> )
     set_target_properties(ROMS_shared PROPERTIES OUTPUT_NAME ROMS)
+    if( ROMS_KOKKOS )
+      target_link_libraries( ROMS_shared PUBLIC Kokkos::kokkos )
+    endif()
     install( TARGETS ROMS_shared LIBRARY )
 
     # The executable links the ROMS_shared target, which already orders
@@ -514,6 +527,9 @@ else()
   if( LIBSTATIC )
     add_library( ROMS_static STATIC $<TARGET_OBJECTS:Objects> )
     set_target_properties(ROMS_static PROPERTIES OUTPUT_NAME ROMS)
+    if( ROMS_KOKKOS )
+      target_link_libraries( ROMS_static PUBLIC Kokkos::kokkos )
+    endif()
     install( TARGETS ROMS_static ARCHIVE )
 
     # The executable links the ROMS_static target, which already orders
