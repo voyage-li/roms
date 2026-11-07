@@ -516,6 +516,119 @@ build fails in the same place.
 WC13 now builds but cannot run here: its input needs the grid and forcing
 files of the ROMS test repository, none of which are in this tree.
 
+## Scale campaign: one process, strong scaling, size sweep
+
+Eleven configurations were taken through a three-part campaign: a base run
+on one process at the largest size the 15 GB share allows, a strong-scaling
+series on that case, and a six-point size sweep against the serial Fortran
+reference. Every timing is `(T(1+N) - T(1)) / N` with N = 5, so the first
+step's warm-up is removed, and every run is `--no-output`.
+
+### The 15 GB share sets the base size
+
+One rank gets `-share_size 15000` and cannot ask for more. The model prints
+its own allocation at the end (`Dynamic and Automatic memory ... USAGE`),
+which is the only figure observable on this runtime: `bjobacct` is broken
+and the MPE runtime segfaults any executable wrapped in `bash` or
+`/usr/bin/time`. Probes bracket the ceiling: 11.0M cells (440x1000x25) used
+13.1 GB and 18.9M cells (1212x624x25) 13.9 GB, while 24.75M and 52.5M died
+with `Cannot allocate memory`. That is 0.73-1.2 KB/cell across the two, so
+the cap admits 12-19M cells depending on the configuration.
+
+The bases therefore sit at 8-19M cells and 9.4-14.0 GB, and a base run above
+300 s/step cannot be met inside the cap: at 10 us/cell - the most expensive
+configuration here, BASIN - 12M cells buy about 120 s, and the most
+expensive base that actually fits is LAB_CANYON at 134.5 s. The table
+reports what the cap does allow.
+
+| application | base scale | grid | cells | Kokkos s/step | memory | `step3d_t` |
+|---|---|---|---|---|---|---|
+| UPWELLING | 13 | 533x1040x16 | 8.87M | 9.0 | 13109 MB | accelerated |
+| SEAMOUNT | 20 | 980x960x13 | 12.23M | 10.9 | 13988 MB | fallback (A4) |
+| KELVIN | 28 | 1400x840x10 | 11.76M | 31.7 | 13800 MB | not called |
+| BL_TEST | 41 | 1599x164x30 | 7.87M | 7.4 | 9406 MB | accelerated |
+| BL_TEST control | 41 | 1599x164x30 | 7.87M | 14.1 | 9406 MB | accelerated |
+| OVERFLOW | 33 | 132x4224x20 | 11.15M | 11.5 | 13687 MB | fallback |
+| RIVERPLUME1 | 16 | 624x1072x13 | 8.70M | 62.7 | 12658 MB | fallback |
+| LAB_CANYON | 4 | 440x1000x25 | 11.00M | 134.5 | 13115 MB | accelerated |
+| WINDBASIN | 12 | 1212x624x25 | 18.91M | 58.7 | 13880 MB | accelerated |
+| BASIN | 6 | 1080x840x12 | 10.89M | 109.1 | 12210 MB | accelerated |
+| ESTUARY_TEST | 26 | 5200x78x20 | 8.11M | 57.0 | 11769 MB | accelerated |
+
+BL_TEST is the KPP case (`UV_VIS2;LMD_MIXING;PERFECT_RESTART` with
+`KK_STAGE_LMD`); its control is the same build without that stage, which is
+why the two differ by 1.9x at the same size. KELVIN defines `SOLVE3D` but
+carries no tracer advection, so `step3d_t` is never entered: `not called`
+is the absence of the call, not a fallback.
+
+### Strong scaling, 1 to 32 ranks
+
+Six ranks per node, 32 ranks span six nodes. Speedup against the one-rank
+base:
+
+| application | 1 | 2 | 4 | 8 | 16 | 32 |
+|---|---:|---:|---:|---:|---:|---:|
+| UPWELLING | 1.00 | 1.86 | 3.00 | 6.74 | 12.81 | 11.85 |
+| SEAMOUNT | 1.00 | 2.26 | 3.56 | 6.07 | 14.10 | 22.49 |
+| KELVIN | 1.00 | 2.37 | 3.39 | 9.08 | 8.02 | 17.15 |
+| BL_TEST | 1.00 | 1.87 | 3.47 | 6.38 | 5.58 | 58.96 |
+| BL_TEST control | 1.00 | 2.00 | 3.85 | 7.34 | 14.20 | 10.32 |
+| OVERFLOW | 1.00 | 1.86 | 3.72 | 5.24 | 11.16 | 10.50 |
+| RIVERPLUME1 | 1.00 | 2.06 | 3.90 | 4.58 | 14.56 | 34.94 |
+| LAB_CANYON | 1.00 | 1.62 | 1.82 | 2.63 | 4.86 | 7.33 |
+| WINDBASIN | 1.00 | 1.94 | 3.86 | 7.92 | 15.65 | 29.25 |
+| BASIN | 1.00 | 1.93 | 3.74 | 7.98 | 16.05 | 15.27 |
+| ESTUARY_TEST | 1.00 | 2.10 | 3.98 | 7.64 | 8.51 | 25.50 |
+
+WINDBASIN, BASIN, RIVERPLUME1 and ESTUARY_TEST hold 91-100% efficiency to
+16 ranks; LAB_CANYON is the outlier at 23% at 32 ranks - its annulus grid
+leaves a long thin tile at 8x4 and the 2-D kernels there are dominated by
+halo exchange. Several 32-rank points exceed the 16-rank one, and BL_TEST
+reaches 59x, which is superlinear: at one rank the working set is 8-14 GB
+and every step is memory-bandwidth bound, while at 32 ranks each tile fits
+in cache. The platform adds a second effect: `-cgsp 64` reserves a 64-core
+core group, not the whole node, so other tenants' groups share the node's
+memory bandwidth and single points can be noisy. The non-monotonic points
+are not kernel fallbacks - the configurations that fall back (SEAMOUNT,
+OVERFLOW, RIVERPLUME1) do so at every rank count, and the ones that
+accelerate accelerate at every rank count; the 16- and 32-rank logs of each
+non-monotonic case were checked.
+
+### Size sweep: Kokkos against serial Fortran
+
+Six sizes from the base down by a factor of sqrt(2) in cells, one process,
+the Kokkos build against the `BACKENDS=reference` Fortran build of the same
+header. The reference is serial Fortran; the Kokkos build's own CPU
+accounting (MPE counts the master task only: 83 s CPU for 65 s wall on the
+SEAMOUNT base) does not settle how many core-group cores it uses. The ratio
+is therefore a wall-clock advantage, not a per-core comparison.
+
+| application | base | /1.41 | /2 | /2.83 | /4 | /5.66 |
+|---|---:|---:|---:|---:|---:|---:|
+| UPWELLING | 11.73 | 11.91 | 11.58 | 11.44 | 10.36 | 8.84 |
+| SEAMOUNT | 11.34 | 10.96 | 10.51 | 10.80 | 11.28 | 10.52 |
+| KELVIN | 12.92 | 15.86 | 12.51 | 18.87 | 20.36 | 21.98 |
+| BL_TEST | 10.52 | 10.65 | 9.34 | 10.15 | 8.43 | 6.23 |
+| BL_TEST control | 5.42 | 5.73 | 5.38 | 5.58 | 4.91 | 4.16 |
+| OVERFLOW | 8.31 | 8.41 | 8.60 | 8.38 | 8.09 | 7.26 |
+| RIVERPLUME1 | 1.54 | 1.41 | 1.40 | 1.37 | 1.35 | 1.31 |
+| LAB_CANYON | 1.33 | 1.15 | 1.29 | 1.28 | - | - |
+| WINDBASIN | 1.34 | 1.35 | 1.33 | 1.34 | 1.33 | 1.31 |
+| BASIN | 1.15 | 1.14 | 1.14 | 1.14 | 1.13 | - |
+| ESTUARY_TEST | 1.41 | 1.43 | 1.44 | 1.42 | 1.42 | 1.31 |
+
+The split follows the compile-time stage set, not the application. The five
+configurations built with the hand-written stage set (UPWELLING, SEAMOUNT,
+KELVIN, BL_TEST, OVERFLOW) are 6-22x faster than serial Fortran; two of
+them fall back inside `step3d_t` but keep the hand-written 2-D kernels. The
+ratio stays within about 20% of its base value down to a quarter of the
+cells and drops only at the smallest sizes, so the advantage is not a
+cache artefact of the base grid. The five on the row-lowered path
+(RIVERPLUME1, LAB_CANYON, WINDBASIN, BASIN, ESTUARY_TEST) sit at 1.1-1.5x
+and drift down as the grid grows, which is the cost of the per-row
+Fortran-shaped code the translator emits. The LMD kernel alone doubles BL_TEST (10.5x against its control's
+5.4x), the clearest single-stage effect at scale.
+
 ## Method notes
 
 - Builds: `build_app.sh UPWELLING` with `MPI=ON`; S1-S3 override
@@ -554,5 +667,19 @@ files of the ROMS test repository, none of which are in this tree.
 - The eight application runs are in `new/runs/more/` with the `-more` tags
   and `logs/run-more-now.log`; the SED_TOY control is
   `build/SED_TOY-reference-mpi-ref`, built with `BACKENDS=reference`.
+- The scale campaign uses the `-scale` and `-scale-ctl` tags for Kokkos and
+  `-scale` for the reference (`BACKENDS=reference MPI=ON`). Its drivers are
+  `scale_common.py`, `scale_ladder.py`, `scale_ladder2.py`, `scale_bump.py`,
+  `scale_campaign.py` and `scale_report.py` in the work directory; the raw
+  results are `results/ladder.json`, `phase2.json`, `phase3.json`,
+  `phase4.json` and the three tables `base.md`, `strong.md`, `sizes.md`.
+  Cases live under `new/runs/scale/<app>/`.
+- Three Sunway runtime facts the campaign had to work around: `bsub` has no
+  `-e` option; the MPE runtime segfaults the model when the job command is
+  `bash` or `/usr/bin/time` wrapping the executable, so `romsM <input>` is
+  submitted directly and the step time comes from the model's own report;
+  and the job's working directory is the submission directory, not the case
+  directory, so a `ROMS` symlink there is what lets ESTUARY_TEST resolve
+  `ROMS/External/sediment_estuary_test.in`.
 - Logs and runs of the earlier campaigns:
   `~/voyage/roms/work/cleanup-20261105T1334/{logs,new/runs}`.
