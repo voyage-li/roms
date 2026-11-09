@@ -59,6 +59,7 @@
 #if defined ROMS_KOKKOS
 
 #include <cmath>
+#include <cstdlib>
 
 /* Only the stages that call these kernels need the physics below.  A build
 ** that enables none of them is free of the restriction, so an application
@@ -1198,6 +1199,31 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
   (void)ng;
   (void)tile;
 
+#if defined(ROMS_KK_RHS_ROWS)
+  /* Experimental row-block path, chosen at run time so one binary can
+  ** be timed both ways.  The timer above still reports it.  Any tile
+  ** too short for a block keeps the production kernel. */
+  static const int rhs_rows = []() {
+    const char* v = std::getenv("ROMS_KK_RHS_ROWS");
+    return (v != nullptr) ? std::atoi(v) : 0;
+  }();
+  if ((rhs_rows == 2 || rhs_rows == 4) &&
+      t->Jend - t->Jstr + 1 >= rhs_rows &&
+      t->Jend - t->JstrV + 1 >= rhs_rows) {
+    k_step2d_rhs_fused_rows(ng, tile, krhs, LBi, UBi, LBj, UBj,
+                            IminS, ImaxS, JminS, JmaxS, h_p, on_u_p, om_v_p,
+                            gzeta_p, gzeta2_p, gzetaSA_p, rhoA_p, zwrk_p,
+                            Drhs_p, fomn_p, ubar_p, vbar_p, DUon_p, DVom_p,
+                            pm_p, pn_p, pmon_r_p, pnom_r_p, pmon_p_p,
+                            pnom_p_p, om_r_p, on_r_p, om_p_p, on_p_p,
+                            visc2_r_p, visc2_p2_p, rhs_ubar_p, rhs_vbar_p,
+                            DiaU2rhs_p, DiaV2rhs_p, NDM2d, M2pgrd, M2xadv,
+                            M2yadv, M2hadv, M2fcor, M2hvis, M2xvis, M2yvis,
+                            g, e, t, rhs_rows);
+    return;
+  }
+#endif
+
   const Shape s{LBi, UBi, LBj, UBj, IminS, ImaxS, JminS, JmaxS};
 
   Array2d<double> h       = grid2d(h_p, s);
@@ -1524,6 +1550,452 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
 }
 
 }  // extern "C"
+
+#if defined(ROMS_KK_RHS_ROWS)
+/*
+** Row-block variant of the fused right-hand side
+** ---------------------------------------------
+** The production kernel gives every eta row its own work item, so an
+** eta-direction face quantity is recomputed once per row that touches
+** it: the ubar eta second difference by three rows, the psi-point depth
+** and viscosity flux, the rho-point vbar flux and the DVom second
+** difference by two.  Each recomputation reads the same neighbours from
+** memory again.
+**
+** This variant puts R consecutive rows in one work item and evaluates
+** every face once per block, with the same expressions, the same inputs
+** and the same operation order, so the result is bitwise identical to
+** k_step2d_rhs_fused.  U and V rows run in separate leagues, each with
+** only its own per-row loop-carried state.
+**
+** Blocks are [j0, min(j0+R-1, Jend)] with j0 = Jstr + b*R.  A short
+** last block evaluates its unused face slots at the clamped index and
+** never reads them; the row loop stops at Jend.
+**
+** The row loop is a plain loop over r with runtime j: the shared values
+** live in LDM arrays, not registers, and that is the point -- they stop
+** being recomputed from the grid arrays by every row.
+*/
+
+namespace {
+
+KOKKOS_INLINE_FUNCTION
+int rhs_face(int jj, int hi) {
+  return (jj <= hi) ? jj : hi;
+}
+
+template <int R>
+void rhs_fused_rows_impl(int ng, int tile, int krhs,
+                         int LBi, int UBi, int LBj, int UBj,
+                         int IminS, int ImaxS, int JminS, int JmaxS,
+                         void* h_p, void* on_u_p, void* om_v_p,
+                         void* gzeta_p, void* gzeta2_p, void* gzetaSA_p,
+                         void* rhoA_p, void* zwrk_p,
+                         void* Drhs_p, void* fomn_p,
+                         void* ubar_p, void* vbar_p,
+                         void* DUon_p, void* DVom_p,
+                         void* pm_p, void* pn_p,
+                         void* pmon_r_p, void* pnom_r_p,
+                         void* pmon_p_p, void* pnom_p_p,
+                         void* om_r_p, void* on_r_p,
+                         void* om_p_p, void* on_p_p,
+                         void* visc2_r_p, void* visc2_p2_p,
+                         void* rhs_ubar_p, void* rhs_vbar_p,
+                         void* DiaU2rhs_p, void* DiaV2rhs_p,
+                         int NDM2d,
+                         int M2pgrd, int M2xadv, int M2yadv, int M2hadv,
+                         int M2fcor, int M2hvis, int M2xvis, int M2yvis,
+                         double g,
+                         const EdgeFlags* e,
+                         const TileBounds* t) {
+  roms::initialize();
+  (void)ng;
+  (void)tile;
+
+  const Shape s{LBi, UBi, LBj, UBj, IminS, ImaxS, JminS, JmaxS};
+
+  Array2d<double> h       = grid2d(h_p, s);
+  Array2d<double> on_u    = grid2d(on_u_p, s);
+  Array2d<double> om_v    = grid2d(om_v_p, s);
+  Array2d<double> gzeta   = priv2d(gzeta_p, s);
+  Array2d<double> gzeta2  = priv2d(gzeta2_p, s);
+  Array2d<double> gzetaSA = priv2d(gzetaSA_p, s);
+  Array2d<double> rhoA    = grid2d(rhoA_p, s);
+  Array2d<double> zwrk    = priv2d(zwrk_p, s);
+
+  Array2d<double> Drhs = priv2d(Drhs_p, s);
+  Array2d<double> fomn = grid2d(fomn_p, s);
+
+  Array3d<double> ubar = grid3d(ubar_p, s, TLEV0, TLEV1);
+  Array3d<double> vbar = grid3d(vbar_p, s, TLEV0, TLEV1);
+
+  Array2d<double> DUon = priv2d(DUon_p, s);
+  Array2d<double> DVom = priv2d(DVom_p, s);
+
+  Array2d<double> pm = grid2d(pm_p, s);
+  Array2d<double> pn = grid2d(pn_p, s);
+
+  Array2d<double> pmon_r = grid2d(pmon_r_p, s);
+  Array2d<double> pnom_r = grid2d(pnom_r_p, s);
+  Array2d<double> pmon_p = grid2d(pmon_p_p, s);
+  Array2d<double> pnom_p = grid2d(pnom_p_p, s);
+  Array2d<double> om_r   = grid2d(om_r_p, s);
+  Array2d<double> on_r   = grid2d(on_r_p, s);
+  Array2d<double> om_p   = grid2d(om_p_p, s);
+  Array2d<double> on_p   = grid2d(on_p_p, s);
+  Array2d<double> visc2_r  = grid2d(visc2_r_p, s);
+  Array2d<double> visc2_pp = grid2d(visc2_p2_p, s);
+
+  Array2d<double> rhs_ubar = priv2d(rhs_ubar_p, s);
+  Array2d<double> rhs_vbar = priv2d(rhs_vbar_p, s);
+
+  Array3d<double> DiaU2rhs = priv3d(DiaU2rhs_p, s, 1, NDM2d - 1);
+  Array3d<double> DiaV2rhs = priv3d(DiaV2rhs_p, s, 1, NDM2d - 1);
+
+  const int Istr = t->Istr, Iend = t->Iend;
+  const int Jstr = t->Jstr, Jend = t->Jend;
+  const int IstrU = t->IstrU, JstrV = t->JstrV;
+
+  const int fw = (!e->composite_w && !e->periodic_ew && e->west);
+  const int fe = (!e->composite_e && !e->periodic_ew && e->east);
+  const int fs = (!e->composite_s && !e->periodic_ns && e->south);
+  const int fn = (!e->composite_n && !e->periodic_ns && e->north);
+
+  const double cpg  = 0.5 * g;
+  const double cpg2 = 1.0 / 3.0;
+  const double c6   = 1.0 / 6.0;
+
+  /*--------------------------------------------------------------------
+  ** U rows, R at a time.
+  **------------------------------------------------------------------*/
+
+  const int nrow_u = Jend - Jstr + 1;
+  const int nblk_u = (nrow_u + R - 1) / R;
+  Kokkos::parallel_for(
+      range_policy(0, nblk_u), KOKKOS_LAMBDA(int b) {
+        const int j0 = Jstr + b * R;
+
+        double gxm[R], gx0[R], dxm[R], dx0[R], uRm[R];
+        for (int r = 0; r < R; ++r) {
+          const int j = j0 + r;
+          if (j > Jend) break;
+          gxm[r] = ddx(ubar, krhs, IstrU - 1, j, fw, fe, Istr, Iend + 1);
+          gx0[r] = ddx(ubar, krhs, IstrU,     j, fw, fe, Istr, Iend + 1);
+          dxm[r] = ddx2(DUon, IstrU - 1, j, fw, fe, Istr, Iend + 1);
+          dx0[r] = ddx2(DUon,     IstrU, j, fw, fe, Istr, Iend + 1);
+          uRm[r] = u_rho_flux(on_r, visc2_r, Drhs, pmon_r, pnom_r, pm, pn,
+                              ubar, vbar, krhs, IstrU - 1, j);
+        }
+
+        for (int i = IstrU; i <= Iend; ++i) {
+          /* One evaluation per face index of the block, shared by the
+          ** rows that border it.  Slot m is face j0-1+m; row r uses
+          ** slots r (south), r+1 (centre) and r+2 (north). */
+          double G[R + 2], Dp[R + 1], Dm[R + 1], dp[R + 1], P[R + 1];
+          for (int m = 0; m < R + 2; ++m) {
+            G[m] = ddy(ubar, krhs, i, rhs_face(j0 - 1 + m, Jend + 1),
+                       fs, fn, Jstr - 1, Jend + 1);
+          }
+          for (int m = 0; m < R + 1; ++m) {
+            const int jj = rhs_face(j0 + m, Jend + 1);
+            Dp[m] = ddx2(DVom, i, jj, 0, 0, 0, 0);
+            Dm[m] = ddx2(DVom, i - 1, jj, 0, 0, 0, 0);
+            dp[m] = 0.25 * (Drhs(i, jj) + Drhs(i - 1, jj) +
+                            Drhs(i, jj - 1) + Drhs(i - 1, jj - 1));
+            P[m] = om_p(i, jj) * om_p(i, jj) *
+                   (visc2_pp(i, jj) * dp[m] * 0.5 *
+                    (pmon_p(i, jj) *
+                         ((pn(i, jj - 1) + pn(i, jj)) * vbar(i, jj, krhs) -
+                          (pn(i - 1, jj - 1) + pn(i - 1, jj)) *
+                              vbar(i - 1, jj, krhs)) +
+                     pnom_p(i, jj) *
+                         ((pm(i - 1, jj) + pm(i, jj)) * ubar(i, jj, krhs) -
+                          (pm(i - 1, jj - 1) + pm(i, jj - 1)) *
+                              ubar(i, jj - 1, krhs))));
+          }
+
+          for (int r = 0; r < R; ++r) {
+            const int j = j0 + r;
+            if (j > Jend) break;
+
+            /* --- pressure gradient --- */
+            const double pg =
+                cpg * on_u(i, j) *
+                ((h(i - 1, j) + h(i, j)) * (gzeta(i - 1, j) - gzeta(i, j)) +
+                 (h(i - 1, j) - h(i, j)) *
+                     (gzetaSA(i - 1, j) + gzetaSA(i, j) +
+                      cpg2 * (rhoA(i - 1, j) - rhoA(i, j)) *
+                          (zwrk(i - 1, j) - zwrk(i, j))) +
+                 (gzeta2(i - 1, j) - gzeta2(i, j)));
+            double acc = pg;
+            DiaU2rhs(i, j, M2pgrd) = pg;
+
+            /* --- advection --- */
+            const double gx1 =
+                ddx(ubar, krhs, i + 1, j, fw, fe, Istr, Iend + 1);
+            const double dx1 =
+                ddx2(DUon, i + 1, j, fw, fe, Istr, Iend + 1);
+            const double ufx =
+                0.25 * (ubar(i, j, krhs) + ubar(i + 1, j, krhs) -
+                        c6 * (gx0[r] + gx1)) *
+                (DUon(i, j) + DUon(i + 1, j) - c6 * (dx0[r] + dx1));
+            const double ufxm =
+                0.25 * (ubar(i - 1, j, krhs) + ubar(i, j, krhs) -
+                        c6 * (gxm[r] + gx0[r])) *
+                (DUon(i - 1, j) + DUon(i, j) - c6 * (dxm[r] + dx0[r]));
+
+            const double ufe =
+                0.25 * (ubar(i, j, krhs) + ubar(i, j - 1, krhs) -
+                        c6 * (G[r + 1] + G[r])) *
+                (DVom(i, j) + DVom(i - 1, j) - c6 * (Dp[r] + Dm[r]));
+            const double ufe1 =
+                0.25 * (ubar(i, j + 1, krhs) + ubar(i, j, krhs) -
+                        c6 * (G[r + 2] + G[r + 1])) *
+                (DVom(i, j + 1) + DVom(i - 1, j + 1) -
+                 c6 * (Dp[r + 1] + Dm[r + 1]));
+
+            const double axadv = ufx - ufxm;
+            const double ayadv = ufe1 - ufe;
+            const double aadv  = axadv + ayadv;
+            acc -= aadv;
+            DiaU2rhs(i, j, M2xadv) = -axadv;
+            DiaU2rhs(i, j, M2yadv) = -ayadv;
+            DiaU2rhs(i, j, M2hadv) = -aadv;
+
+            /* --- coriolis --- */
+            const double fcor =
+                0.5 * (0.5 * Drhs(i, j) * fomn(i, j) *
+                           (vbar(i, j, krhs) + vbar(i, j + 1, krhs)) +
+                       0.5 * Drhs(i - 1, j) * fomn(i - 1, j) *
+                           (vbar(i - 1, j, krhs) + vbar(i - 1, j + 1, krhs)));
+            acc += fcor;
+            DiaU2rhs(i, j, M2fcor) = fcor;
+
+            /* --- harmonic viscosity --- */
+            const double uR = u_rho_flux(on_r, visc2_r, Drhs, pmon_r, pnom_r,
+                                         pm, pn, ubar, vbar, krhs, i, j);
+            const double uP  = P[r];
+            const double uPp = P[r + 1];
+
+            const double vx1 = 0.5 * (pn(i - 1, j) + pn(i, j)) *
+                               (uR - uRm[r]);
+            const double vy1 = 0.5 * (pm(i - 1, j) + pm(i, j)) * (uPp - uP);
+            const double hv  = vx1 + vy1;
+            acc += hv;
+            DiaU2rhs(i, j, M2hvis) = hv;
+            DiaU2rhs(i, j, M2xvis) = vx1;
+            DiaU2rhs(i, j, M2yvis) = vy1;
+
+            rhs_ubar(i, j) = acc;
+
+            gxm[r] = gx0[r]; gx0[r] = gx1;
+            dxm[r] = dx0[r]; dx0[r] = dx1;
+            uRm[r] = uR;
+          }
+        }
+      });
+
+  /*--------------------------------------------------------------------
+  ** V rows, R at a time.
+  **------------------------------------------------------------------*/
+
+  const int nrow_v = Jend - JstrV + 1;
+  const int nblk_v = (nrow_v + R - 1) / R;
+  Kokkos::parallel_for(
+      range_policy(0, nblk_v), KOKKOS_LAMBDA(int b) {
+        const int j0 = JstrV + b * R;
+
+        double vgxm[R], vgx0[R], vdxm[R], vdx0[R], vPm[R];
+        for (int r = 0; r < R; ++r) {
+          const int j = j0 + r;
+          if (j > Jend) break;
+          vgxm[r] = ddx(vbar, krhs, Istr - 1, j, fw, fe, Istr - 1, Iend + 1);
+          vgx0[r] = ddx(vbar, krhs, Istr,     j, fw, fe, Istr - 1, Iend + 1);
+          vdxm[r] = ddy2(DUon, Istr, j - 1, 0, 0, 0, 0);
+          vdx0[r] = ddy2(DUon, Istr, j,     0, 0, 0, 0);
+          vPm[r]  = v_psi_flux(on_p, visc2_pp,
+                               0.25 * (Drhs(Istr, j) + Drhs(Istr - 1, j) +
+                                       Drhs(Istr, j - 1) +
+                                       Drhs(Istr - 1, j - 1)),
+                               pmon_p, pnom_p, pm, pn, ubar, vbar, krhs,
+                               Istr, j);
+        }
+
+        for (int i = Istr; i <= Iend; ++i) {
+          double Gv[R + 2], Dv[R + 2], vRf[R + 1];
+          for (int m = 0; m < R + 2; ++m) {
+            const int jf = rhs_face(j0 - 1 + m, Jend + 1);
+            Gv[m] = ddy(vbar, krhs, i, jf, fs, fn, Jstr, Jend + 1);
+            Dv[m] = ddy2(DVom, i, jf, fs, fn, Jstr, Jend + 1);
+          }
+          for (int m = 0; m < R + 1; ++m) {
+            const int jj = rhs_face(j0 - 1 + m, Jend);
+            vRf[m] =
+                om_r(i, jj) * om_r(i, jj) *
+                (visc2_r(i, jj) * Drhs(i, jj) * 0.5 *
+                 (pmon_r(i, jj) *
+                      ((pn(i, jj) + pn(i + 1, jj)) * ubar(i + 1, jj, krhs) -
+                       (pn(i - 1, jj) + pn(i, jj)) * ubar(i, jj, krhs)) -
+                  pnom_r(i, jj) *
+                      ((pm(i, jj) + pm(i, jj + 1)) * vbar(i, jj + 1, krhs) -
+                       (pm(i, jj - 1) + pm(i, jj)) * vbar(i, jj, krhs))));
+          }
+
+          for (int r = 0; r < R; ++r) {
+            const int j = j0 + r;
+            if (j > Jend) break;
+
+            /* --- pressure gradient --- */
+            const double pg =
+                cpg * om_v(i, j) *
+                ((h(i, j - 1) + h(i, j)) * (gzeta(i, j - 1) - gzeta(i, j)) +
+                 (h(i, j - 1) - h(i, j)) *
+                     (gzetaSA(i, j - 1) + gzetaSA(i, j) +
+                      cpg2 * (rhoA(i, j - 1) - rhoA(i, j)) *
+                          (zwrk(i, j - 1) - zwrk(i, j))) +
+                 (gzeta2(i, j - 1) - gzeta2(i, j)));
+            double acc = pg;
+            DiaV2rhs(i, j, M2pgrd) = pg;
+
+            /* --- advection --- */
+            const double vfx =
+                0.25 * (vbar(i, j, krhs) + vbar(i - 1, j, krhs) -
+                        c6 * (vgx0[r] + vgxm[r])) *
+                (DUon(i, j) + DUon(i, j - 1) -
+                 c6 * (vdx0[r] + vdxm[r]));
+
+            const double gx1 =
+                ddx(vbar, krhs, i + 1, j, fw, fe, Istr - 1, Iend + 1);
+            const double dx1  = ddy2(DUon, i + 1, j, 0, 0, 0, 0);
+            const double dx1m = ddy2(DUon, i + 1, j - 1, 0, 0, 0, 0);
+            const double vfx1 =
+                0.25 * (vbar(i + 1, j, krhs) + vbar(i, j, krhs) -
+                        c6 * (gx1 + vgx0[r])) *
+                (DUon(i + 1, j) + DUon(i + 1, j - 1) -
+                 c6 * (dx1 + dx1m));
+
+            const double gy0  = Gv[r + 1];
+            const double dgy0 = Dv[r + 1];
+            const double gy1  = Gv[r + 2];
+            const double dgy1 = Dv[r + 2];
+            const double vfe =
+                0.25 * (vbar(i, j, krhs) + vbar(i, j + 1, krhs) -
+                        c6 * (gy0 + gy1)) *
+                (DVom(i, j) + DVom(i, j + 1) - c6 * (dgy0 + dgy1));
+
+            const double gym  = Gv[r];
+            const double dgym = Dv[r];
+            const double vfem =
+                0.25 * (vbar(i, j - 1, krhs) + vbar(i, j, krhs) -
+                        c6 * (gym + gy0)) *
+                (DVom(i, j - 1) + DVom(i, j) - c6 * (dgym + dgy0));
+
+            const double axadv = vfx1 - vfx;
+            const double ayadv = vfe - vfem;
+            const double aadv  = axadv + ayadv;
+            acc -= aadv;
+            DiaV2rhs(i, j, M2xadv) = -axadv;
+            DiaV2rhs(i, j, M2yadv) = -ayadv;
+            DiaV2rhs(i, j, M2hadv) = -aadv;
+
+            /* --- coriolis --- */
+            const double fcor =
+                0.5 * (0.5 * Drhs(i, j) * fomn(i, j) *
+                           (ubar(i, j, krhs) + ubar(i + 1, j, krhs)) +
+                       0.5 * Drhs(i, j - 1) * fomn(i, j - 1) *
+                           (ubar(i, j - 1, krhs) +
+                            ubar(i + 1, j - 1, krhs)));
+            acc -= fcor;
+            DiaV2rhs(i, j, M2fcor) = -fcor;
+
+            /* --- harmonic viscosity --- */
+            const double dp10 = 0.25 * (Drhs(i + 1, j) + Drhs(i, j) +
+                                        Drhs(i + 1, j - 1) +
+                                        Drhs(i, j - 1));
+            const double vPp = v_psi_flux(on_p, visc2_pp, dp10, pmon_p,
+                                          pnom_p, pm, pn, ubar, vbar, krhs,
+                                          i + 1, j);
+            const double vR  = vRf[r + 1];
+            const double vRm = vRf[r];
+
+            const double vx1 = 0.5 * (pn(i, j - 1) + pn(i, j)) *
+                               (vPp - vPm[r]);
+            const double vy1 = 0.5 * (pm(i, j - 1) + pm(i, j)) * (vR - vRm);
+            const double hv  = vx1 - vy1;
+            acc += hv;
+            DiaV2rhs(i, j, M2hvis) = hv;
+            DiaV2rhs(i, j, M2xvis) = vx1;
+            DiaV2rhs(i, j, M2yvis) = -vy1;
+
+            rhs_vbar(i, j) = acc;
+
+            vgxm[r] = vgx0[r]; vgx0[r] = gx1;
+            vdxm[r] = dx1m; vdx0[r] = dx1;
+            vPm[r] = vPp;
+          }
+        }
+      });
+}
+
+}  // namespace
+
+/* Same contract as k_step2d_rhs_fused, R rows per work item. */
+
+void k_step2d_rhs_fused_rows(int ng, int tile, int krhs,
+                             int LBi, int UBi, int LBj, int UBj,
+                             int IminS, int ImaxS, int JminS, int JmaxS,
+                             void* h_p, void* on_u_p, void* om_v_p,
+                             void* gzeta_p, void* gzeta2_p,
+                             void* gzetaSA_p, void* rhoA_p, void* zwrk_p,
+                             void* Drhs_p, void* fomn_p,
+                             void* ubar_p, void* vbar_p,
+                             void* DUon_p, void* DVom_p,
+                             void* pm_p, void* pn_p,
+                             void* pmon_r_p, void* pnom_r_p,
+                             void* pmon_p_p, void* pnom_p_p,
+                             void* om_r_p, void* on_r_p,
+                             void* om_p_p, void* on_p_p,
+                             void* visc2_r_p, void* visc2_p2_p,
+                             void* rhs_ubar_p, void* rhs_vbar_p,
+                             void* DiaU2rhs_p, void* DiaV2rhs_p,
+                             int NDM2d,
+                             int M2pgrd, int M2xadv, int M2yadv,
+                             int M2hadv, int M2fcor, int M2hvis,
+                             int M2xvis, int M2yvis,
+                             double g,
+                             const roms::EdgeFlags* e,
+                             const roms::TileBounds* t,
+                             int rows) {
+  switch (rows) {
+    case 2:
+      rhs_fused_rows_impl<2>(ng, tile, krhs, LBi, UBi, LBj, UBj,
+                             IminS, ImaxS, JminS, JmaxS, h_p, on_u_p,
+                             om_v_p, gzeta_p, gzeta2_p, gzetaSA_p, rhoA_p,
+                             zwrk_p, Drhs_p, fomn_p, ubar_p, vbar_p, DUon_p,
+                             DVom_p, pm_p, pn_p, pmon_r_p, pnom_r_p,
+                             pmon_p_p, pnom_p_p, om_r_p, on_r_p, om_p_p,
+                             on_p_p, visc2_r_p, visc2_p2_p, rhs_ubar_p,
+                             rhs_vbar_p, DiaU2rhs_p, DiaV2rhs_p, NDM2d,
+                             M2pgrd, M2xadv, M2yadv, M2hadv, M2fcor,
+                             M2hvis, M2xvis, M2yvis, g, e, t);
+      break;
+    case 4:
+      rhs_fused_rows_impl<4>(ng, tile, krhs, LBi, UBi, LBj, UBj,
+                             IminS, ImaxS, JminS, JmaxS, h_p, on_u_p,
+                             om_v_p, gzeta_p, gzeta2_p, gzetaSA_p, rhoA_p,
+                             zwrk_p, Drhs_p, fomn_p, ubar_p, vbar_p, DUon_p,
+                             DVom_p, pm_p, pn_p, pmon_r_p, pnom_r_p,
+                             pmon_p_p, pnom_p_p, om_r_p, on_r_p, om_p_p,
+                             on_p_p, visc2_r_p, visc2_p2_p, rhs_ubar_p,
+                             rhs_vbar_p, DiaU2rhs_p, DiaV2rhs_p, NDM2d,
+                             M2pgrd, M2xadv, M2yadv, M2hadv, M2fcor,
+                             M2hvis, M2xvis, M2yvis, g, e, t);
+      break;
+    default:
+      break;  /* the caller only selects 2 or 4 */
+  }
+}
+#endif  // ROMS_KK_RHS_ROWS
 
 #endif  // KK_STAGE_FUSED || KK_STAGE_TAVG || KK_STAGE_COUP || KK_STAGE_MOMT ||
         // KK_STAGE_DIAG || KK_STAGE_STOR

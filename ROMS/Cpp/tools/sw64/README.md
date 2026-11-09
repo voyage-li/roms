@@ -280,11 +280,35 @@ on the Python hash seed.
 
 ## 8. Decisions
 
-- **No TeamPolicy.** On SW64 a team is 64 CPEs and leagues run one after another.
-  Every step2d kernel's team entry ran at 0.58-0.86 of the range entry's speed
-  at 41x80, and sharing the `step3d_t` x-face flux in team scratch paid
-  (1.6-1.7x) only beyond about 65k columns per launch, while a rank holds 3-4k.
-  The experiment and its benchmarks were removed.
+- **No TeamPolicy** (2026-11; updated 2026-11-09 with the scale-campaign
+  tiles). On SW64 a team is 64 CPEs and leagues run one after another. Every
+  step2d kernel's team entry ran at 0.58-0.86 of the range entry's speed at
+  41x80, and sharing the `step3d_t` x-face flux in team scratch paid (1.6-1.7x)
+  only beyond about 65k columns per launch, while a rank then held 3-4k. The
+  2026-11-09 re-run on the campaign base tiles (0.26-0.76M columns per rank)
+  made the team scratch usable at `-cache_size 128` for the first time (a fork
+  copy with a 3.75 MB pool and `-ldm_share_mode 5 -ldm_share_size 64`) and
+  measured the remaining y-face duplication: TeamPolicy y sharing reached 1.25x
+  (UPWELLING 533x1040x16, R=16) and 1.29x (BL_TEST 1599x164x30, R=8) but fell
+  to 0.59x on a canyon-shaped tile, because its two-phase structure (flux pass,
+  barrier, update pass) re-reads what the range kernel fuses. A plain
+  RangePolicy row block (one work item per R-row block and column strip, the
+  same sharing in one pass) gets 1.21-1.23x on the two applications that
+  actually call this kernel, with no share flags and no fork change. All
+  variants are bitwise equal to the chunk kernel. That row block is wired: in
+  a build that carries the variants the step3d_t entry dispatches to it by
+  default (R=8, 32-column chunks, 64/128-column strips), `ROMS_KK_T_ROWS=0`
+  restores the chunk kernel and `ROMS_KK_T_ROWS=2|4` overrides the block size.
+  End to end at the UPWELLING base tile the kernel goes 0.5356 s -> 0.4798 s
+  (1.12x), the kernel sum 8.9303 s -> 8.8847 s (-0.51%), and the history file
+  is bitwise identical. Benchmarks and numbers:
+  `results/team-2026-11-09.md` in the team-share work directory on SW.
+  The same sharing was then tried on the largest kernel, `step2d rhs_fused`
+  (19% of the base step): the row-block variant is bitwise equal but measures
+  0.92-1.12x at R=2 and collapses to 0.54x at R=4 on the tall tile, so it is
+  not wired. The duplicate eta-face evaluations are largely L2 hits; that
+  kernel needs fewer bytes per step, not fewer evaluations, and sits at the
+  machine's practical rate (~11 GB/s) for its access pattern.
 - **Generated rows rather than hand ports** for the long tail of loops: the
   EOS and bulk-flux polynomials stay single-sourced in Fortran. The hand-written
   `pre_step3d`/`step3d_uv`/`step3d_t` kernels and the generated rows do not

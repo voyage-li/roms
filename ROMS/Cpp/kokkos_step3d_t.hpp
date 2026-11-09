@@ -20,5 +20,25 @@ struct TracerConfig {
 extern "C" void k_step3d_t_chunks(const roms::TracerConfig* config,
     const int* schemes, void* pm, void* pn, void* Hz, void* Huon, void* Hvom,
     void* W, void* zr, void* Akt, void* tracer, void* diagnostics);
+#if defined(ROMS_KK_TEAM_STEP3D_T)
+/* TeamPolicy variant sharing the y-face flux in team scratch; block_rows is
+** the number of rows per team (0 takes the default). */
+extern "C" void k_step3d_t_team(const roms::TracerConfig* config,
+    const int* schemes, int block_rows, int chunk_cols, void* pm, void* pn,
+    void* Hz, void* Huon, void* Hvom, void* W, void* zr, void* Akt,
+    void* tracer, void* diagnostics);
+/* Double-buffered pipeline: league of one team, produce block n while
+** consuming block n-1 in the same loop. */
+extern "C" void k_step3d_t_team_pipe(const roms::TracerConfig* config,
+    const int* schemes, int block_rows, int chunk_cols, void* pm, void* pn,
+    void* Hz, void* Huon, void* Hvom, void* W, void* zr, void* Akt,
+    void* tracer, void* diagnostics);
+/* RangePolicy row-block control: same y sharing in one pass, private
+** workspace, no team barrier.  strip_cols sets the columns per work item. */
+extern "C" void k_step3d_t_rows(const roms::TracerConfig* config,
+    const int* schemes, int block_rows, int chunk_cols, int strip_cols,
+    void* pm, void* pn, void* Hz, void* Huon, void* Hvom, void* W, void* zr,
+    void* Akt, void* tracer, void* diagnostics);
+#endif
 #endif
 #endif

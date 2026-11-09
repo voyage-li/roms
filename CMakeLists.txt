@@ -444,6 +444,19 @@ if( ROMS_KOKKOS )
       roms_kokkos_test( test_step2d_kokkos ROMS/Cpp/test_step2d_kokkos.cpp
         ROMS/Cpp/test_step2d_reference.f90
         ROMS/Cpp/kokkos_config.cpp ROMS/Cpp/kokkos_step2d.cpp )
+
+      # Row-block fused 2-D rhs against the production kernel: bitwise
+      # exactness and timing on the campaign base shapes.  The kernel is
+      # compiled into this target only; enabling it in the model is a
+      # separate decision (ROMS_KK_RHS_ROWS in MY_CPP_FLAGS).
+      option( ROMS_KOKKOS_RHS_BENCH "Build the 2-D rhs row-block bench" OFF )
+      if( ROMS_KOKKOS_RHS_BENCH OR "ROMS_KK_RHS_ROWS" IN_LIST MY_CPP_FLAGS )
+        roms_kokkos_test( bench_step2d_rhs_kokkos
+          ROMS/Cpp/bench_step2d_rhs_kokkos.cpp ROMS/Cpp/kokkos_config.cpp
+          ROMS/Cpp/kokkos_step2d.cpp )
+        target_compile_definitions( bench_step2d_rhs_kokkos
+          PRIVATE ROMS_KK_RHS_ROWS )
+      endif()
     endif()
 
     if( ROMS_KOKKOS_STEP3D_T )
@@ -453,6 +466,15 @@ if( ROMS_KOKKOS )
         ROMS/Cpp/kokkos_step3d_t.cpp )
       # It recompiles the ROMS modules; serialise their .mod writes.
       add_dependencies( test_step3d_t_kokkos Objects )
+
+      # Chunk kernel against the TeamPolicy y-share kernel: exactness and
+      # timing on the campaign base shapes.  On SW64 the team run needs
+      # -ldm_share_mode 5 -ldm_share_size 64 at submit time.
+      roms_kokkos_test( bench_step3d_t_kokkos
+        ROMS/Cpp/bench_step3d_t_kokkos.cpp ROMS/Cpp/kokkos_config.cpp
+        ROMS/Cpp/kokkos_step3d_t.cpp )
+      target_compile_definitions( bench_step3d_t_kokkos
+        PRIVATE ROMS_KK_TEAM_STEP3D_T )
     endif()
 
     # Fortran only.  The two small modules are the preprocessed copies that

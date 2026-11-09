@@ -629,6 +629,115 @@ and drift down as the grid grows, which is the cost of the per-row
 Fortran-shaped code the translator emits. The LMD kernel alone doubles BL_TEST (10.5x against its control's
 5.4x), the clearest single-stage effect at scale.
 
+## TeamPolicy on the tracer corrector (branch `feat/kokkos.share`, 2026-11-09)
+
+The campaign left one TeamPolicy question open: on SW64 a team is one 64-CPE
+core group and leagues run one after another, so the only thing TeamPolicy adds
+is team-shared LDM. The 2026-11 experiments had to run it at `-cache_size 32`
+because the fork's fixed 8 MB pool does not fit next to the 128 KB cache and
+the 38 KB of TLS. A copy of the fork in the work directory makes the pool size
+a macro (3.75 MB), and `-ldm_share_mode 5 -ldm_share_size 64 -cache_size 128`
+now starts: a cross-CPE scratch test passes (`mode=5 size=64`, `PASS`). This is
+the first configuration that keeps the campaign's cache size and gets real
+shared LDM.
+
+Three kernels were compared on the campaign base tiles, all sharing the
+`Fields` helpers and the per-cell expression order, and all bitwise equal
+(`max|dt| = max|d diag| = 0`):
+
+| kernel | policy | sharing |
+|---|---|---|
+| `k_step3d_t_chunks` | RangePolicy, one item per (row, tracer) | x faces inside a 32-column chunk (production) |
+| `k_step3d_t_team` | TeamPolicy, one 64-CPE team per R-row block | x + y faces in team LDM, two phases with a barrier |
+| `k_step3d_t_rows` | RangePolicy, one item per (R-row block, column strip, tracer) | x + y faces in one pass, private workspace |
+
+Medians of five alternating calls, ratio = chunks / variant:
+
+| shape | team best | rows best |
+|---|---:|---:|
+| UPWELLING 533x1040x16 | 1.25x (R=16) | **1.23x** (R=8) |
+| BL_TEST 1599x164x30 | **1.29x** (R=8) | 1.21x (R=8) |
+| 12-rank tile 240x352x25 | 0.99x | 1.07x |
+| canyon-shaped 440x1000x25 | 0.59x | 0.64x |
+
+The y-face duplication is real: the two applications whose builds call this
+kernel (UPWELLING and BL_TEST are the only headers with `SPLINES_VDIFF`) gain
+1.21-1.29x. But the TeamPolicy vehicle is not what pays: its two-phase
+structure re-reads the field data, so it peaks only slightly above the plain
+row block and collapses on the canyon-shaped tile; at the same block size it
+loses (UPWELLING R=8: 0.92x team against 1.23x rows). The row block also shows
+that block size and chunk width need tuning: R=8 with 32-column chunks for both
+production shapes, while 8-column chunks waste the cache lines.
+
+The ceiling is small: the tracer region is 0.578 s of a 9.33 s step at the
+UPWELLING base and 0.389 s of 9.19 s at BL_TEST, so 1.2x on the kernel is about
+1.0% and 0.7% of the stepping wall. Wiring the row block is therefore a small,
+safe gain; wiring TeamPolicy would also require the share flags on every job
+and the fork change. Benchmarks and the full tables:
+`~/voyage/roms/work/team-share-20261109/results/team-2026-11-09.md`.
+
+The row block is wired: in a build that compiles the variants
+(`ROMS_KK_TEAM_STEP3D_T`) `k_step3d_t_chunks` dispatches to `k_step3d_t_rows`
+(with `R=8`, 32-column chunks and 64- or 128-column strips by tile width), and
+`ROMS_KK_T_ROWS=0` in the job environment restores the chunk kernel;
+`ROMS_KK_T_ROWS=2|4` overrides the block size. The end-to-end check on the
+UPWELLING base tile (533x1040x16, one 3-D step, both jobs on the same node,
+`ROMS_KK_TIMING=1`):
+
+| | chunks | row block |
+|---|---:|---:|
+| `step3d_t` kernel | 0.5356 s | 0.4798 s (1.12x) |
+| kernel sum | 8.9303 s | 8.8847 s (-0.51%) |
+
+The history file is bitwise identical (one byte differs in the 1.1 GB file,
+inside the netCDF header timestamp). The model's kernel gain is 1.12x rather
+than the bench's 1.23x, so the whole-step effect is about half a percent.
+
+One more formulation was tried before settling: a double-buffered pipeline
+(`k_step3d_t_team_pipe`) where one team owns the whole tile, two LDM buffers
+hold the y-face fluxes of consecutive blocks, and the produce of block n runs
+in the same loop as the consume of block n-1, so a CPE keeps both memory
+streams in flight between barriers. It is bitwise equal, but 10-37% slower
+than the row block and slower than the two-phase team kernel on three of four
+shapes: overlapping cannot remove the second read of the field data, and the
+kernel already runs at the machine's practical bandwidth, so the bytes are
+still paid. The variant stays as the record of that experiment; nothing is
+wired.
+
+### The same sharing on the fused 2-D rhs does not pay
+
+The tracer result suggested repeating it on the largest kernel, `step2d`
+`rhs_fused` (19% of the base step): its eta-direction face terms are also
+evaluated by two or three rows each (the ubar eta second difference by three,
+the psi-point depth and viscosity flux, the rho-point vbar flux and the DVom
+second difference by two). `k_step2d_rhs_fused_rows` (behind
+`ROMS_KK_RHS_ROWS`) keeps R consecutive rows in one work item and evaluates
+each face once per block, in the same order, with U and V rows in separate
+leagues. `ROMS/Cpp/bench_step2d_rhs_kokkos.cpp` runs it against the production
+kernel on identical fixtures, alternating the call order:
+
+| shape (tile interior) | production | R=2 | R=4 |
+|---|---:|---:|---:|
+| UPWELLING 533x1040 | 20.6 ms | 18.4 ms (1.12x) | 38.1 ms (0.54x) |
+| BL_TEST 1599x164 | 9.0 ms | 9.8 ms (0.92x) | 9.4 ms (0.96x) |
+| 12-rank tile 240x352 | 2.8 ms | 3.0 ms (0.93x) | 3.3 ms (0.85x) |
+| canyon-shaped 440x1000 | 16.4 ms | 15.0 ms (1.10x) | 14.3 ms (1.15x) |
+
+Every output is bitwise equal to the production kernel at both block sizes
+(`max|diff| = 0`), so the sharing is arithmetically free; it just does not buy
+time. The duplicate evaluations were never the critical traffic: rows that
+border the same face run close together in the league and the second read
+usually hits L2, so removing the recomputation does not cut the misses that
+matter. The kernel runs at about 11 GB/s at the base tile, the same band as
+the tracer kernel, i.e. at the machine's practical rate for this access
+pattern. R=4 collapses on the tall 533-column tile (reproducible, not an
+ordering or node artefact) where its wider per-item footprint - five face
+slots against three - appears to cross a cache threshold; R=2 shows the same
+effect in miniature, winning on the tall tiles and losing on the short or
+narrow ones. The lever is recorded as closed: `rhs_fused` needs fewer bytes
+per step, not fewer evaluations, and that is an algorithmic change
+(fewer diagnostics passes) outside the kernel.
+
 ## Method notes
 
 - Builds: `build_app.sh UPWELLING` with `MPI=ON`; S1-S3 override
