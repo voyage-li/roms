@@ -11,21 +11,21 @@
 namespace roms {
 
 class HostWorkspace {
- public:
-  double* reserve(std::size_t count) {
-    if (count > capacity_) {
-      storage_.reset(new double[count]);
-      capacity_ = count;
+public:
+    double* reserve(std::size_t count) {
+        if (count > capacity_) {
+            storage_.reset(new double[count]);
+            capacity_ = count;
+        }
+        return storage_.get();
     }
-    return storage_.get();
-  }
 
- private:
-  std::unique_ptr<double[]> storage_;
-  std::size_t capacity_ = 0;
+private:
+    std::unique_ptr<double[]> storage_;
+    std::size_t capacity_ = 0;
 };
 
-}  // namespace roms
-#endif  // !__sw_slave__
+} // namespace roms
+#endif // !__sw_slave__
 
-#endif  // ROMS_KOKKOS_WORKSPACE_HPP
+#endif // ROMS_KOKKOS_WORKSPACE_HPP

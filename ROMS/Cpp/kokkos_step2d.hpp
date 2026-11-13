@@ -162,8 +162,8 @@ void k_step2d_rhs_fused(int ng, int tile, int krhs,
                         const roms::EdgeFlags* e,
                         const roms::TileBounds* t);
 
-}  // extern "C"
+} // extern "C"
 
-#endif  // ROMS_KOKKOS
+#endif // ROMS_KOKKOS
 
-#endif  // ROMS_KOKKOS_STEP2D_HPP
+#endif // ROMS_KOKKOS_STEP2D_HPP

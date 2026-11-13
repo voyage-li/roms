@@ -59,7 +59,7 @@
 /* ROMS' CPU macro conflicts with Kokkos::SW64 and Tools::DeviceType::SW64.
 ** It is needed by the Fortran preprocessor, not by the C++ kernels. */
 #ifdef SW64
-#  undef SW64
+#undef SW64
 #endif
 
 /*
@@ -80,7 +80,7 @@
 */
 
 #if defined(ROMS_KOKKOS_SW64) && !defined(__sw_hybrid_coding__)
-#  error "ROMS_KOKKOS_SW64 needs -mhybrid-coding on every kernel file; " \
+#error "ROMS_KOKKOS_SW64 needs -mhybrid-coding on every kernel file; " \
          "__sw_hybrid_coding__ is not defined, which would silently "  \
          "compile the SW64 backend out."
 #endif
@@ -107,12 +107,12 @@
 
 #if !defined(ROMS_KOKKOS_SERIAL) && !defined(ROMS_KOKKOS_OPENMP) && \
     !defined(ROMS_KOKKOS_SW64)
-#  define ROMS_KOKKOS_SERIAL
+#define ROMS_KOKKOS_SERIAL
 #endif
 
 #if (defined(ROMS_KOKKOS_SERIAL) + defined(ROMS_KOKKOS_OPENMP) + \
      defined(ROMS_KOKKOS_SW64)) > 1
-#  error "Define only one of ROMS_KOKKOS_SERIAL / _OPENMP / _SW64"
+#error "Define only one of ROMS_KOKKOS_SERIAL / _OPENMP / _SW64"
 #endif
 
 namespace roms {
@@ -127,57 +127,57 @@ namespace roms {
 
 template <class T>
 struct Array2d {
-  T*  p   = nullptr;
-  int lb_i = 0, lb_j = 0;
-  int ni   = 0;
+    T* p = nullptr;
+    int lb_i = 0, lb_j = 0;
+    int ni = 0;
 
-  KOKKOS_INLINE_FUNCTION
-  T& operator()(int i, int j) const {
-    return p[std::ptrdiff_t(i - lb_i) + std::ptrdiff_t(j - lb_j) * ni];
-  }
+    KOKKOS_INLINE_FUNCTION
+    T &operator()(int i, int j) const {
+        return p[std::ptrdiff_t(i - lb_i) + std::ptrdiff_t(j - lb_j) * ni];
+    }
 };
 
 template <class T>
 struct Array3d {
-  T*  p   = nullptr;
-  int lb_i = 0, lb_j = 0, lb_k = 0;
-  int ni   = 0, nj   = 0;
+    T* p = nullptr;
+    int lb_i = 0, lb_j = 0, lb_k = 0;
+    int ni = 0, nj = 0;
 
-  KOKKOS_INLINE_FUNCTION
-  T& operator()(int i, int j, int k) const {
-    return p[std::ptrdiff_t(i - lb_i) + std::ptrdiff_t(j - lb_j) * ni +
-             std::ptrdiff_t(k - lb_k) * ni * nj];
-  }
+    KOKKOS_INLINE_FUNCTION
+    T &operator()(int i, int j, int k) const {
+        return p[std::ptrdiff_t(i - lb_i) + std::ptrdiff_t(j - lb_j) * ni +
+                 std::ptrdiff_t(k - lb_k) * ni * nj];
+    }
 };
 
 template <class T>
 struct Array4d {
-  T*  p   = nullptr;
-  int lb_i = 0, lb_j = 0, lb_k = 0, lb_l = 0;
-  int ni   = 0, nj   = 0, nk   = 0;
+    T* p = nullptr;
+    int lb_i = 0, lb_j = 0, lb_k = 0, lb_l = 0;
+    int ni = 0, nj = 0, nk = 0;
 
-  KOKKOS_INLINE_FUNCTION
-  T& operator()(int i, int j, int k, int l) const {
-    return p[std::ptrdiff_t(i - lb_i) + std::ptrdiff_t(j - lb_j) * ni +
-             std::ptrdiff_t(k - lb_k) * ni * nj +
-             std::ptrdiff_t(l - lb_l) * ni * nj * nk];
-  }
+    KOKKOS_INLINE_FUNCTION
+    T &operator()(int i, int j, int k, int l) const {
+        return p[std::ptrdiff_t(i - lb_i) + std::ptrdiff_t(j - lb_j) * ni +
+                 std::ptrdiff_t(k - lb_k) * ni * nj +
+                 std::ptrdiff_t(l - lb_l) * ni * nj * nk];
+    }
 };
 
 /* Tracers and their diagnostics each have five Fortran dimensions. */
 template <class T>
 struct Array5d {
-  T* p = nullptr;
-  int lb_i=0, lb_j=0, lb_k=0, lb_l=0, lb_m=0;
-  int ni=0, nj=0, nk=0, nl=0;
+    T* p = nullptr;
+    int lb_i = 0, lb_j = 0, lb_k = 0, lb_l = 0, lb_m = 0;
+    int ni = 0, nj = 0, nk = 0, nl = 0;
 
-  KOKKOS_INLINE_FUNCTION
-  T& operator()(int i, int j, int k, int l, int m) const {
-    return p[std::ptrdiff_t(i-lb_i) + std::ptrdiff_t(j-lb_j)*ni +
-             std::ptrdiff_t(k-lb_k)*ni*nj +
-             std::ptrdiff_t(l-lb_l)*ni*nj*nk +
-             std::ptrdiff_t(m-lb_m)*ni*nj*nk*nl];
-  }
+    KOKKOS_INLINE_FUNCTION
+    T &operator()(int i, int j, int k, int l, int m) const {
+        return p[std::ptrdiff_t(i - lb_i) + std::ptrdiff_t(j - lb_j) * ni +
+                 std::ptrdiff_t(k - lb_k) * ni * nj +
+                 std::ptrdiff_t(l - lb_l) * ni * nj * nk +
+                 std::ptrdiff_t(m - lb_m) * ni * nj * nk * nl];
+    }
 };
 
 /*
@@ -199,27 +199,27 @@ struct Array5d {
 */
 
 struct EdgeFlags {
-  int west, east, south, north;
-  int composite_w, composite_e, composite_s, composite_n;
-  int periodic_ew, periodic_ns;
+    int west, east, south, north;
+    int composite_w, composite_e, composite_s, composite_n;
+    int periodic_ew, periodic_ns;
 };
 
 struct TileBounds {
-  int Istr, Iend, Jstr, Jend;
+    int Istr, Iend, Jstr, Jend;
 
-  int IstrU, JstrV;
-  int IstrR, JstrR, IendR, JendR;
+    int IstrU, JstrV;
+    int IstrR, JstrR, IendR, JendR;
 
-  int Istrm1, Jstrm1;
-  int Iendp1, Jendp1;
-  int Iendp2, Jendp2;
+    int Istrm1, Jstrm1;
+    int Iendp1, Jendp1;
+    int Iendp2, Jendp2;
 
-  int IstrUm1, JstrVm1;
-  int IstrUm2, JstrVm2;
+    int IstrUm1, JstrVm1;
+    int IstrUm2, JstrVm2;
 
-  /* Trailing extents that the assumed-shape declarations do not carry. */
+    /* Trailing extents that the assumed-shape declarations do not carry. */
 
-  int UBk;   /* N(ng): top level of the 3-D arrays (ru/rv are 0:UBk).
+    int UBk; /* N(ng): top level of the 3-D arrays (ru/rv are 0:UBk).
               ** Not the time-level extent of ubar/vbar/zeta, which is 3. */
 };
 
@@ -231,47 +231,47 @@ struct TileBounds {
 
 template <class T>
 inline Array2d<T> as_2d(void* ptr, int lb_i, int ub_i, int lb_j, int /*ub_j*/) {
-  Array2d<T> a;
-  a.p    = static_cast<T*>(ptr);
-  a.lb_i = lb_i;
-  a.lb_j = lb_j;
-  a.ni   = ub_i - lb_i + 1;
-  return a;
+    Array2d<T> a;
+    a.p = static_cast<T*>(ptr);
+    a.lb_i = lb_i;
+    a.lb_j = lb_j;
+    a.ni = ub_i - lb_i + 1;
+    return a;
 }
 
 template <class T>
 inline Array3d<T> as_3d(void* ptr, int lb_i, int ub_i, int lb_j, int ub_j,
                         int lb_k, int /*ub_k*/) {
-  Array3d<T> a;
-  a.p    = static_cast<T*>(ptr);
-  a.lb_i = lb_i;
-  a.lb_j = lb_j;
-  a.lb_k = lb_k;
-  a.ni   = ub_i - lb_i + 1;
-  a.nj   = ub_j - lb_j + 1;
-  return a;
+    Array3d<T> a;
+    a.p = static_cast<T*>(ptr);
+    a.lb_i = lb_i;
+    a.lb_j = lb_j;
+    a.lb_k = lb_k;
+    a.ni = ub_i - lb_i + 1;
+    a.nj = ub_j - lb_j + 1;
+    return a;
 }
 
 template <class T>
 inline Array4d<T> as_4d(void* ptr, int lb_i, int ub_i, int lb_j, int ub_j,
                         int lb_k, int ub_k, int lb_l, int /*ub_l*/) {
-  Array4d<T> a;
-  a.p    = static_cast<T*>(ptr);
-  a.lb_i = lb_i;
-  a.lb_j = lb_j;
-  a.lb_k = lb_k;
-  a.lb_l = lb_l;
-  a.ni   = ub_i - lb_i + 1;
-  a.nj   = ub_j - lb_j + 1;
-  a.nk   = ub_k - lb_k + 1;
-  return a;
+    Array4d<T> a;
+    a.p = static_cast<T*>(ptr);
+    a.lb_i = lb_i;
+    a.lb_j = lb_j;
+    a.lb_k = lb_k;
+    a.lb_l = lb_l;
+    a.ni = ub_i - lb_i + 1;
+    a.nj = ub_j - lb_j + 1;
+    a.nk = ub_k - lb_k + 1;
+    return a;
 }
 
 template <class T>
 inline Array5d<T> as_5d(void* ptr, int li, int ui, int lj, int uj,
-                       int lk, int uk, int ll, int ul, int lm, int /*um*/) {
-  return {static_cast<T*>(ptr), li, lj, lk, ll, lm,
-          ui-li+1, uj-lj+1, uk-lk+1, ul-ll+1};
+                        int lk, int uk, int ll, int ul, int lm, int /*um*/) {
+    return {static_cast<T*>(ptr), li, lj, lk, ll, lm,
+            ui - li + 1, uj - lj + 1, uk - lk + 1, ul - ll + 1};
 }
 
 /*
@@ -310,36 +310,37 @@ void finalize();
 */
 
 #if !defined(__sw_slave__)
-int    timer_slot(const char* name);
-void   timer_add(int slot, double seconds);
-bool   timer_enabled();
+int timer_slot(const char* name);
+void timer_add(int slot, double seconds);
+bool timer_enabled();
 double wall_seconds();
 
 class ScopedTimer {
- public:
-  explicit ScopedTimer(int slot)
-      : slot_(timer_enabled() ? slot : -1),
-        t0_(slot_ >= 0 ? wall_seconds() : 0.0) {}
-  ~ScopedTimer() {
-    if (slot_ >= 0) timer_add(slot_, wall_seconds() - t0_);
-  }
-  ScopedTimer(const ScopedTimer&) = delete;
-  ScopedTimer& operator=(const ScopedTimer&) = delete;
+public:
+    explicit ScopedTimer(int slot)
+        : slot_(timer_enabled() ? slot : -1),
+          t0_(slot_ >= 0 ? wall_seconds() : 0.0) {}
+    ~ScopedTimer() {
+        if (slot_ >= 0)
+            timer_add(slot_, wall_seconds() - t0_);
+    }
+    ScopedTimer(const ScopedTimer &) = delete;
+    ScopedTimer &operator=(const ScopedTimer &) = delete;
 
- private:
-  int    slot_;
-  double t0_;
+private:
+    int slot_;
+    double t0_;
 };
 
-#  define ROMS_KK_TIMER(name)                                         \
-     static const int roms_kk_slot_ = ::roms::timer_slot(name);       \
-     ::roms::ScopedTimer roms_kk_timer_(roms_kk_slot_)
+#define ROMS_KK_TIMER(name)                                    \
+    static const int roms_kk_slot_ = ::roms::timer_slot(name); \
+    ::roms::ScopedTimer roms_kk_timer_(roms_kk_slot_)
 #else
-#  define ROMS_KK_TIMER(name)
+#define ROMS_KK_TIMER(name)
 #endif
 
-}  // namespace roms
+} // namespace roms
 
-#endif  // ROMS_KOKKOS
+#endif // ROMS_KOKKOS
 
-#endif  // ROMS_KOKKOS_CONFIG_HPP
+#endif // ROMS_KOKKOS_CONFIG_HPP

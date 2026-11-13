@@ -26,49 +26,49 @@ namespace roms {
 /* Mirror of TYPE(kokkos_pre3d_config) in kokkos_step3d_mod.F; the field
 ** order must match. */
 struct Pre3dConfig {
-  int LBi, UBi, LBj, UBj;
-  int Istr, Iend, Jstr, Jend, IstrU, JstrV;
-  int N, NT, NAT, NDT;
-  int nrhs, nstp, nnew;
-  int step;                 /* 0: iic==ntfirst, 1: ntfirst+1, 2: later */
-  int iTrate, iTvdif;
-  int NDM3d, NDrhs, M3pgrd, M3vvis, M3rate;
-  int fold_w, fold_e, fold_s, fold_n;   /* closed-edge flux folds */
-  double dt, lambda;
+    int LBi, UBi, LBj, UBj;
+    int Istr, Iend, Jstr, Jend, IstrU, JstrV;
+    int N, NT, NAT, NDT;
+    int nrhs, nstp, nnew;
+    int step; /* 0: iic==ntfirst, 1: ntfirst+1, 2: later */
+    int iTrate, iTvdif;
+    int NDM3d, NDrhs, M3pgrd, M3vvis, M3rate;
+    int fold_w, fold_e, fold_s, fold_n; /* closed-edge flux folds */
+    double dt, lambda;
 };
 
 /* Horizontal / vertical tracer advection schemes, as resolved from
 ** Hadvection(itrc,ng) / Vadvection(itrc,ng) by the caller. */
 enum Pre3dScheme {
-  kSchemeNone = 0,
-  kCentered2 = 1,
-  kUpstream1 = 2,   /* MPDATA or HSIMT: first-order upstream here */
-  kUpstream3 = 3,
-  kAkima4 = 4,
-  kCentered4 = 5,   /* CENTERED4 or SPLIT_U3 */
-  kSplines = 6      /* vertical only */
+    kSchemeNone = 0,
+    kCentered2 = 1,
+    kUpstream1 = 2, /* MPDATA or HSIMT: first-order upstream here */
+    kUpstream3 = 3,
+    kAkima4 = 4,
+    kCentered4 = 5, /* CENTERED4 or SPLIT_U3 */
+    kSplines = 6    /* vertical only */
 };
 
 /* Mirror of TYPE(kokkos_uv3d_config) in kokkos_step3d_mod.F. */
 struct Uv3dConfig {
-  int LBi, UBi, LBj, UBj;
-  int Istr, Iend, Jstr, Jend, IstrU, JstrV;
-  int IstrP, IstrT, IendT, JstrT, JendT;
-  int Mm, N, nrhs, nnew;
-  int step;                 /* 0: iic==ntfirst, 1: ntfirst+1, 2: later */
-  int NDM2d, NDM3d, NDrhs;
-  int M2pgrd, M2bstr, M2sstr, M2rate, M3pgrd, M3vvis, M3rate;
-  int M3xvis, M3yvis, M3hvis;   /* 0 without UV_VIS2/UV_VIS4 */
-  /* (M2, M3) index pairs integrated over the column for the interior
-  ** mean replacement: pgrd, vvis->bstr, then Coriolis, viscosity and
-  ** advection terms as compiled. */
-  int npairs, m2[12], m3[12];
-  /* Boundary-point replacement switches (step3d_uv.F, coupling). */
-  int rep_w, rep_e, rep_s, rep_n;
-  double dt, lambda;
+    int LBi, UBi, LBj, UBj;
+    int Istr, Iend, Jstr, Jend, IstrU, JstrV;
+    int IstrP, IstrT, IendT, JstrT, JendT;
+    int Mm, N, nrhs, nnew;
+    int step; /* 0: iic==ntfirst, 1: ntfirst+1, 2: later */
+    int NDM2d, NDM3d, NDrhs;
+    int M2pgrd, M2bstr, M2sstr, M2rate, M3pgrd, M3vvis, M3rate;
+    int M3xvis, M3yvis, M3hvis; /* 0 without UV_VIS2/UV_VIS4 */
+    /* (M2, M3) index pairs integrated over the column for the interior
+    ** mean replacement: pgrd, vvis->bstr, then Coriolis, viscosity and
+    ** advection terms as compiled. */
+    int npairs, m2[12], m3[12];
+    /* Boundary-point replacement switches (step3d_uv.F, coupling). */
+    int rep_w, rep_e, rep_s, rep_n;
+    double dt, lambda;
 };
 
-}  // namespace roms
+} // namespace roms
 
 extern "C" {
 
@@ -113,8 +113,8 @@ void k_step3d_uv_couple(const roms::Uv3dConfig* c,
                         void* DiaU2int_p, void* DiaV2int_p,
                         void* DiaU3wrk_p, void* DiaV3wrk_p);
 
-}  // extern "C"
+} // extern "C"
 
-#endif  // ROMS_KOKKOS
+#endif // ROMS_KOKKOS
 
-#endif  // ROMS_KOKKOS_STEP3D_HPP
+#endif // ROMS_KOKKOS_STEP3D_HPP

@@ -1,0 +1,15 @@
+---
+# Formatting for the ROMS C++ sources: 4-space indentation, braces kept
+# on the same line, and no column limit (lines are never wrapped).
+Language: Cpp
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+AccessModifierOffset: -4
+ColumnLimit: 0
+BreakBeforeBraces: Attach
+PointerAlignment: Left
+ReferenceAlignment: Right
+DerivePointerAlignment: false
+SortIncludes: false

@@ -72,8 +72,8 @@ void k_set_zeta(int ng, int tile,
                 void* Zt_avg1_p, void* zeta_p,
                 const roms::TileBounds* t);
 
-}  // extern "C"
+} // extern "C"
 
-#endif  // ROMS_KOKKOS
+#endif // ROMS_KOKKOS
 
-#endif  // ROMS_KOKKOS_RHS3D_HPP
+#endif // ROMS_KOKKOS_RHS3D_HPP
